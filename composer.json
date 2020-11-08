@@ -1,0 +1,23 @@
+{
+  "name": "abmmhasan/otp",
+  "description": "Simple but Secure TOTP & HOTP solution!",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "abmmhasan",
+      "email": "abmmhasan346@gmail.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "AbmmHasan\\OTP\\": "src/OTP/"
+    }
+  },
+  "minimum-stability": "stable",
+  "require": {
+    "php": ">=7.1",
+    "paragonie/constant_time_encoding": "^2.3",
+    "bacon/bacon-qr-code": "^2.0"
+  }
+}
