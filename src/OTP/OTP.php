@@ -127,7 +127,7 @@ class OTP
             $result[] = chr($timeCode & 0xFF);
             $timeCode >>= 8;
         }
-        $intToByteString = str_pad(implode('',array_reverse($result)), 8, "\000", STR_PAD_LEFT);
+        $intToByteString = str_pad(implode('', array_reverse($result)), 8, "\000", STR_PAD_LEFT);
         $hash = hash_hmac('sha1', $intToByteString, Base32::decodeUpper($this->secret));
         foreach (str_split($hash, 2) as $hex) {
             $hmac[] = hexdec($hex);
