@@ -1,7 +1,7 @@
 <?php
 
 
-namespace AbmmHasan\OTP;
+namespace AbmmHasan;
 
 
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -22,9 +22,9 @@ class OTP
      */
     public function createSecret()
     {
-        $string = strtoupper(bin2hex(random_bytes(5)));
+        $string = bin2hex(random_bytes(5));
         $string = Base32::encodeUpper($string);
-        return trim(mb_strtoupper($string), '=');
+        return trim(strtoupper($string), '=');
     }
 
     /**

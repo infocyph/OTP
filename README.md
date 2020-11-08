@@ -34,25 +34,25 @@ All the data generated are simply on your very own server.
 * Generate Secret
 * It will generate secure random secret string
 */
-$secret = (new \AbmmHasan\OTP\OTP())->createSecret();
+$secret = (new \AbmmHasan\OTP())->createSecret();
 
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP\OTP())->setSecret($secret)->getQRSnap('hotp','TestName','TestTitle');
+(new \AbmmHasan\OTP())->setSecret($secret)->getQRSnap('hotp','TestName','TestTitle');
 
 /**
 * Get current OTP for a given counter
 */
 $counter = 346;
-$otp = (new \AbmmHasan\OTP\OTP())->setSecret($secret)->getHOTP($counter);
+$otp = (new \AbmmHasan\OTP())->setSecret($secret)->getHOTP($counter);
 
 /**
 * Verify
 */
-(new \AbmmHasan\OTP\OTP())->setSecret($secret)->verify($otp,$counter);
+(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp,$counter);
 // or
-(new \AbmmHasan\OTP\OTP())->setSecret($secret)->verify($otp,$counter,'hotp');
+(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp,$counter,'hotp');
 ```
 
 ### TOTP
@@ -62,25 +62,25 @@ $otp = (new \AbmmHasan\OTP\OTP())->setSecret($secret)->getHOTP($counter);
 * Generate Secret
 * It will generate secure random secret string
 */
-$secret = (new \AbmmHasan\OTP\OTP())->createSecret();
+$secret = (new \AbmmHasan\OTP())->createSecret();
 
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP\OTP())->setSecret($secret)->getQRSnap('totp','TestName','TestTitle');
+(new \AbmmHasan\OTP())->setSecret($secret)->getQRSnap('totp','TestName','TestTitle');
 
 /**
 * Get current OTP
 */
-$otp = (new \AbmmHasan\OTP\OTP())->setSecret($secret)->getTOTP();
+$otp = (new \AbmmHasan\OTP())->setSecret($secret)->getTOTP();
 // or get OTP for another specified epoch time
-$otp = (new \AbmmHasan\OTP\OTP())->setSecret($secret)->getTOTP(1604820275);
+$otp = (new \AbmmHasan\OTP())->setSecret($secret)->getTOTP(1604820275);
 /**
 * Verify current OTP
 */
-(new \AbmmHasan\OTP\OTP())->setSecret($secret)->verify($otp);
+(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp);
 // or verify for a specified time
-(new \AbmmHasan\OTP\OTP())->setSecret($secret)->verify($otp,1604820275,'totp');
+(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp,1604820275,'totp');
 ```
 
 ## Support

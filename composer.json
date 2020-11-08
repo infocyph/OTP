@@ -11,7 +11,7 @@
   ],
   "autoload": {
     "psr-4": {
-      "AbmmHasan\\OTP\\": "src/OTP/"
+      "AbmmHasan\\": "src/"
     }
   },
   "minimum-stability": "stable",
