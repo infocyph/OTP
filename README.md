@@ -1,6 +1,13 @@
 # OTP
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+![Scrutinizer code quality (GitHub/Bitbucket)](https://img.shields.io/scrutinizer/quality/g/abmmhasan/otp/main)
+![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/otp)
+![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/otp)
+![Packagist License](https://img.shields.io/packagist/l/abmmhasan/otp)
+![Packagist Version](https://img.shields.io/packagist/v/abmmhasan/otp)
+![Packagist PHP Version Support](https://img.shields.io/packagist/php-v/abmmhasan/otp)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/abmmhasan/otp)
+![Lines of code](https://img.shields.io/tokei/lines/github/abmmhasan/otp)
 
 
 Simple but Secure TOTP (RFC6238) & HOTP (RFC4226) solution!
