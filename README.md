@@ -1,6 +1,6 @@
 # OTP
 
-![Scrutinizer code quality (GitHub/Bitbucket)](https://img.shields.io/scrutinizer/quality/g/abmmhasan/otp/main)
+[![Scrutinizer Code Quality](https://img.shields.io/scrutinizer/quality/g/abmmhasan/otp)](https://scrutinizer-ci.com/g/abmmhasan/otp)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/otp)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/otp)
 ![Packagist License](https://img.shields.io/packagist/l/abmmhasan/otp)
