@@ -1,14 +1,12 @@
 # OTP
 
-[![Scrutinizer Code Quality](https://img.shields.io/scrutinizer/quality/g/abmmhasan/otp)](https://scrutinizer-ci.com/g/abmmhasan/otp)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/7470c9de3a5848f982b77f005945b04f)](https://app.codacy.com/gh/abmmhasan/OTP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/otp)
-![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/otp)
-![Packagist License](https://img.shields.io/packagist/l/abmmhasan/otp)
+![Packagist Downloads (custom server)](https://img.shields.io/packagist/dt/abmmhasan/otp?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Fabmmhasan%2Fotp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 ![Packagist Version](https://img.shields.io/packagist/v/abmmhasan/otp)
-![Packagist PHP Version Support](https://img.shields.io/packagist/php-v/abmmhasan/otp)
+![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/abmmhasan/otp/php)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/abmmhasan/otp)
-![Lines of code](https://img.shields.io/tokei/lines/github/abmmhasan/otp)
-
 
 Simple but Secure TOTP (RFC6238) & HOTP (RFC4226) solution!
 
