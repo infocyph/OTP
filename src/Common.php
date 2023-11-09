@@ -11,6 +11,9 @@ use ParagonIE\ConstantTime\Base32;
 
 trait Common
 {
+    private string $secret;
+    private int $steps;
+    private int $digitCount;
 
     /**
      * Generates a secret string
@@ -23,20 +26,6 @@ trait Common
         $string = bin2hex(random_bytes(5));
         $string = Base32::encodeUpper($string);
         return trim(strtoupper($string), '=');
-    }
-
-    /**
-     * Initializes a new instance of the class.
-     *
-     * @param string $secret The secret key.
-     * @param int $digitCount The number of digits in the generated code. Default is 6.
-     * @param int $interval The time interval in seconds. Default is 30.
-     */
-    public function __construct(
-        private string $secret,
-        private int $digitCount = 6,
-        private int $interval = 30,
-    ) {
     }
 
     /**
@@ -71,7 +60,7 @@ trait Common
      */
     private function getPassword(int $input): int
     {
-        $timeCode = ($input * 1000) / ($this->interval * 1000);
+        $timeCode = ($input * 1000) / ($this->steps * 1000);
         $result = $hmac = [];
         while ($timeCode != 0) {
             $result[] = chr($timeCode & 0xFF);

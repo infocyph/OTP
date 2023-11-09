@@ -6,6 +6,24 @@ class TOTP
 {
     use Common;
 
+
+    /**
+     * Initializes a new instance of the class.
+     *
+     * @param string $secret The secret key.
+     * @param int $digitCount The number of digits in the generated code. Default is 6.
+     * @param int $interval The time interval in seconds. Default is 30.
+     */
+    public function __construct(
+        string $secret,
+        int $digitCount = 6,
+        int $interval = 30
+    ) {
+        $this->secret = $secret;
+        $this->digitCount = $digitCount;
+        $this->steps = $interval;
+    }
+
     /**
      * Retrieves the QR image for a given name and title.
      *

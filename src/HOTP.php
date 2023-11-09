@@ -6,6 +6,22 @@ class HOTP
 {
     use Common;
 
+
+    /**
+     * Initializes a new instance of the class.
+     *
+     * @param string $secret The secret key.
+     * @param int $digitCount The number of digits in the generated code. Default is 6.
+     */
+    public function __construct(
+        string $secret,
+        int $digitCount = 6
+    ) {
+        $this->secret = $secret;
+        $this->digitCount = $digitCount;
+        $this->steps = 1;
+    }
+
     /**
      * Retrieves the QR image for a given name and title.
      *
