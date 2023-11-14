@@ -8,12 +8,14 @@
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/abmmhasan/otp/php)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/abmmhasan/otp)
 
-Simple but Secure TOTP (RFC6238) & HOTP (RFC4226) solution!
+Simple but Secure Generic OTP, TOTP (RFC6238), HOTP (RFC4226) solution!
 
 
 ## Prerequisites
 
-Language: PHP 7.1/+
+Language: PHP 8.0/+
+
+_Note: v1.x.x supports PHP 7.x.x series_
 
 ## Installation
 
@@ -23,70 +25,89 @@ composer require abmmhasan/otp
 
 ## Why this library?
 
-Most of the OTP library found there (written in PHP) are insecure. Wanna know why?
-1. Uses Online URL to generate QR Images (it exposes your secret key, online)
-2. Uses basic Base32 functions which is not Time safe (verifies same OTP upto 90 second instead of 30 second)
+#### TOTP & HOTP
+- Uses offline QR code generator (no more exposing your secret online)
+- Time-safe Base32 encoding (30 seconds validity means 30 seconds, I'm not kidding)
 
-Well, this library mitigates both problems using [Constant-Time Encoding](https://github.com/paragonie/constant_time_encoding) & [QR Code generator](https://github.com/Bacon/BaconQrCode).
-All the data generated are simply on your very own server.
+#### Generic OTP
+- No need to dedicate extra storage/db for User information (just build your unique signature)
 
 ## Usage
 
-### HOTP
+### HOTP (RFC4226)
 
 ```php
 /**
 * Generate Secret
 * It will generate secure random secret string
 */
-$secret = (new \AbmmHasan\OTP())->createSecret();
+$secret = \AbmmHasan\OTP\HOTP::generateSecret();
 
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP())->setSecret($secret)->getQRSnap('hotp','TestName','TestTitle');
+(new \AbmmHasan\OTP\HOTP($secret))->getQRImage('TestName', 'TestTitle');
 
 /**
 * Get current OTP for a given counter
 */
 $counter = 346;
-$otp = (new \AbmmHasan\OTP())->setSecret($secret)->getHOTP($counter);
+$otp = (new \AbmmHasan\OTP\HOTP($secret))->getOTP($counter);
 
 /**
 * Verify
 */
-(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp,$counter);
-// or
-(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp,$counter,'hotp');
+(new \AbmmHasan\OTP\HOTP($secret))->verify($otp,$counter);
 ```
 
-### TOTP
+### TOTP (RFC6238)
 
 ```php
 /**
 * Generate Secret
 * It will generate secure random secret string
 */
-$secret = (new \AbmmHasan\OTP())->createSecret();
+$secret = \AbmmHasan\OTP\TOTP::generateSecret();
 
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP())->setSecret($secret)->getQRSnap('totp','TestName','TestTitle');
+(new \AbmmHasan\OTP\TOTP($secret))->getQRImage('TestName', 'TestTitle');
 
 /**
 * Get current OTP
 */
-$otp = (new \AbmmHasan\OTP())->setSecret($secret)->getTOTP();
+$otp = (new \AbmmHasan\OTP\TOTP($secret))->getOTP();
 // or get OTP for another specified epoch time
-$otp = (new \AbmmHasan\OTP())->setSecret($secret)->getTOTP(1604820275);
+$otp = (new \AbmmHasan\OTP\TOTP($secret))->getOTP(1604820275);
+
 /**
-* Verify current OTP
+* Verify
 */
-(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp);
+(new \AbmmHasan\OTP\TOTP($secret))->verify($otp);
 // or verify for a specified time
-(new \AbmmHasan\OTP())->setSecret($secret)->verify($otp,1604820275,'totp');
+(new \AbmmHasan\OTP\TOTP($secret))->verify($otp, 1604820275);
 ```
+
+### Generic OTP
+
+```php
+/**
+* Initiate (Param 1 is OTP length, Param 2 is validity in seconds) 
+*/
+$otpInstance = new \AbmmHasan\OTP\OTP(4, 60);
+
+/**
+* Generate & get the OTP
+*/
+$otp = $otpInstance->generate('an unique signature for a cause');
+
+/**
+* Verify the OTP
+*/
+$otpInstance->verify('an unique signature for a cause', $otp);
+```
+_Note: Generic OTP uses **temporary location** for storage, make sure you have proper access permission_
 
 ## Support
 

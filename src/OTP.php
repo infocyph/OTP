@@ -32,7 +32,7 @@ class OTP
      */
     public function generate(string $signature): int
     {
-        $otpAdapter = $this->cacheAdapter->getItem(base64_encode($signature));
+        $otpAdapter = $this->cacheAdapter->getItem('ao-otp:' . base64_encode($signature));
         $otpAdapter->set($this->number($this->digitCount))->expiresAfter($this->validUpto);
         $this->cacheAdapter->save($otpAdapter);
         return $otpAdapter->get();
@@ -51,7 +51,7 @@ class OTP
         if ($otp < 0 || strlen($otp) !== $this->digitCount) {
             return false;
         }
-        $signature = base64_encode($signature);
+        $signature = 'ao-otp:' . base64_encode($signature);
         $otpAdapter = $this->cacheAdapter->getItem($signature);
         if ($otpAdapter->isHit()) {
             $isVerified = $otpAdapter->get() === $otp;
