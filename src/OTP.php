@@ -18,7 +18,8 @@ class OTP
      */
     public function __construct(
         private int $digitCount = 6,
-        private int $validUpto = 30
+        private int $validUpto = 30,
+        private string $hashAlgorithm = 'sha256'
     ) {
         $this->cacheAdapter = new FilesystemAdapter();
     }
@@ -34,7 +35,7 @@ class OTP
     {
         $otpAdapter = $this->cacheAdapter->getItem('ao-otp_' . base64_encode($signature));
         $otp = $this->number($this->digitCount);
-        $otpAdapter->set(hash('sha256', $otp))->expiresAfter($this->validUpto);
+        $otpAdapter->set(hash($this->hashAlgorithm, $otp))->expiresAfter($this->validUpto);
         $this->cacheAdapter->save($otpAdapter);
         return $otp;
     }
@@ -44,10 +45,11 @@ class OTP
      *
      * @param string $signature The signature to be verified.
      * @param int $otp The one-time password (OTP) to be verified.
+     * @param bool $deleteIfFound Whether to delete the OTP from the cache if found (disregarding verification).
      * @return bool Returns true if the signature and OTP are verified successfully, false otherwise.
      * @throws InvalidArgumentException
      */
-    public function verify(string $signature, int $otp): bool
+    public function verify(string $signature, int $otp, bool $deleteIfFound = true): bool
     {
         if ($otp < 0 || strlen($otp) !== $this->digitCount) {
             return false;
@@ -55,8 +57,8 @@ class OTP
         $signature = 'ao-otp_' . base64_encode($signature);
         $otpAdapter = $this->cacheAdapter->getItem($signature);
         if ($otpAdapter->isHit()) {
-            $isVerified = hash_equals($otpAdapter->get(), hash('sha256', $otp));
-            $this->cacheAdapter->deleteItem($signature);
+            $isVerified = hash_equals($otpAdapter->get(), hash($this->hashAlgorithm, $otp));
+            $deleteIfFound && $this->cacheAdapter->deleteItem($signature);
             return $isVerified;
         }
         return false;
