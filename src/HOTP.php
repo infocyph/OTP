@@ -19,28 +19,31 @@ class HOTP
     ) {
         $this->secret = $secret;
         $this->digitCount = $digitCount;
-        $this->steps = 1;
+        $this->period = 1;
+        $this->type = 'hotp';
     }
 
     /**
-     * Retrieves the QR image for a given name and title.
+     * Sets the initial counter value.
      *
-     * @param string $name The name to generate the QR image for.
-     * @param string|null $title The title to be displayed on the QR image. (optional)
-     * @return string The QR image URL.
+     * Required if Provisioning resources need to manipulate based on a specific counter.
+     *
+     * @param int $counter The new value for the counter.
+     * @return static
      */
-    public function getQRImage(string $name, string $title = null): string
+    public function setCounter(int $counter): static
     {
-        return $this->getImage('hotp', $name, $title);
+        $this->counter = $counter;
+        return $this;
     }
 
     /**
      * Generates a one-time password (OTP) based on the given Counter.
      *
      * @param int $counter The input value used to generate the OTP.
-     * @return int The generated OTP.
+     * @return string The generated OTP.
      */
-    public function getOTP(int $counter): int
+    public function getOTP(int $counter): string
     {
         return $this->getPassword($counter);
     }
@@ -48,12 +51,12 @@ class HOTP
     /**
      * Verifies if the given OTP matches the OTP generated based on the given Counter.
      *
-     * @param int $otp The OTP to be verified.
+     * @param string $otp The OTP to be verified.
      * @param int $counter The input used to generate the OTP.
-     * @return bool Returns true if the OTP matches the generated OTP, otherwise false.
+     * @return bool Returns true if the OTP matches the generated one, otherwise false.
      */
-    public function verify(int $otp, int $counter): bool
+    public function verify(string $otp, int $counter): bool
     {
-        return $otp === $this->getOTP($counter);
+        return hash_equals($otp, $this->getOTP($counter));
     }
 }

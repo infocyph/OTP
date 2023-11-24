@@ -46,7 +46,10 @@ $secret = \AbmmHasan\OTP\HOTP::generateSecret();
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP\HOTP($secret))->getQRImage('TestName', 'TestTitle');
+(new \AbmmHasan\OTP\HOTP($secret))// supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
+->setCounter(3) // only required if the counter is being imported from another system or if it is old, & for QR only
+->setAlgorithm('sha256') // default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
+->getProvisioningUriQR('TestName', 'abc@def.ghi'); // or `getProvisioningUri` just to get the URI
 
 /**
 * Get current OTP for a given counter
@@ -72,7 +75,9 @@ $secret = \AbmmHasan\OTP\TOTP::generateSecret();
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP\TOTP($secret))->getQRImage('TestName', 'TestTitle');
+(new \AbmmHasan\OTP\TOTP($secret)) // supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
+->setAlgorithm('sha256') // default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
+->getProvisioningUriQR('TestName', 'abc@def.ghi'); // or `getProvisioningUri` just to get the URI
 
 /**
 * Get current OTP
