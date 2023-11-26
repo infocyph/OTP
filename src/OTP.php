@@ -58,10 +58,32 @@ class OTP
         $otpAdapter = $this->cacheAdapter->getItem($signature);
         if ($otpAdapter->isHit()) {
             $isVerified = hash_equals($otpAdapter->get(), hash($this->hashAlgorithm, $otp));
-            $deleteIfFound && $this->cacheAdapter->deleteItem($signature);
+            ($deleteIfFound || $isVerified) && $this->cacheAdapter->deleteItem($signature);
             return $isVerified;
         }
         return false;
+    }
+
+    /**
+     * Deletes an OTP based on the given signature.
+     *
+     * @param string $signature The signature of the item to be deleted.
+     * @return bool True if the item was successfully deleted, false otherwise.
+     * @throws InvalidArgumentException
+     */
+    public function delete(string $signature): bool
+    {
+        return $this->cacheAdapter->deleteItem('ao-otp_' . base64_encode($signature));
+    }
+
+    /**
+     * Flushes all the OTPs.
+     *
+     * @return bool
+     */
+    public function flush(): bool
+    {
+        return $this->cacheAdapter->clear();
     }
 
     /**
