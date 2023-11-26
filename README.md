@@ -109,8 +109,21 @@ $otp = $otpInstance->generate('an unique signature for a cause');
 
 /**
 * Verify the OTP
+* 
+* on 3rd parameter setting false will keep the record till the otp is verified or expired
+* by default it will keep the record till the key name match or the otp is verified or expired
 */
 $otpInstance->verify('an unique signature for a cause', $otp);
+
+/**
+* Delete the record
+*/
+$otpInstance->delete('an unique signature for a cause');
+
+/**
+* Flush all the existing OTPs (if any)
+*/
+$otpInstance->flush()
 ```
 _Note: Generic OTP uses **temporary location** for storage, make sure you have proper access permission_
 
