@@ -16,6 +16,7 @@ Simple but Secure Generic OTP, TOTP (RFC6238), HOTP (RFC4226) solution!
 Language: PHP 8.0/+
 
 _Note: v1.x.x supports PHP 7.x.x series_
+_Note: v2.x.x supports PHP 8.x.x series_
 
 ## Installation
 
@@ -88,6 +89,9 @@ $otp = (new \AbmmHasan\OTP\TOTP($secret))->getOTP(1604820275);
 
 /**
 * Verify
+* 
+* on 3rd parameter it supports, enabling leeway.
+* if enabled, it will also check with last segment's generated otp 
 */
 (new \AbmmHasan\OTP\TOTP($secret))->verify($otp);
 // or verify for a specified time
@@ -98,7 +102,10 @@ $otp = (new \AbmmHasan\OTP\TOTP($secret))->getOTP(1604820275);
 
 ```php
 /**
-* Initiate (Param 1 is OTP length, Param 2 is validity in seconds) 
+* Initiate 
+* Param 1 is OTP length (default 6)
+* Param 2 is validity in seconds (default 30 seconds)
+* Param 3 is retry count on failure (default 3)
 */
 $otpInstance = new \AbmmHasan\OTP\OTP(4, 60);
 
