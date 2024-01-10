@@ -13,10 +13,13 @@ Simple but Secure Generic OTP, TOTP (RFC6238), HOTP (RFC4226) solution!
 
 ## Prerequisites
 
-Language: PHP 8.0/+
+Language: PHP 8.3/+
 
-_Note: v1.x.x supports PHP 7.x.x series_
-_Note: v2.x.x supports PHP 8.x.x series_
+| Library Version | PHP Version     |
+|-----------------|-----------------|
+| 3.x.x           | 8.2.x or Higher |
+| 2.x.x           | 8.x.x           |
+| 1.x.x           | 7.x.x           |
 
 ## Installation
 
@@ -47,10 +50,14 @@ $secret = \AbmmHasan\OTP\HOTP::generateSecret();
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP\HOTP($secret))// supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
-->setCounter(3) // only required if the counter is being imported from another system or if it is old, & for QR only
-->setAlgorithm('sha256') // default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
-->getProvisioningUriQR('TestName', 'abc@def.ghi'); // or `getProvisioningUri` just to get the URI
+// supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
+(new \AbmmHasan\OTP\HOTP($secret))
+// only required if the counter is being imported from another system or if it is old, & for QR only
+->setCounter(3)
+// default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
+->setAlgorithm('sha256') 
+// or `getProvisioningUri` just to get the URI
+->getProvisioningUriQR('TestName', 'abc@def.ghi'); 
 
 /**
 * Get current OTP for a given counter
@@ -76,9 +83,12 @@ $secret = \AbmmHasan\OTP\TOTP::generateSecret();
 /**
 * Get QR Code Image for secret $secret
 */
-(new \AbmmHasan\OTP\TOTP($secret)) // supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
-->setAlgorithm('sha256') // default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
-->getProvisioningUriQR('TestName', 'abc@def.ghi'); // or `getProvisioningUri` just to get the URI
+// supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
+(new \AbmmHasan\OTP\TOTP($secret)) 
+// default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
+->setAlgorithm('sha256') 
+// or `getProvisioningUri` just to get the URI
+->getProvisioningUriQR('TestName', 'abc@def.ghi');
 
 /**
 * Get current OTP
@@ -104,10 +114,10 @@ $otp = (new \AbmmHasan\OTP\TOTP($secret))->getOTP(1604820275);
 /**
 * Initiate 
 * Param 1 is OTP length (default 6)
-* Param 2 is validity in seconds (default 30 seconds)
+* Param 2 is validity in seconds (default 30)
 * Param 3 is retry count on failure (default 3)
 */
-$otpInstance = new \AbmmHasan\OTP\OTP(4, 60);
+$otpInstance = new \AbmmHasan\OTP\OTP(4, 60, 2);
 
 /**
 * Generate & get the OTP
