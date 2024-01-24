@@ -13,7 +13,7 @@ Simple but Secure Generic OTP, TOTP (RFC6238), HOTP (RFC4226) solution!
 
 ## Prerequisites
 
-Language: PHP 8.3/+
+Language: PHP 8.2/+
 
 | Library Version | PHP Version     |
 |-----------------|-----------------|
@@ -31,10 +31,10 @@ composer require abmmhasan/otp
 
 #### TOTP & HOTP
 - Uses offline QR code generator (no more exposing your secret online)
-- Time-safe Base32 encoding (30 seconds validity means 30 seconds, I'm not kidding)
+- Time-safe Base32 encoding (30 seconds validity means 30 seconds)
 
 #### Generic OTP
-- No need to dedicate extra storage/db for User information (just build your unique signature)
+- No need to dedicate extra storage/db for User information (just build a unique signature)
 
 ## Usage
 
