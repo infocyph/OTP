@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\OTP;
+namespace Infocyph\OTP;
 
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;

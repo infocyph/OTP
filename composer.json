@@ -1,5 +1,5 @@
 {
-  "name": "abmmhasan/otp",
+  "name": "infocyph/otp",
   "description": "Simple but Secure OTP solution!",
   "type": "library",
   "license": "MIT",
@@ -11,7 +11,7 @@
   ],
   "autoload": {
     "psr-4": {
-      "AbmmHasan\\OTP\\": "src/"
+      "Infocyph\\OTP\\": "src/"
     }
   },
   "minimum-stability": "stable",
@@ -22,11 +22,14 @@
   },
   "require": {
     "php": ">=8.2",
-    "bacon/bacon-qr-code": "^2.0",
+    "bacon/bacon-qr-code": "^3.0",
     "paragonie/constant_time_encoding": "^2.6",
     "symfony/cache": "^7.0"
   },
   "require-dev": {
     "symfony/var-dumper": "^7.0"
+  },
+  "replace": {
+    "abmmhasan/otp": "*"
   }
 }
