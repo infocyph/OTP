@@ -22,7 +22,7 @@
   },
   "require": {
     "php": ">=8.2",
-    "bacon/bacon-qr-code": "^2.0",
+    "bacon/bacon-qr-code": "^2.0 || ^3.0",
     "paragonie/constant_time_encoding": "^2.6",
     "symfony/cache": "^7.0"
   },
