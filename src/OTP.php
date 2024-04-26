@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\OTP;
+namespace Infocyph\OTP;
 
 use Exception;
 use Psr\Cache\InvalidArgumentException;
