@@ -19,16 +19,18 @@ final class OCRA
      * Constructor for the class.
      *
      * @param string $ocraSuite The OCRA suite string.
-     * @param string $key The key for the OCRA instance.
-     * @throws OCRAException
+     * @param string $sharedKey The shared key for the OCRA instance.
+     * @throws OCRAException If the OCRA suite is invalid.
      */
-    public function __construct(string $ocraSuite, private readonly string $key)
+    public function __construct(string $ocraSuite, private readonly string $sharedKey)
     {
         $this->validateAndParse($ocraSuite);
     }
 
     /**
      * Sets the pin for the OCRA instance.
+     *
+     * Required if the suite supports session.
      *
      * @param string $pin The pin to set.
      * @return OCRA
@@ -42,6 +44,8 @@ final class OCRA
     /**
      * Sets the session for the OCRA instance.
      *
+     * Required if the suite supports session.
+     *
      * @param string $session The session to set.
      * @return OCRA
      */
@@ -53,6 +57,8 @@ final class OCRA
 
     /**
      * Sets the time for the OCRA instance.
+     *
+     * Only applicable if the suite supports time format.
      *
      * @param DateTimeInterface $dateTime The DateTime object to set the time from.
      * @return OCRA
@@ -66,12 +72,12 @@ final class OCRA
     /**
      * Generates the OCRA code based on the input and optional counter.
      *
-     * @param string $input The input value for generating the OCRA code.
+     * @param string $challenge The challenge for generating the OCRA code.
      * @param int $counter The optional counter value (default is 0).
      * @return string The generated OCRA code.
      * @throws Exception
      */
-    public function generate(string $input, int $counter = 0): string
+    public function generate(string $challenge, int $counter = 0): string
     {
         $msg = $this->ocraSuite['suite'] . "\0";
 
@@ -79,13 +85,13 @@ final class OCRA
             $msg .= pack('NN', ($counter >> 32) & 0xffffffff, $counter & 0xffffffff);
         }
 
-        $msg .= $this->calculateQ($input);
+        $msg .= $this->calculateQ($challenge);
 
         if ($this->ocraSuite['optional']) {
             $msg .= $this->calculateOptionals();
         }
 
-        $hash = hash_hmac($this->ocraSuite['algo'], $msg, $this->key, true);
+        $hash = hash_hmac($this->ocraSuite['algo'], $msg, $this->sharedKey, true);
 
         if (!$this->ocraSuite['length']) {
             return $hash;

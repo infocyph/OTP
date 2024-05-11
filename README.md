@@ -8,8 +8,28 @@
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/otp/php)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/infocyph/otp)
 
-Simple but Secure Generic OTP, TOTP (RFC6238), HOTP (RFC4226) solution!
+Simple but Secure AIO OTP solution. Supports,
+- Generic OTP (storage-less otp solution)
+- TOTP (RFC6238)
+- HOTP (RFC4226)
+- OCRA (RFC6287)
 
+## Table of Contents
+
+<!--ts-->
+
+* [Prerequisites](#prerequisites)
+* [Installation](#installation)
+* [Why this library?](#why-this-library)
+* [Usage](#usage)
+    * [HOTP (RFC4226)](#hotp-rfc4226)
+    * [TOTP (RFC6238)](#totp-rfc6238)
+    * [OCRA (RFC6287)](#ocra-rfc6287)
+    * [Generic OTP](#generic-otp)
+* [Support](#support)
+* [References](#references)
+
+<!--te-->
 
 ## Prerequisites
 
@@ -35,6 +55,9 @@ composer require infocyph/otp
 
 #### Generic OTP
 - No need to dedicate extra storage/db for User information (just build a unique signature)
+
+#### OCRA
+- One of a few implementation in PHP, easy to use
 
 ## Usage
 
@@ -108,6 +131,21 @@ $otp = (new \Infocyph\OTP\TOTP($secret))->getOTP(1604820275);
 (new \Infocyph\OTP\TOTP($secret))->verify($otp, 1604820275);
 ```
 
+### OCRA (RFC6287)
+
+```php
+// Example usage:
+$sharedKey = 'mySecretKey'; // Replace with your actual shared key (binary format)
+$challenge = '123456'; // Replace with your challenge value
+$counter = 0; // Replace with the appropriate counter value
+
+// Create an OCRA suite instance
+$suite = new \Infocyph\OTP\OCRA('OCRA-1:HOTP-SHA1-6:C-QN08', $sharedKey);
+
+// Generate the OCRA value
+$suite->generate($challenge, $counter);
+```
+
 ### Generic OTP
 
 ```php
@@ -147,3 +185,9 @@ _Note: Generic OTP uses **temporary location** for storage, make sure you have p
 ## Support
 
 Having trouble? Create an issue!
+
+## References
+
+- HOTP (RFC4226): https://tools.ietf.org/html/rfc4226
+- TOTP (RFC6238): https://tools.ietf.org/html/rfc6238
+- OCRA (RFC6287): https://tools.ietf.org/html/rfc6287
