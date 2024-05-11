@@ -2,7 +2,7 @@
 
 namespace Infocyph\OTP;
 
-class TOTP
+final class TOTP
 {
     use Common;
 
