@@ -24,8 +24,8 @@ Simple but Secure AIO OTP solution. Supports,
 * [Usage](#usage)
     * [HOTP (RFC4226)](#hotp-rfc4226)
     * [TOTP (RFC6238)](#totp-rfc6238)
-    * [OCRA (RFC6287)](#ocra-rfc6287)
     * [Generic OTP](#generic-otp)
+    * [OCRA (RFC6287)](#ocra-rfc6287)
 * [Support](#support)
 * [References](#references)
 
@@ -210,11 +210,11 @@ Here `OCRA-1:HOTP-` is fixed as of current documentation.
 - C denotes counter support (optional)
 - QN08 denotes the mode (it can be either of QNxx, QAxx, QHxx)
 
-  |    Format (F)    | Up to Length (xx) |
-      |:----------------:|:-----------------:|
-  | A (alphanumeric) |       04-64       |
-  |   N (numeric)    |       04-64       |
-  | H (hexadecimal)  |       04-64       |
+|    Format (F)    | Up to Length (xx) |
+|:----------------:|:-----------------:|
+| A (alphanumeric) |       04-64       |
+|   N (numeric)    |       04-64       |
+| H (hexadecimal)  |       04-64       |
 
 - Next part is optional & little tricky
     - PSHA1 denotes the hash function used for pin support (it can be either of PSHA1, PSHA256, PSHA512)
