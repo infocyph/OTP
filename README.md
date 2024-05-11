@@ -1,7 +1,6 @@
 # OTP
 
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/1b7873dd2bdf48748c86265f24db0b34)](https://app.codacy.com/gh/infocyph/OTP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/infocyph/otp)
 ![Packagist Downloads (custom server)](https://img.shields.io/packagist/dt/infocyph/otp?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fotp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/otp)
