@@ -7,7 +7,7 @@ use Psr\Cache\InvalidArgumentException;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\CacheItem;
 
-class OTP
+final class OTP
 {
     private FilesystemAdapter $cacheAdapter;
 

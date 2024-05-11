@@ -1,0 +1,12 @@
+.github/dependabot.yml abmmhasan@users.noreply.github.com
+.github/workflows/php.yml abmmhasan@users.noreply.github.com
+.gitignore abmmhasan@users.noreply.github.com
+LICENSE abmmhasan@users.noreply.github.com
+README.md abmmhasan@users.noreply.github.com
+composer.json abmmhasan@users.noreply.github.com
+src/Common.php abmmhasan@users.noreply.github.com
+src/Exceptions/OCRAException.php abmmhasan@users.noreply.github.com
+src/HOTP.php abmmhasan@users.noreply.github.com
+src/OCRA.php abmmhasan@users.noreply.github.com
+src/OTP.php abmmhasan@users.noreply.github.com
+src/TOTP.php abmmhasan@users.noreply.github.com

@@ -20,16 +20,18 @@
     "sort-packages": true,
     "optimize-autoloader": true
   },
+  "archive": {
+    "exclude": [
+      "/.github"
+    ]
+  },
   "require": {
     "php": ">=8.2",
     "bacon/bacon-qr-code": "^3.0",
-    "paragonie/constant_time_encoding": "^2.6",
+    "paragonie/constant_time_encoding": "^3.0",
     "symfony/cache": "^7.0"
   },
   "require-dev": {
     "symfony/var-dumper": "^7.0"
-  },
-  "replace": {
-    "abmmhasan/otp": "*"
   }
 }
