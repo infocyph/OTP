@@ -8,6 +8,7 @@
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/infocyph/otp)
 
 Simple but Secure AIO OTP solution. Supports,
+
 - Generic OTP (storage-less otp solution)
 - TOTP (RFC6238)
 - HOTP (RFC4226)
@@ -49,13 +50,16 @@ composer require infocyph/otp
 ## Why this library?
 
 #### TOTP & HOTP
+
 - Uses offline QR code generator (no more exposing your secret online)
 - Time-safe Base32 encoding (30 seconds validity means 30 seconds)
 
 #### Generic OTP
+
 - No need to dedicate extra storage/db for User information (just build a unique signature)
 
 #### OCRA
+
 - One of a few implementation in PHP, easy to use
 
 ## Usage
@@ -130,21 +134,6 @@ $otp = (new \Infocyph\OTP\TOTP($secret))->getOTP(1604820275);
 (new \Infocyph\OTP\TOTP($secret))->verify($otp, 1604820275);
 ```
 
-### OCRA (RFC6287)
-
-```php
-// Example usage:
-$sharedKey = 'mySecretKey'; // Replace with your actual shared key (binary format)
-$challenge = '123456'; // Replace with your challenge value
-$counter = 0; // Replace with the appropriate counter value
-
-// Create an OCRA suite instance
-$suite = new \Infocyph\OTP\OCRA('OCRA-1:HOTP-SHA1-6:C-QN08', $sharedKey);
-
-// Generate the OCRA value
-$suite->generate($challenge, $counter);
-```
-
 ### Generic OTP
 
 ```php
@@ -179,7 +168,64 @@ $otpInstance->delete('an unique signature for a cause');
 */
 $otpInstance->flush()
 ```
+
 _Note: Generic OTP uses **temporary location** for storage, make sure you have proper access permission_
+
+### OCRA (RFC6287)
+
+```php
+// Example usage:
+$sharedKey = 'mySecretKey'; // Replace with your actual shared key (binary format)
+$challenge = '123456'; // Replace with your challenge value
+$counter = 0; // Replace with the appropriate counter value
+
+// Create an OCRA instance
+$suite = new \Infocyph\OTP\OCRA('OCRA-1:HOTP-SHA1-6:C-QN08', $sharedKey);
+
+// If the OCRA suite supports session, set the session
+$suite->setSession('...');
+
+// If the OCRA suite supports time format, set the time
+$suite->setTime(new \DateTime());
+
+// If the OCRA suite supports pin, set the pin
+$suite->setPin('...');
+
+// Generate the OCRA value
+$suite->generate($challenge, $counter);
+```
+
+#### Forming an OCRA Suite
+
+According to current RFC6287, an example string should be in the following format:
+
+```php
+OCRA-1:HOTP-SHA1-6:C-QN08-PSHA1
+```
+
+Here `OCRA-1:HOTP-` is fixed as of current documentation.
+
+- SHA1 is cryptographic hash function. (supported: SHA1, SHA256, SHA512)
+- 6 is the number of digits in the generated OTP. (supported: 0, 4-10)
+- C denotes counter support (optional)
+- QN08 denotes the mode (it can be either of QNxx, QAxx, QHxx)
+
+  |    Format (F)    | Up to Length (xx) |
+      |:----------------:|:-----------------:|
+  | A (alphanumeric) |       04-64       |
+  |   N (numeric)    |       04-64       |
+  | H (hexadecimal)  |       04-64       |
+
+- Next part is optional & little tricky
+    - PSHA1 denotes the hash function used for pin support (it can be either of PSHA1, PSHA256, PSHA512)
+    - S (not in example) denotes session length (3 digits)
+    - T (not in example) denotes time format as of below table,
+
+| Time-Step Size (G) |           Examples           |
+|:------------------:|:----------------------------:|
+|      [1-59]S       | number of seconds, e.g., 20S |
+|      [1-59]M       | number of minutes, e.g., 5M  |
+|      [0-48]H       |  number of hours, e.g., 24H  |
 
 ## Support
 
