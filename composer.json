@@ -9,6 +9,19 @@
       "email": "abmmhasan@gmail.com"
     }
   ],
+  "keywords": [
+    "otp",
+    "hotp",
+    "totp",
+    "hmac",
+    "sha",
+    "ocra",
+    "rfc4226",
+    "rfc6238",
+    "rfc6287",
+    "sms-otp",
+    "email-otp"
+  ],
   "autoload": {
     "psr-4": {
       "Infocyph\\OTP\\": "src/"
