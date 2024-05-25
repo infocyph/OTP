@@ -1,0 +1,10 @@
+{
+  "preset": "psr12",
+  "exclude": [
+    "tests"
+  ],
+  "notPath": [
+    "rector.php",
+    "test.php"
+  ]
+}

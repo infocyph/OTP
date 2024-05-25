@@ -46,22 +46,31 @@ trait Common
     }
 
     /**
-     * Generates the provisioning URI.
+     * Generates the provisioning URI for the given label, issuer, and optional parameters.
      *
-     * @param string $label The label for the URI.
-     * @param string $issuer The issuer for the URI.
-     * @return string The provisioning URI.
+     * @param string $label The label for the provisioning URI.
+     * @param string $issuer The issuer for the provisioning URI.
+     * @param array $include An array of optional parameters to include in the provisioning URI. Default is ['algorithm', 'digits', 'period', 'counter'].
+     * @return string The provisioning URI as a string.
      */
-    public function getProvisioningUri(string $label, string $issuer): string
-    {
+    public function getProvisioningUri(
+        string $label,
+        string $issuer,
+        array $include = ['algorithm', 'digits', 'period', 'counter']
+    ): string {
+        $include = array_flip($include);
+        $period = null;
+        if ($this->type !== 'hotp' && isset($include['period'])) {
+            $period = $this->period;
+        }
         $query = http_build_query(
             array_filter([
                 'secret' => $this->secret,
                 'issuer' => $issuer,
-                'algorithm' => $this->algorithm,
-                'digits' => $this->digitCount,
-                'period' => $this->type === 'hotp' ? null : $this->period,
-                'counter' => $this->counter
+                'algorithm' => isset($include['algorithm']) ? $this->algorithm : null,
+                'digits' => isset($include['digits']) ? $this->digitCount : null,
+                'period' => $period,
+                'counter' => isset($include['counter']) ? $this->counter : null
             ]),
             encoding_type: PHP_QUERY_RFC3986
         );
@@ -72,21 +81,25 @@ trait Common
     }
 
     /**
-     * Generates the provisioning URI QR image.
+     * Generates the provisioning QR code for the given label, issuer, and optional parameters.
      *
-     * @param string $label The label for the provisioning URI.
-     * @param string|null $issuer The issuer for the provisioning URI. Default is null.
-     * @return string The provisioning URI as a string.
+     * @param string $label The label for the provisioning QR code.
+     * @param string $issuer The issuer for the provisioning QR code.
+     * @param array $include An array of optional parameters to include in the provisioning QR code. Default is ['algorithm', 'digits', 'period', 'counter'].
+     * @return string The provisioning QR code as SVG string.
      */
-    public function getProvisioningUriQR(string $label, string $issuer = null): string
-    {
+    public function getProvisioningUriQR(
+        string $label,
+        string $issuer,
+        array $include = ['algorithm', 'digits', 'period', 'counter']
+    ): string {
         $writer = new Writer(
             new ImageRenderer(
                 new RendererStyle(200),
                 new SvgImageBackEnd()
             )
         );
-        return $writer->writeString($this->getProvisioningUri($label, $issuer));
+        return $writer->writeString($this->getProvisioningUri($label, $issuer, $include));
     }
 
     /**
@@ -97,7 +110,7 @@ trait Common
      */
     private function getPassword(int $input): string
     {
-        $timeCode = ($input * 1000) / ($this->period * 1000);
+        $timeCode = (int)(($input * 1000) / ($this->period * 1000));
         $result = [];
         while ($timeCode !== 0) {
             $result[] = chr($timeCode & 0xFF);
@@ -119,7 +132,7 @@ trait Common
             ($hmac[$offset + 2] & 0xFF) << 8 |
             ($hmac[$offset + 3] & 0xFF);
         return str_pad(
-            $code % pow(10, $this->digitCount),
+            $code % 10 ** $this->digitCount,
             $this->digitCount,
             '0',
             STR_PAD_LEFT

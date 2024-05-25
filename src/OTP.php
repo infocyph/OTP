@@ -18,10 +18,10 @@ final class OTP
      * @param int $validUpto The number of seconds until the code expires.
      */
     public function __construct(
-        private int $digitCount = 6,
-        private int $validUpto = 30,
-        private int $retry = 3,
-        private string $hashAlgorithm = 'sha256'
+        private readonly int $digitCount = 6,
+        private readonly int $validUpto = 30,
+        private readonly int $retry = 3,
+        private readonly string $hashAlgorithm = 'xxh128'
     ) {
         $this->cacheAdapter = new FilesystemAdapter();
     }
@@ -36,7 +36,7 @@ final class OTP
     public function generate(string $signature): int
     {
         $this->validateRequirements();
-        $otpAdapter = $this->cacheAdapter->getItem('ao-otp_' . base64_encode($signature));
+        $otpAdapter = $this->cacheAdapter->getItem('ao-otp_' . hash('xxh3', $signature));
         $otp = $this->number($this->digitCount);
         $this->storeData($otpAdapter, hash($this->hashAlgorithm, $otp), $this->retry, $this->validUpto);
         return $otp;
@@ -56,7 +56,7 @@ final class OTP
         if ($otp < 0 || strlen($otp) !== $this->digitCount) {
             return false;
         }
-        $signature = 'ao-otp_' . base64_encode($signature);
+        $signature = 'ao-otp_' . hash('xxh3', $signature);
         $otpAdapter = $this->cacheAdapter->getItem($signature);
         if (!$otpAdapter->isHit()) {
             return false;
@@ -79,7 +79,7 @@ final class OTP
      */
     public function delete(string $signature): bool
     {
-        return $this->cacheAdapter->deleteItem('ao-otp_' . base64_encode($signature));
+        return $this->cacheAdapter->deleteItem('ao-otp_' . hash('xxh3', $signature));
     }
 
     /**
@@ -128,7 +128,7 @@ final class OTP
             $this->digitCount < 2 || $this->digitCount > PHP_INT_SIZE
             => throw new Exception('The number of digits must be between 2 and ' . PHP_INT_SIZE . '.'),
             $this->retry < 0
-            => throw new Exception('The number of retries must be atleast 0.'),
+            => throw new Exception('The number of retries must be at least 0.'),
             $this->validUpto < 1
             => throw new Exception('Validity duration is invalid.'),
             default => null

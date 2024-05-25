@@ -91,16 +91,16 @@ final class OCRA
             $msg .= $this->calculateOptionals();
         }
 
-        $hash = hash_hmac($this->ocraSuite['algo'], $msg, $this->sharedKey, true);
+        $hash = hash_hmac((string) $this->ocraSuite['algo'], $msg, $this->sharedKey, true);
 
         if (!$this->ocraSuite['length']) {
             return $hash;
         }
 
-        list(, $value) = unpack('N', substr($hash, ord(substr($hash, -1)) & 0xf, 4));
+        [, $value] = unpack('N', substr($hash, ord(substr($hash, -1)) & 0xf, 4));
 
         return str_pad(
-            ($value & 0x7fffffff) % pow(10, $this->ocraSuite['length']),
+            ($value & 0x7fffffff) % 10 ** $this->ocraSuite['length'],
             $this->ocraSuite['length'],
             '0',
             STR_PAD_LEFT
@@ -132,7 +132,7 @@ final class OCRA
     {
         return match ($this->ocraSuite['optional']['format']) {
             'p' => hash(
-                $this->ocraSuite['optional']['value'],
+                (string) $this->ocraSuite['optional']['value'],
                 $this->pin ?? throw new OCRAException('Missing PIN'),
                 true
             ),
@@ -182,9 +182,9 @@ final class OCRA
     private function prepareConditionalParts(array $parts): array
     {
         $conditionalParts = (
-        $parts[5] === 'c'
-            ? ['c' => true, 'q' => substr($parts[6], 1), 'optional' => $parts[7] ?? null]
-            : ['c' => false, 'q' => substr($parts[5], 1), 'optional' => $parts[6] ?? null]
+            $parts[5] === 'c'
+            ? ['c' => true, 'q' => substr((string) $parts[6], 1), 'optional' => $parts[7] ?? null]
+            : ['c' => false, 'q' => substr((string) $parts[5], 1), 'optional' => $parts[6] ?? null]
         );
 
         $conditionalParts['q'] = [
@@ -198,7 +198,7 @@ final class OCRA
 
         $conditionalParts['optional'] = [
             'format' => $conditionalParts['optional'][0],
-            'value' => substr($conditionalParts['optional'], 1)
+            'value' => substr((string) $conditionalParts['optional'], 1)
         ];
         $conditionalParts['optional']['value'] = match ($conditionalParts['optional']['format']) {
             's' => (int)$conditionalParts['optional']['value'],

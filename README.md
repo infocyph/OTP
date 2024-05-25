@@ -1,5 +1,6 @@
 # OTP
 
+[![Security & Standards](https://github.com/infocyph/OTP/actions/workflows/build.yml/badge.svg)](https://github.com/infocyph/OTP/actions/workflows/build.yml)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/1b7873dd2bdf48748c86265f24db0b34)](https://app.codacy.com/gh/infocyph/OTP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 ![Packagist Downloads (custom server)](https://img.shields.io/packagist/dt/infocyph/otp?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fotp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -66,16 +67,12 @@ composer require infocyph/otp
 
 ### HOTP (RFC4226)
 
+- Generate secret
 ```php
-/**
-* Generate Secret
-* It will generate secure random secret string
-*/
 $secret = \Infocyph\OTP\HOTP::generateSecret();
-
-/**
-* Get QR Code Image for secret $secret
-*/
+```
+- Get QR Code Image for secret $secret (in SVG format)
+```php
 // supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
 (new \Infocyph\OTP\HOTP($secret))
 // only required if the counter is being imported from another system or if it is old, & for QR only
@@ -84,72 +81,74 @@ $secret = \Infocyph\OTP\HOTP::generateSecret();
 ->setAlgorithm('sha256') 
 // or `getProvisioningUri` just to get the URI
 ->getProvisioningUriQR('TestName', 'abc@def.ghi'); 
+```
+> The `getProvisioningUriQR` & `getProvisioningUri` accepts 3rd parameter, where it takes array of parameters
+`['algorithm', 'digits', 'period', 'counter']`. Problem you might encounter, with the URI/Image is that most of the 
+OTP generator might not support all of those options. In that case, passing in a blank array will remove all the optional
+keys, or you can pass in selective parameters as you need.
 
-/**
-* Get current OTP for a given counter
-*/
+- Get current OTP for a given counter
+```php
 $counter = 346;
 $otp = (new \Infocyph\OTP\HOTP($secret))->getOTP($counter);
-
-/**
-* Verify
-*/
+```
+- Verify
+```php
 (new \Infocyph\OTP\HOTP($secret))->verify($otp,$counter);
 ```
 
 ### TOTP (RFC6238)
 
+- Generate secret
 ```php
-/**
-* Generate Secret
-* It will generate secure random secret string
-*/
 $secret = \Infocyph\OTP\TOTP::generateSecret();
-
-/**
-* Get QR Code Image for secret $secret
-*/
+```
+- Get QR Code Image for secret $secret (in SVG format)
+```php
 // supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
-(new \Infocyph\OTP\TOTP($secret)) 
+(new \Infocyph\OTP\TOTP($secret))
 // default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
 ->setAlgorithm('sha256') 
 // or `getProvisioningUri` just to get the URI
-->getProvisioningUriQR('TestName', 'abc@def.ghi');
+->getProvisioningUriQR('TestName', 'abc@def.ghi'); 
+```
+> The `getProvisioningUriQR` & `getProvisioningUri` accepts 3rd parameter, where it takes array of parameters
+`['algorithm', 'digits', 'period', 'counter']`. Problem you might encounter, with the URI/Image is that most of the
+OTP generators might not support all of those options. In that case, passing in a blank array will remove all the optional
+keys, or you can pass in selective parameters as you need.
 
-/**
-* Get current OTP
-*/
-$otp = (new \Infocyph\OTP\TOTP($secret))->getOTP();
+- Get current OTP for a given counter
+```php
+$counter = 346;
+$otp = (new \Infocyph\OTP\TOTP($secret))->getOTP($counter);
 // or get OTP for another specified epoch time
 $otp = (new \Infocyph\OTP\TOTP($secret))->getOTP(1604820275);
-
-/**
-* Verify
-* 
-* on 3rd parameter it supports, enabling leeway.
-* if enabled, it will also check with last segment's generated otp 
-*/
+```
+- Verify
+```php
 (new \Infocyph\OTP\TOTP($secret))->verify($otp);
 // or verify for a specified time
 (new \Infocyph\OTP\TOTP($secret))->verify($otp, 1604820275);
 ```
+> On 3rd parameter `(bool)` it supports, enabling leeway. If enabled, it will also check with last segment's generated otp.
 
 ### Generic OTP
 
+- Initiate
 ```php
 /**
-* Initiate 
 * Param 1 is OTP length (default 6)
 * Param 2 is validity in seconds (default 30)
 * Param 3 is retry count on failure (default 3)
 */
 $otpInstance = new \Infocyph\OTP\OTP(4, 60, 2);
-
-/**
-* Generate & get the OTP
-*/
+```
+- Generate & get the OTP
+```php
 $otp = $otpInstance->generate('an unique signature for a cause');
-
+```
+- Verify the OTP
+```php
 /**
 * Verify the OTP
 * 
@@ -157,19 +156,21 @@ $otp = $otpInstance->generate('an unique signature for a cause');
 * by default it will keep the record till the key name match or the otp is verified or expired
 */
 $otpInstance->verify('an unique signature for a cause', $otp);
+```
+> On 3rd parameter setting false `will keep the record till the otp is verified or expired`. By default, 
+`will keep the record till the key name match or the otp is verified or expired`
 
-/**
-* Delete the record
-*/
+- Delete a record
+```php
 $otpInstance->delete('an unique signature for a cause');
+```
+- Flush all the existing OTPs (if any)
 
-/**
-* Flush all the existing OTPs (if any)
-*/
+```php
 $otpInstance->flush()
 ```
 
-_Note: Generic OTP uses **temporary location** for storage, make sure you have proper access permission_
+> Generic OTP uses **temporary location** for storage, make sure you have proper access permission
 
 ### OCRA (RFC6287)
 

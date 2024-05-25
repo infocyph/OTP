@@ -1,0 +1,45 @@
+name: "Security & Standards"
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+
+jobs:
+  run:
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ ubuntu-latest ]
+        php-versions: [ '8.2', '8.3' ]
+        dependency-version: [ prefer-lowest, prefer-stable ]
+
+    name: PHP ${{ matrix.php-versions }} - ${{ matrix.operating-system }} - ${{ matrix.dependency-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-versions }}
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Check PHP Version
+        run: php -v
+
+      - name: Validate Composer
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Package Audit
+        run: composer audit
+
+      - name: Test
+        run: composer tests
