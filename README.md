@@ -149,12 +149,6 @@ $otp = $otpInstance->generate('an unique signature for a cause');
 ```
 - Verify the OTP
 ```php
-/**
-* Verify the OTP
-* 
-* on 3rd parameter setting false will keep the record till the otp is verified or expired
-* by default it will keep the record till the key name match or the otp is verified or expired
-*/
 $otpInstance->verify('an unique signature for a cause', $otp);
 ```
 > On 3rd parameter setting false `will keep the record till the otp is verified or expired`. By default, 
