@@ -7,6 +7,7 @@
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/otp)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/otp/php)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/infocyph/otp)
+[![]()](https://visitor-badge.laobi.icu/badge?page_id=infocyph.com)
 
 Simple but Secure AIO OTP solution. Supports,
 
