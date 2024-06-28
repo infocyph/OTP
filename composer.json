@@ -1,6 +1,6 @@
 {
   "name": "infocyph/otp",
-  "description": "Simple but Secure OTP solution!",
+  "description": "Simple & Secure Generic OTP, OCRA (RFC6287), TOTP (RFC6238) & HOTP (RFC4226) solution!",
   "type": "library",
   "license": "MIT",
   "authors": [
