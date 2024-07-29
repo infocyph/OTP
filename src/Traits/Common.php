@@ -20,7 +20,7 @@ trait Common
     private string $algorithm = 'sha1';
     private string $type = 'totp';
     private ?string $label = null;
-    private ?string $ocraSuite = null;
+    private ?string $ocraSuiteString = null;
 
     /**
      * Generates a secret string
@@ -48,12 +48,12 @@ trait Common
     /**
      * Set the OCRA suite for the OTP generation.
      *
-     * @param string $ocraSuite The OCRA suite to set.
+     * @param string $ocraSuiteString The OCRA suite to set.
      * @return static
      */
-    public function setOcraSuite(string $ocraSuite): static
+    public function setOcraSuite(string $ocraSuiteString): static
     {
-        $this->ocraSuite = $ocraSuite;
+        $this->ocraSuiteString = $ocraSuiteString;
         $this->type = 'ocra';
         return $this;
     }
@@ -65,7 +65,7 @@ trait Common
      */
     private function getAlgorithmFromSuite(): string
     {
-        preg_match('/HOTP-(SHA\d+)/', $this->ocraSuite, $matches);
+        preg_match('/HOTP-(SHA\d+)/', $this->ocraSuiteString, $matches);
         return $matches[1] ?? 'SHA1';
     }
 
@@ -76,7 +76,7 @@ trait Common
      */
     private function getDigitsFromSuite(): int
     {
-        preg_match('/-(\d{1,2}):/', $this->ocraSuite, $matches);
+        preg_match('/-(\d{1,2}):/', $this->ocraSuiteString, $matches);
         return (int)($matches[1] ?? 6);
     }
 
@@ -101,7 +101,7 @@ trait Common
 
         $query += match ($this->type) {
             'ocra' => [
-                'ocraSuite' => $this->ocraSuite,
+                'ocraSuite' => $this->ocraSuiteString,
                 'algorithm' => isset($include['algorithm']) ? strtoupper($this->getAlgorithmFromSuite()) : null,
                 'digits' => isset($include['digits']) ? $this->getDigitsFromSuite() : null
             ],
