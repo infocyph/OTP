@@ -5,15 +5,16 @@ namespace Infocyph\OTP;
 use DateTimeInterface;
 use Exception;
 use Infocyph\OTP\Exceptions\OCRAException;
+use Infocyph\OTP\Traits\Common;
 
 final class OCRA
 {
-    private string $ocraRegex = '/^OCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]|10):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(-(P(SHA1|SHA256|SHA512)|S\d{3}|(T((\d|[1-3]\d|4[0-8])H|(([1-9]|[1-5]\d)([SM]))))))?/';
-
+    use Common;
+    private const OCRA_REGEX = '/^OCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]|10):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(-(P(SHA1|SHA256|SHA512)|S\d{3}|(T((\d|[1-3]\d|4[0-8])H|(([1-9]|[1-5]\d)([SM]))))))*$/';
     private array $ocraSuite;
-    private string $pin;
-    private string $session;
-    private string $time;
+    private ?string $pin = null;
+    private ?string $session = null;
+    private ?string $time = null;
 
     /**
      * Constructor for the class.
@@ -30,13 +31,17 @@ final class OCRA
     /**
      * Sets the pin for the OCRA instance.
      *
-     * Required if the suite supports session.
+     * Required if the suite supports PIN.
      *
      * @param string $pin The pin to set.
      * @return OCRA
+     * @throws OCRAException
      */
     public function setPin(string $pin): OCRA
     {
+        if (empty($pin)) {
+            throw new OCRAException('PIN cannot be empty.');
+        }
         $this->pin = $pin;
         return $this;
     }
@@ -48,9 +53,13 @@ final class OCRA
      *
      * @param string $session The session to set.
      * @return OCRA
+     * @throws OCRAException
      */
     public function setSession(string $session): OCRA
     {
+        if (empty($session)) {
+            throw new OCRAException('Session cannot be empty.');
+        }
         $this->session = $session;
         return $this;
     }
@@ -87,11 +96,11 @@ final class OCRA
 
         $msg .= $this->calculateQ($challenge);
 
-        if ($this->ocraSuite['optional']) {
+        if (!empty($this->ocraSuite['optionals'])) {
             $msg .= $this->calculateOptionals();
         }
 
-        $hash = hash_hmac((string) $this->ocraSuite['algo'], $msg, $this->sharedKey, true);
+        $hash = hash_hmac((string)$this->ocraSuite['algo'], $msg, $this->sharedKey, true);
 
         if (!$this->ocraSuite['length']) {
             return $hash;
@@ -123,30 +132,35 @@ final class OCRA
     }
 
     /**
-     * Calculates the optional value based on the format specified in the OCRA suite.
+     * Calculates the optional values based on the formats specified in the OCRA suite.
      *
-     * @return string The calculated optional value.
+     * @return string The concatenated calculated optional values.
      * @throws OCRAException
      */
     private function calculateOptionals(): string
     {
-        return match ($this->ocraSuite['optional']['format']) {
-            'p' => hash(
-                (string) $this->ocraSuite['optional']['value'],
-                $this->pin ?? throw new OCRAException('Missing PIN'),
-                true
-            ),
-            's' => str_pad(
-                pack('H*', $this->session ?? throw new OCRAException('Missing Session')),
-                $this->ocraSuite['optional']['value'],
-                "\0",
-                STR_PAD_LEFT
-            ),
-            't' => [
-                $time = (int)floor(($this->time ?? time()) / $this->ocraSuite['optional']['value']),
-                pack('NN', ($time >> 32) & 0xffffffff, $time & 0xffffffff)
-            ][1]
-        };
+        $optionals = '';
+        foreach ($this->ocraSuite['optionals'] as $optional) {
+            $optionals .= match ($optional['format']) {
+                'p' => hash(
+                    (string)$optional['value'],
+                    $this->pin ?? throw new OCRAException('Missing PIN'),
+                    true
+                ),
+                's' => str_pad(
+                    pack('H*', $this->session ?? throw new OCRAException('Missing Session')),
+                    $optional['value'],
+                    "\0",
+                    STR_PAD_LEFT
+                ),
+                't' => [
+                    $time = (int)floor(($this->time ?? time()) / $optional['value']),
+                    pack('NN', ($time >> 32) & 0xffffffff, $time & 0xffffffff)
+                ][1],
+                default => throw new OCRAException('Invalid optional part format')
+            };
+        }
+        return $optionals;
     }
 
     /**
@@ -157,7 +171,7 @@ final class OCRA
      */
     private function validateAndParse(string $ocraSuite): void
     {
-        if (!preg_match($this->ocraRegex, $ocraSuite, $matches)) {
+        if (!preg_match(self::OCRA_REGEX, $ocraSuite, $matches)) {
             throw new OCRAException('Invalid OCRA Suite!');
         }
 
@@ -178,13 +192,14 @@ final class OCRA
      *
      * @param array $parts The array of parts to prepare the conditional parts from.
      * @return array The prepared conditional parts.
+     * @throws OCRAException
      */
     private function prepareConditionalParts(array $parts): array
     {
         $conditionalParts = (
-            $parts[5] === 'c'
-            ? ['c' => true, 'q' => substr((string) $parts[6], 1), 'optional' => $parts[7] ?? null]
-            : ['c' => false, 'q' => substr((string) $parts[5], 1), 'optional' => $parts[6] ?? null]
+        $parts[5] === 'c'
+            ? ['c' => true, 'q' => substr((string)$parts[6], 1), 'optionals' => array_slice($parts, 7)]
+            : ['c' => false, 'q' => substr((string)$parts[5], 1), 'optionals' => array_slice($parts, 6)]
         );
 
         $conditionalParts['q'] = [
@@ -192,23 +207,29 @@ final class OCRA
             'value' => (int)($conditionalParts['q'][1] . $conditionalParts['q'][2]),
         ];
 
-        if (!$conditionalParts['optional']) {
+        if (empty($conditionalParts['optionals'])) {
             return $conditionalParts;
         }
 
-        $conditionalParts['optional'] = [
-            'format' => $conditionalParts['optional'][0],
-            'value' => substr((string) $conditionalParts['optional'], 1)
-        ];
-        $conditionalParts['optional']['value'] = match ($conditionalParts['optional']['format']) {
-            's' => (int)$conditionalParts['optional']['value'],
-            'p' => $conditionalParts['optional']['value'],
-            't' => match (substr($conditionalParts['optional']['value'], -1)) {
-                's' => (int)rtrim($conditionalParts['optional']['value'], 's'),
-                'm' => (int)rtrim($conditionalParts['optional']['value'], 'm') * 60,
-                'h' => (int)rtrim($conditionalParts['optional']['value'], 'h') * 3600
-            }
-        };
+        $conditionalParts['optionals'] = array_map(function ($optional) {
+            return [
+                'format' => $optional[0],
+                'value' => substr((string)$optional, 1)
+            ];
+        }, $conditionalParts['optionals']);
+
+        foreach ($conditionalParts['optionals'] as &$optional) {
+            $optional['value'] = match ($optional['format']) {
+                's' => (int)$optional['value'],
+                'p' => $optional['value'],
+                't' => match (substr($optional['value'], -1)) {
+                    's' => (int)rtrim($optional['value'], 's'),
+                    'm' => (int)rtrim($optional['value'], 'm') * 60,
+                    'h' => (int)rtrim($optional['value'], 'h') * 3600,
+                    default => throw new OCRAException('Invalid time format')
+                }
+            };
+        }
 
         return $conditionalParts;
     }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Infocyph\OTP;
+namespace Infocyph\OTP\Traits;
 
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -20,7 +20,7 @@ trait Common
     private string $algorithm = 'sha1';
     private string $type = 'totp';
     private ?string $label = null;
-
+    private ?string $ocraSuite = null;
 
     /**
      * Generates a secret string
@@ -46,6 +46,41 @@ trait Common
     }
 
     /**
+     * Set the OCRA suite for the OTP generation.
+     *
+     * @param string $ocraSuite The OCRA suite to set.
+     * @return static
+     */
+    public function setOcraSuite(string $ocraSuite): static
+    {
+        $this->ocraSuite = $ocraSuite;
+        $this->type = 'ocra';
+        return $this;
+    }
+
+    /**
+     * Get the algorithm from the OCRA suite.
+     *
+     * @return string The algorithm.
+     */
+    private function getAlgorithmFromSuite(): string
+    {
+        preg_match('/HOTP-(SHA\d+)/', $this->ocraSuite, $matches);
+        return $matches[1] ?? 'SHA1';
+    }
+
+    /**
+     * Get the number of digits from the OCRA suite.
+     *
+     * @return int The number of digits.
+     */
+    private function getDigitsFromSuite(): int
+    {
+        preg_match('/-(\d{1,2}):/', $this->ocraSuite, $matches);
+        return (int)($matches[1] ?? 6);
+    }
+
+    /**
      * Generates the provisioning URI for the given label, issuer, and optional parameters.
      *
      * @param string $label The label for the provisioning URI.
@@ -59,25 +94,33 @@ trait Common
         array $include = ['algorithm', 'digits', 'period', 'counter']
     ): string {
         $include = array_flip($include);
-        $period = null;
-        if ($this->type !== 'hotp' && isset($include['period'])) {
-            $period = $this->period;
-        }
-        $query = http_build_query(
-            array_filter([
-                'secret' => $this->secret,
-                'issuer' => $issuer,
+        $query = [
+            'secret' => $this->secret,
+            'issuer' => $issuer,
+        ];
+
+        $query += match ($this->type) {
+            'ocra' => [
+                'ocraSuite' => $this->ocraSuite,
+                'algorithm' => isset($include['algorithm']) ? strtoupper($this->getAlgorithmFromSuite()) : null,
+                'digits' => isset($include['digits']) ? $this->getDigitsFromSuite() : null
+            ],
+            default => [
                 'algorithm' => isset($include['algorithm']) ? $this->algorithm : null,
                 'digits' => isset($include['digits']) ? $this->digitCount : null,
-                'period' => $period,
+                'period' => $this->type === 'totp' && isset($include['period']) ? $this->period : null,
                 'counter' => isset($include['counter']) ? $this->counter : null
-            ]),
+            ]
+        };
+
+        $queryString = http_build_query(
+            array_filter($query),
             encoding_type: PHP_QUERY_RFC3986
         );
 
         $label = rawurlencode(($issuer ? $issuer . ':' : '') . $label);
 
-        return "otpauth://$this->type/$label?$query";
+        return "otpauth://$this->type/$label?$queryString";
     }
 
     /**
@@ -86,16 +129,18 @@ trait Common
      * @param string $label The label for the provisioning QR code.
      * @param string $issuer The issuer for the provisioning QR code.
      * @param array $include An array of optional parameters to include in the provisioning QR code. Default is ['algorithm', 'digits', 'period', 'counter'].
+     * @param int $imageSize The size of the QR code image.
      * @return string The provisioning QR code as SVG string.
      */
     public function getProvisioningUriQR(
         string $label,
         string $issuer,
-        array $include = ['algorithm', 'digits', 'period', 'counter']
+        array $include = ['algorithm', 'digits', 'period', 'counter'],
+        int $imageSize = 200
     ): string {
         $writer = new Writer(
             new ImageRenderer(
-                new RendererStyle(200),
+                new RendererStyle($imageSize),
                 new SvgImageBackEnd()
             )
         );
