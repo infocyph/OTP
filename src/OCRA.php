@@ -197,7 +197,7 @@ final class OCRA
     private function prepareConditionalParts(array $parts): array
     {
         $conditionalParts = (
-        $parts[5] === 'c'
+            $parts[5] === 'c'
             ? ['c' => true, 'q' => substr((string)$parts[6], 1), 'optionals' => array_slice($parts, 7)]
             : ['c' => false, 'q' => substr((string)$parts[5], 1), 'optionals' => array_slice($parts, 6)]
         );
@@ -211,12 +211,10 @@ final class OCRA
             return $conditionalParts;
         }
 
-        $conditionalParts['optionals'] = array_map(function ($optional) {
-            return [
-                'format' => $optional[0],
-                'value' => substr((string)$optional, 1)
-            ];
-        }, $conditionalParts['optionals']);
+        $conditionalParts['optionals'] = array_map(fn ($optional) => [
+            'format' => $optional[0],
+            'value' => substr((string)$optional, 1)
+        ], $conditionalParts['optionals']);
 
         foreach ($conditionalParts['optionals'] as &$optional) {
             $optional['value'] = match ($optional['format']) {
