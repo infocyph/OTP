@@ -2,6 +2,8 @@
 
 namespace Infocyph\OTP;
 
+use Infocyph\OTP\Traits\Common;
+
 final class HOTP
 {
     use Common;
