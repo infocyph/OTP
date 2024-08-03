@@ -86,7 +86,8 @@ $secret = \Infocyph\OTP\HOTP::generateSecret();
 > The `getProvisioningUriQR` & `getProvisioningUri` accepts 3rd parameter, where it takes array of parameters
 `['algorithm', 'digits', 'period', 'counter']`. Problem you might encounter, with the URI/Image is that most of the 
 OTP generator might not support all of those options. In that case, passing in a blank array will remove all the optional
-keys, or you can pass in selective parameters as you need.
+keys, or you can pass in selective parameters as you need. Additionally, you can also pass in additional parameter to reflect
+in URI string or QR image in 4th parameter. But be cautious that, it might not be supported by the Client Apps.
 
 - Get current OTP for a given counter
 ```php
@@ -115,8 +116,9 @@ $secret = \Infocyph\OTP\TOTP::generateSecret();
 ```
 > The `getProvisioningUriQR` & `getProvisioningUri` accepts 3rd parameter, where it takes array of parameters
 `['algorithm', 'digits', 'period', 'counter']`. Problem you might encounter, with the URI/Image is that most of the
-OTP generators might not support all of those options. In that case, passing in a blank array will remove all the optional
-keys, or you can pass in selective parameters as you need.
+OTP generator might not support all of those options. In that case, passing in a blank array will remove all the optional
+keys, or you can pass in selective parameters as you need. Additionally, you can also pass in additional parameter to reflect
+in URI string or QR image in 4th parameter. But be cautious that, it might not be supported by the Client Apps.
 
 - Get current OTP for a given counter
 ```php
