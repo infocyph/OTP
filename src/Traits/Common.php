@@ -86,32 +86,32 @@ trait Common
      * @param string $label The label for the provisioning URI.
      * @param string $issuer The issuer for the provisioning URI.
      * @param array $include An array of optional parameters to include in the provisioning URI. Default is ['algorithm', 'digits', 'period', 'counter'].
+     * @param array $additionalParameters An array of additional parameters to include in the provisioning URI.
      * @return string The provisioning URI as a string.
      */
     public function getProvisioningUri(
         string $label,
         string $issuer,
-        array $include = ['algorithm', 'digits', 'period', 'counter']
+        array $include = ['algorithm', 'digits', 'period', 'counter'],
+        array $additionalParameters = []
     ): string {
         $include = array_flip($include);
         $query = [
-            'secret' => $this->secret,
-            'issuer' => $issuer,
-        ];
-
-        $query += match ($this->type) {
-            'ocra' => [
-                'ocraSuite' => $this->ocraSuiteString,
-                'algorithm' => isset($include['algorithm']) ? strtoupper($this->getAlgorithmFromSuite()) : null,
-                'digits' => isset($include['digits']) ? $this->getDigitsFromSuite() : null
-            ],
-            default => [
-                'algorithm' => isset($include['algorithm']) ? $this->algorithm : null,
-                'digits' => isset($include['digits']) ? $this->digitCount : null,
-                'period' => $this->type === 'totp' && isset($include['period']) ? $this->period : null,
-                'counter' => isset($include['counter']) ? $this->counter : null
-            ]
-        };
+                'secret' => $this->secret,
+                'issuer' => $issuer,
+            ] + match ($this->type) {
+                'ocra' => [
+                    'ocraSuite' => $this->ocraSuiteString,
+                    'algorithm' => isset($include['algorithm']) ? strtoupper($this->getAlgorithmFromSuite()) : null,
+                    'digits' => isset($include['digits']) ? $this->getDigitsFromSuite() : null
+                ],
+                default => [
+                    'algorithm' => isset($include['algorithm']) ? $this->algorithm : null,
+                    'digits' => isset($include['digits']) ? $this->digitCount : null,
+                    'period' => $this->type === 'totp' && isset($include['period']) ? $this->period : null,
+                    'counter' => isset($include['counter']) ? $this->counter : null
+                ]
+            } + $additionalParameters;
 
         $queryString = http_build_query(
             array_filter($query),
@@ -129,6 +129,7 @@ trait Common
      * @param string $label The label for the provisioning QR code.
      * @param string $issuer The issuer for the provisioning QR code.
      * @param array $include An array of optional parameters to include in the provisioning QR code. Default is ['algorithm', 'digits', 'period', 'counter'].
+     * @param array $additionalParameters An array of additional parameters to include in the provisioning URI.
      * @param int $imageSize The size of the QR code image.
      * @return string The provisioning QR code as SVG string.
      */
@@ -136,6 +137,7 @@ trait Common
         string $label,
         string $issuer,
         array $include = ['algorithm', 'digits', 'period', 'counter'],
+        array $additionalParameters = [],
         int $imageSize = 200
     ): string {
         $writer = new Writer(
@@ -144,7 +146,7 @@ trait Common
                 new SvgImageBackEnd()
             )
         );
-        return $writer->writeString($this->getProvisioningUri($label, $issuer, $include));
+        return $writer->writeString($this->getProvisioningUri($label, $issuer, $include, $additionalParameters));
     }
 
     /**
