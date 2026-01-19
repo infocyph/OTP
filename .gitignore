@@ -5,3 +5,11 @@ example.php
 test.php
 composer.lock
 git-story_media
+*~
+*.txt
+!docs/requirements.txt
+.windsurf
+.vscode
+.phpunit.cache
+*.patch
+patch.php

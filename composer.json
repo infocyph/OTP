@@ -43,11 +43,11 @@
     "symfony/cache": "^7.0"
   },
   "require-dev": {
-    "captainhook/captainhook": "^5.23",
-    "laravel/pint": "^1.15",
-    "pestphp/pest": "^2.34",
-    "rector/rector": "^1.0",
-    "symfony/var-dumper": "^7.0"
+    "captainhook/captainhook": "^5.25",
+    "laravel/pint": "^1.25",
+    "pestphp/pest": "^4.1",
+    "rector/rector": "^2.2.3",
+    "symfony/var-dumper": "^7.3"
   },
   "scripts": {
     "test:code": "pest --parallel --processes=10",
@@ -70,6 +70,6 @@
     "test": "pest",
     "refactor": "rector process",
     "lint": "pint",
-    "post-autoload-dump": "@git:hook"
+    "post-autoload-dump": "captainhook install --only-enabled -nf"
   }
 }
