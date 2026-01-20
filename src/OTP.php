@@ -7,7 +7,7 @@ use Psr\Cache\InvalidArgumentException;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\CacheItem;
 
-final class OTP
+final readonly class OTP
 {
     private FilesystemAdapter $cacheAdapter;
 
@@ -18,10 +18,10 @@ final class OTP
      * @param int $validUpto The number of seconds until the code expires.
      */
     public function __construct(
-        private readonly int $digitCount = 6,
-        private readonly int $validUpto = 30,
-        private readonly int $retry = 3,
-        private readonly string $hashAlgorithm = 'xxh128'
+        private int $digitCount = 6,
+        private int $validUpto = 30,
+        private int $retry = 3,
+        private string $hashAlgorithm = 'xxh128'
     ) {
         $this->cacheAdapter = new FilesystemAdapter();
     }
