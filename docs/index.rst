@@ -30,6 +30,7 @@ The library includes:
    guides/generic-otp
    guides/ocra
    guides/provisioning
+   guides/authenticator-apps
    guides/secret-rotation
    guides/device-enrollment
    guides/replay-protection
