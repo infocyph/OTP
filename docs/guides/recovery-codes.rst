@@ -41,3 +41,14 @@ Behavior
 - Stored values are hashed before persistence.
 - Generating a new set replaces the old set.
 - A consumed code cannot be reused.
+
+Persistent tracking
+-------------------
+
+The included in-memory store is useful for tests and simple examples, but production systems should use a persistent store.
+
+See :doc:`custom-stores` for:
+
+- a database schema example
+- a PDO-backed ``RecoveryCodeStoreInterface`` implementation
+- guidance on tracking total issued, remaining, and last-used values over time
