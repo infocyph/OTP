@@ -1,1 +1,5 @@
-mkdocs-material>=9.0
+sphinx>=8.0,<9
+sphinx-book-theme>=1.1
+sphinxcontrib-phpdomain>=0.9
+sphinx-copybutton>=0.5.2
+sphinx-design>=0.6
