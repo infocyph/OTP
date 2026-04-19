@@ -1,0 +1,14 @@
+:root {
+  --md-primary-fg-color: #0f766e;
+  --md-accent-fg-color: #f97316;
+}
+
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: #0f766e;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  letter-spacing: -0.02em;
+}
