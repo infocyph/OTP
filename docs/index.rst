@@ -30,10 +30,10 @@ The library includes:
    guides/generic-otp
    guides/ocra
    guides/provisioning
-   guides/benchmarks
    guides/replay-protection
    guides/recovery-codes
    guides/storage
+   guides/custom-stores
 
 .. toctree::
    :maxdepth: 2

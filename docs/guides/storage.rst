@@ -29,3 +29,12 @@ The package includes contracts you can implement in your own infrastructure:
 - ``Infocyph\OTP\Contracts\ReplayStoreInterface``
 - ``Infocyph\OTP\Contracts\RecoveryCodeStoreInterface``
 - ``Infocyph\OTP\Contracts\SecretStoreInterface``
+
+Implementation examples
+-----------------------
+
+See :doc:`custom-stores` for a step-by-step guide to building persistent database-backed implementations for:
+
+- recovery code tracking
+- replay tracking
+- day-to-day metadata such as total issued, remaining, and last-used time

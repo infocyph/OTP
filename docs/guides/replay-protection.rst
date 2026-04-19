@@ -51,3 +51,10 @@ Example
        replayStore: $store,
        binding: 'user-42',
    );
+
+Persistent implementations
+--------------------------
+
+The in-memory replay store is mainly for tests and lightweight scenarios.
+
+See :doc:`custom-stores` for a database-oriented example implementing ``ReplayStoreInterface``.

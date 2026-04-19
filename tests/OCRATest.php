@@ -1,6 +1,8 @@
 <?php
 
+use Infocyph\OTP\Exceptions\OCRAException;
 use Infocyph\OTP\OCRA;
+use Infocyph\OTP\Stores\InMemoryReplayStore;
 
 const KEY_20 = '12345678901234567890';
 const KEY_32 = "12345678901234567890123456789012";
@@ -76,4 +78,105 @@ test('OCRA-1:HOTP-SHA256-8:QA08', function () {
         ->and($ocra->generate('CLI22222SRV11112'))->toBe('65387857')
         ->and($ocra->generate('CLI22223SRV11113'))->toBe('03351211')
         ->and($ocra->generate('CLI22224SRV11114'))->toBe('83412541');
+});
+
+test('OCRA verifies with and without counter correctly', function () {
+    $withCounter = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', KEY_32);
+    $withCounter->setPin('1234');
+    $otpWithCounter = $withCounter->generate('12345678', 2);
+
+    $withoutCounter = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', KEY_32);
+    $withoutCounter->setPin('1234');
+    $otpWithoutCounter = $withoutCounter->generate('12345678');
+
+    expect($withCounter->verify($otpWithCounter, '12345678', 2))->toBeTrue()
+        ->and($withCounter->verify($otpWithCounter, '12345678', 3))->toBeFalse()
+        ->and($withoutCounter->verify($otpWithoutCounter, '12345678'))->toBeTrue();
+});
+
+test('OCRA pin optional changes output and missing pin is rejected when required', function () {
+    $pinSuite = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', KEY_32);
+    $pinSuite->setPin('1234');
+    $withPin = $pinSuite->generate('00000000');
+
+    $sameSuiteDifferentPin = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', KEY_32);
+    $sameSuiteDifferentPin->setPin('5678');
+    $withDifferentPin = $sameSuiteDifferentPin->generate('00000000');
+
+    $noPinSuite = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', KEY_20);
+    $withoutPin = $noPinSuite->generate('00000000');
+
+    expect($withPin)->not->toBe($withDifferentPin)
+        ->and($withoutPin)->toBe('237653');
+
+    $missingPinSuite = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', KEY_32);
+    $missingPinAction = fn () => $missingPinSuite->generate('00000000');
+    expect($missingPinAction)->toThrow(OCRAException::class, 'Missing PIN');
+});
+
+test('OCRA session optional requires session and changes output', function () {
+    $withSession = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', KEY_32);
+    $withSession->setSession('A1B2C3D4');
+    $otpWithSession = $withSession->generate('12345678');
+
+    $differentSession = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', KEY_32);
+    $differentSession->setSession('B1C2D3E4');
+    $otpDifferentSession = $differentSession->generate('12345678');
+
+    expect($otpWithSession)->not->toBe($otpDifferentSession);
+
+    $missingSessionSuite = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', KEY_32);
+    $missingSessionAction = fn () => $missingSessionSuite->generate('12345678');
+    expect($missingSessionAction)->toThrow(OCRAException::class, 'Missing Session');
+});
+
+test('OCRA time optional changes output across time slices', function () {
+    $ocra = new OCRA('OCRA-1:HOTP-SHA512-8:QN08-T1M', KEY_64);
+    $ocra->setTime(new DateTimeImmutable('Mar 25 2008, 12:06:30 GMT'));
+    $first = $ocra->generate('11111111');
+
+    $ocra->setTime(new DateTimeImmutable('Mar 25 2008, 12:07:30 GMT'));
+    $second = $ocra->generate('11111111');
+
+    expect($first)->toBe('55907591')
+        ->and($second)->not->toBe($first);
+});
+
+test('OCRA replay protection rejects reusing accepted challenge and counter combination', function () {
+    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', KEY_32);
+    $ocra->setPin('1234');
+    $store = new InMemoryReplayStore();
+    $otp = $ocra->generate('12345678', 4);
+
+    $first = $ocra->verifyWithResult($otp, '12345678', 4, $store, 'user-42');
+    $second = $ocra->verifyWithResult($otp, '12345678', 4, $store, 'user-42');
+
+    expect($first->matched)->toBeTrue()
+        ->and($second->matched)->toBeFalse()
+        ->and($second->replayDetected)->toBeTrue();
+});
+
+test('OCRA exposes parsed suite details', function () {
+    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', KEY_32);
+    $suite = $ocra->getSuite();
+
+    expect($suite->suite)->toBe('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1')
+        ->and($suite->algorithm)->toBe('sha256')
+        ->and($suite->digits)->toBe(8)
+        ->and($suite->counterEnabled)->toBeTrue()
+        ->and($suite->challengeFormat)->toBe('n')
+        ->and($suite->challengeLength)->toBe(8)
+        ->and($suite->optionals)->toHaveCount(1)
+        ->and($suite->optionals[0]['format'])->toBe('p')
+        ->and($suite->optionals[0]['value'])->toBe('SHA1');
+});
+
+test('OCRA rejects invalid challenge formats', function () {
+    $numeric = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', KEY_20);
+    $alpha = new OCRA('OCRA-1:HOTP-SHA256-8:QA08', KEY_32);
+    $hex = new OCRA('OCRA-1:HOTP-SHA256-8:QH08', KEY_32);
+
+    expect(fn () => $numeric->generate('ABC12345'))->toThrow(OCRAException::class)
+        ->and(fn () => $alpha->generate(str_repeat('A', 129)))->toThrow(OCRAException::class)
+        ->and(fn () => $hex->generate('XYZ'))->toThrow(OCRAException::class);
 });
