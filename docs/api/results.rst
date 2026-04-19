@@ -36,3 +36,16 @@ Fields:
 - ``remainingCount``
 - ``totalGenerated``
 - ``lastUsedAt``
+
+StepUpResult
+------------
+
+Returned by ``Infocyph\OTP\Support\StepUp::assess()``.
+
+Fields:
+
+- ``requiresFreshOtp``
+- ``verifiedAt``
+- ``ageInSeconds``
+- ``freshForSeconds``
+- ``expiresAt``

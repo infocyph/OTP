@@ -15,6 +15,7 @@ use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
 use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
+use Infocyph\OTP\ValueObjects\SecretRotation;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 
 final class TOTP
@@ -150,6 +151,37 @@ final class TOTP
         }
 
         return intdiv($timestamp, $this->period);
+    }
+
+    /**
+     * @param array<string> $include
+     * @param array<string, scalar|null> $additionalParameters
+     */
+    public function planSecretRotation(
+        string $newSecret,
+        string $label,
+        string $issuer,
+        ?int $gracePeriodInSeconds = null,
+        ?int $now = null,
+        array $include = ['algorithm', 'digits', 'period'],
+        array $additionalParameters = [],
+        bool $withQrSvg = false,
+        int $imageSize = 200,
+    ): SecretRotation {
+        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
+            throw new \InvalidArgumentException('Grace period must be non-negative.');
+        }
+
+        $rotation = $this->rotateSecret($newSecret, $gracePeriodInSeconds, $now);
+        $next = new self($rotation['next'], $this->digitCount, $this->period);
+        $next->setAlgorithm($this->algorithm);
+
+        return new SecretRotation(
+            $rotation['current'],
+            $rotation['next'],
+            $rotation['overlapUntil'] !== null ? new \DateTimeImmutable()->setTimestamp($rotation['overlapUntil']) : null,
+            $next->getEnrollmentPayload($label, $issuer, $include, $additionalParameters, $withQrSvg, $imageSize),
+        );
     }
 
     /**

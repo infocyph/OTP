@@ -23,3 +23,31 @@ Value objects
 - ``Infocyph\OTP\ValueObjects\EnrollmentPayload``
 - ``Infocyph\OTP\ValueObjects\OcraSuite``
 - ``Infocyph\OTP\ValueObjects\DeviceEnrollment``
+- ``Infocyph\OTP\ValueObjects\SecretRotation``
+
+Notable helper responsibilities
+-------------------------------
+
+``StepUp``
+~~~~~~~~~~
+
+Provides small policy helpers for “fresh OTP required” decisions:
+
+- ``requiresFreshOtp()``
+- ``verifiedWithin()``
+- ``ageInSeconds()``
+- ``assess()``
+
+``DeviceEnrollment``
+~~~~~~~~~~~~~~~~~~~~
+
+Provides a lightweight lifecycle model for factor enrollment records:
+
+- ``create()``
+- ``activate()``
+- ``revoke()``
+- ``rename()``
+- ``withSecretReference()``
+- ``isPendingActivation()``
+- ``isActive()``
+- ``isRevoked()``

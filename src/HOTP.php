@@ -15,6 +15,7 @@ use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
 use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
+use Infocyph\OTP\ValueObjects\SecretRotation;
 
 final class HOTP
 {
@@ -121,6 +122,38 @@ final class HOTP
         return SvgQrRenderer::render(
             $this->getProvisioningUri($label, $issuer, $include, $additionalParameters),
             $imageSize,
+        );
+    }
+
+    /**
+     * @param array<string> $include
+     * @param array<string, scalar|null> $additionalParameters
+     */
+    public function planSecretRotation(
+        string $newSecret,
+        string $label,
+        string $issuer,
+        ?int $gracePeriodInSeconds = null,
+        ?int $now = null,
+        array $include = ['algorithm', 'digits', 'counter'],
+        array $additionalParameters = [],
+        bool $withQrSvg = false,
+        int $imageSize = 200,
+    ): SecretRotation {
+        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
+            throw new \InvalidArgumentException('Grace period must be non-negative.');
+        }
+
+        $normalizedSecret = SecretUtility::normalizeBase32($newSecret);
+        $next = new self($normalizedSecret, $this->digitCount);
+        $next->setAlgorithm($this->algorithm);
+        $next->setCounter($this->counter);
+
+        return new SecretRotation(
+            $this->secret,
+            $normalizedSecret,
+            $gracePeriodInSeconds !== null ? new \DateTimeImmutable()->setTimestamp(($now ?? time()) + $gracePeriodInSeconds) : null,
+            $next->getEnrollmentPayload($label, $issuer, $include, $additionalParameters, $withQrSvg, $imageSize),
         );
     }
 

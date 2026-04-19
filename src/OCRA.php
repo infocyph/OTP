@@ -17,6 +17,7 @@ use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
 use Infocyph\OTP\ValueObjects\OcraSuite;
 use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
+use Infocyph\OTP\ValueObjects\SecretRotation;
 
 final class OCRA
 {
@@ -174,6 +175,35 @@ final class OCRA
             $this->ocraSuite['q']['format'],
             $this->ocraSuite['q']['value'],
             $this->ocraSuite['optionals'],
+        );
+    }
+
+    /**
+     * @param array<string> $include
+     * @param array<string, scalar|null> $additionalParameters
+     */
+    public function planSecretRotation(
+        string $newSecret,
+        string $label,
+        string $issuer,
+        ?int $gracePeriodInSeconds = null,
+        ?int $now = null,
+        array $include = ['algorithm', 'digits'],
+        array $additionalParameters = [],
+        bool $withQrSvg = false,
+        int $imageSize = 200,
+    ): SecretRotation {
+        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
+            throw new OCRAException('Grace period must be non-negative.');
+        }
+
+        $next = new self($this->ocraSuite['suite'], $newSecret);
+
+        return new SecretRotation(
+            $this->sharedKey,
+            $newSecret,
+            $gracePeriodInSeconds !== null ? new \DateTimeImmutable()->setTimestamp(($now ?? time()) + $gracePeriodInSeconds) : null,
+            $next->getEnrollmentPayload($label, $issuer, $include, $additionalParameters, $withQrSvg, $imageSize),
         );
     }
 

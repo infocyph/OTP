@@ -15,6 +15,19 @@ The relevant contracts are:
 
 - ``Infocyph\OTP\Contracts\RecoveryCodeStoreInterface``
 - ``Infocyph\OTP\Contracts\ReplayStoreInterface``
+- ``Infocyph\OTP\Contracts\SecretStoreInterface``
+
+Secret storage guidance
+-----------------------
+
+For TOTP, HOTP, and many OCRA deployments, the application must be able to read the secret again later to generate or verify future OTPs.
+
+That means:
+
+- hashing alone is not enough for OTP secrets
+- encryption at rest is usually the correct default
+- the stored record should have a stable reference or key id
+- rotation should create a new secret record rather than overwrite history blindly
 
 Recovery code tracking in a database
 ------------------------------------
