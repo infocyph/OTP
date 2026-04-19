@@ -6,7 +6,7 @@ import os
 project = "OTP"
 author = "Infocyph"
 year_now = datetime.date.today().strftime("%Y")
-copyright = f"2024-{year_now}"
+copyright = f"2020-{year_now}"
 version = os.environ.get("READTHEDOCS_VERSION", "latest")
 release = version
 language = "en"
