@@ -15,7 +15,7 @@
                 "options": []
             },
             {
-                "action": "composer audit",
+                "action": "composer release:audit",
                 "options": []
             },
             {

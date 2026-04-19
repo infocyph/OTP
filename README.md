@@ -6,228 +6,342 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/otp)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/otp/php)
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/infocyph/otp)
-[![]()](https://visitor-badge.laobi.icu/badge?page_id=infocyph.com)
 
-Simple but Secure AIO OTP solution. Supports,
+Standalone OTP and MFA primitives for PHP.
 
-- Generic OTP (storage-less otp solution)
+Supports:
+
+- Generic OTP with PSR-6 storage
 - TOTP (RFC6238)
 - HOTP (RFC4226)
 - OCRA (RFC6287)
+- Recovery / backup codes
+- `otpauth://` generation and parsing
+- Replay-protection contracts and in-memory stores
 
-## Table of Contents
+## Requirements
 
-<!--ts-->
-
-* [Prerequisites](#prerequisites)
-* [Installation](#installation)
-* [Why this library?](#why-this-library)
-* [Usage](#usage)
-    * [HOTP (RFC4226)](#hotp-rfc4226)
-    * [TOTP (RFC6238)](#totp-rfc6238)
-    * [Generic OTP](#generic-otp)
-    * [OCRA (RFC6287)](#ocra-rfc6287)
-* [Support](#support)
-* [References](#references)
-
-<!--te-->
-
-## Prerequisites
-
-Language: PHP 8.2/+
-
-| Library Version | PHP Version     |
-|-----------------|-----------------|
-| 3.x.x/+         | 8.2.x or Higher |
-| 2.x.x           | 8.x.x           |
-| 1.x.x           | 7.x.x           |
+- PHP 8.4+
 
 ## Installation
 
-```
+```bash
 composer require infocyph/otp
 ```
 
-## Why this library?
+## Highlights
 
-#### TOTP & HOTP
+- Base32 secret generation, normalization, and validation
+- Safer provisioning URI and label handling
+- SVG QR rendering plus raw payload/URI access
+- Rich verification results where needed, simple bool APIs where preferred
+- Configurable TOTP drift windows
+- HOTP look-ahead resynchronization
+- Replay protection contracts for TOTP, HOTP, and OCRA
+- One-time recovery codes with hashed storage
 
-- Uses offline QR code generator (no more exposing your secret online)
-- Time-safe Base32 encoding (30 seconds validity means 30 seconds)
+## Quick Start
 
-#### Generic OTP
+### TOTP
 
-- No need to dedicate extra storage/db for User information (just build a unique signature)
-
-#### OCRA
-
-- One of a few implementation in PHP, easy to use
-
-## Usage
-
-### HOTP (RFC4226)
-
-- Generate secret
 ```php
-$secret = \Infocyph\OTP\HOTP::generateSecret();
-```
-- Get QR Code Image for secret $secret (in SVG format)
-```php
-// supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
-(new \Infocyph\OTP\HOTP($secret))
-// only required if the counter is being imported from another system or if it is old, & for QR only
-->setCounter(3)
-// default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
-->setAlgorithm('sha256') 
-// or `getProvisioningUri` just to get the URI
-->getProvisioningUriQR('TestName', 'abc@def.ghi'); 
-```
-> The `getProvisioningUriQR` & `getProvisioningUri` accepts 3rd parameter, where it takes array of parameters
-`['algorithm', 'digits', 'period', 'counter']`. Problem you might encounter, with the URI/Image is that most of the 
-OTP generator might not support all of those options. In that case, passing in a blank array will remove all the optional
-keys, or you can pass in selective parameters as you need. Additionally, you can also pass in additional parameter to reflect
-in URI string or QR image in 4th parameter. But be cautious that, it might not be supported by the Client Apps.
+use Infocyph\OTP\TOTP;
 
-- Get current OTP for a given counter
-```php
-$counter = 346;
-$otp = (new \Infocyph\OTP\HOTP($secret))->getOTP($counter);
-```
-- Verify
-```php
-(new \Infocyph\OTP\HOTP($secret))->verify($otp,$counter);
+$secret = TOTP::generateSecret();
+
+$totp = (new TOTP($secret))
+    ->setAlgorithm('sha256');
+
+$otp = $totp->getOTP();
+
+$isValid = $totp->verify($otp);
 ```
 
-### TOTP (RFC6238)
+Advanced verification with drift windows:
 
-- Generate secret
 ```php
-$secret = \Infocyph\OTP\TOTP::generateSecret();
-```
-- Get QR Code Image for secret $secret (in SVG format)
-```php
-// supports digit count in 2nd parameter, recommended to be either 6 or 8 (default 6)
-(new \Infocyph\OTP\TOTP($secret))
-// default is sha1; Caution: many app (in fact, most of them) have algorithm limitation
-->setAlgorithm('sha256') 
-// or `getProvisioningUri` just to get the URI
-->getProvisioningUriQR('TestName', 'abc@def.ghi'); 
-```
-> The `getProvisioningUriQR` & `getProvisioningUri` accepts 3rd parameter, where it takes array of parameters
-`['algorithm', 'digits', 'period', 'counter']`. Problem you might encounter, with the URI/Image is that most of the
-OTP generator might not support all of those options. In that case, passing in a blank array will remove all the optional
-keys, or you can pass in selective parameters as you need. Additionally, you can also pass in additional parameter to reflect
-in URI string or QR image in 4th parameter. But be cautious that, it might not be supported by the Client Apps.
+use Infocyph\OTP\Stores\InMemoryReplayStore;
+use Infocyph\OTP\ValueObjects\VerificationWindow;
 
-- Get current OTP for a given counter
-```php
-$counter = 346;
-$otp = (new \Infocyph\OTP\TOTP($secret))->getOTP($counter);
-// or get OTP for another specified epoch time
-$otp = (new \Infocyph\OTP\TOTP($secret))->getOTP(1604820275);
+$store = new InMemoryReplayStore();
+
+$result = $totp->verifyWithWindow(
+    $otp,
+    timestamp: time(),
+    window: new VerificationWindow(past: 1, future: 1),
+    replayStore: $store,
+    binding: 'user-42',
+);
+
+$result->matched;
+$result->matchedTimestep;
+$result->driftOffset;
+$result->isExact();
+$result->isDrifted();
+$result->replayDetected;
 ```
-- Verify
+
+Useful helpers:
+
 ```php
-(new \Infocyph\OTP\TOTP($secret))->verify($otp);
-// or verify for a specified time
-(new \Infocyph\OTP\TOTP($secret))->verify($otp, 1604820275);
+$totp->getCurrentTimeStep();
+$totp->getRemainingSeconds();
+$totp->getTimeStepFromTimestamp(1716532624);
 ```
-> On 3rd parameter `(bool)` it supports, enabling leeway. If enabled, it will also check with last segment's generated otp.
+
+### HOTP
+
+```php
+use Infocyph\OTP\HOTP;
+
+$secret = HOTP::generateSecret();
+$hotp = (new HOTP($secret))
+    ->setCounter(3)
+    ->setAlgorithm('sha256');
+
+$otp = $hotp->getOTP(346);
+
+$isValid = $hotp->verify($otp, 346);
+```
+
+Look-ahead verification with matched-counter result:
+
+```php
+use Infocyph\OTP\Stores\InMemoryReplayStore;
+
+$result = $hotp->verifyWithResult(
+    $otp,
+    counter: 340,
+    lookAhead: 10,
+    replayStore: new InMemoryReplayStore(),
+    binding: 'device-1',
+);
+
+$result->matched;
+$result->matchedCounter;
+$result->driftOffset;
+```
 
 ### Generic OTP
 
-- Initiate
-```php
-/**
-* Param 1 is OTP length (default 6)
-* Param 2 is validity in seconds (default 30)
-* Param 3 is retry count on failure (default 3)
-*/
-$otpInstance = new \Infocyph\OTP\OTP(4, 60, 2);
-```
-- Generate & get the OTP
-```php
-$otp = $otpInstance->generate('an unique signature for a cause');
-```
-- Verify the OTP
-```php
-$otpInstance->verify('an unique signature for a cause', $otp);
-```
-> On 3rd parameter setting false `will keep the record till the otp is verified or expired`. By default, 
-`will keep the record till the key name match or the otp is verified or expired`
-
-- Delete a record
-```php
-$otpInstance->delete('an unique signature for a cause');
-```
-- Flush all the existing OTPs (if any)
+Generic OTP is now string-based and uses a caller-provided PSR-6 cache pool.
 
 ```php
-$otpInstance->flush()
+use Infocyph\OTP\OTP;
+use Psr\Cache\CacheItemPoolInterface;
+
+/** @var CacheItemPoolInterface $cachePool */
+$otp = new OTP(
+    digitCount: 6,
+    validUpto: 60,
+    retry: 3,
+    hashAlgorithm: 'xxh128',
+    cacheAdapter: $cachePool,
+);
+
+$code = $otp->generate('signup:alice@example.com');
+$otp->verify('signup:alice@example.com', $code);
+$otp->delete('signup:alice@example.com');
+$otp->flush();
 ```
 
-> Generic OTP uses **temporary location** for storage, make sure you have proper access permission
+Notes:
 
-### OCRA (RFC6287)
+- Codes are strings, not integers
+- Leading zeroes are preserved
+- Digit count must be between `4` and `10`
+
+### OCRA
 
 ```php
-// Example usage:
-$sharedKey = 'mySecretKey'; // Replace with your actual shared key (binary format)
-$challenge = '123456'; // Replace with your challenge value
-$counter = 0; // Replace with the appropriate counter value
+use Infocyph\OTP\OCRA;
 
-// Create an OCRA instance
-$suite = new \Infocyph\OTP\OCRA('OCRA-1:HOTP-SHA1-6:C-QN08', $sharedKey);
+$ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', '12345678901234567890123456789012');
 
-// If the OCRA suite supports session, set the session
-$suite->setSession('...');
+$ocra->setPin('1234');
 
-// If the OCRA suite supports time format, set the time
-$suite->setTime(new \DateTime());
-
-// If the OCRA suite supports pin, set the pin
-$suite->setPin('...');
-
-// Generate the OCRA value
-$suite->generate($challenge, $counter);
+$code = $ocra->generate('12345678', 0);
+$isValid = $ocra->verify($code, '12345678', 0);
 ```
 
-#### Forming an OCRA Suite
-
-According to current RFC6287, an example string should be in the following format:
+Replay-aware verification:
 
 ```php
+use Infocyph\OTP\Stores\InMemoryReplayStore;
+
+$result = $ocra->verifyWithResult(
+    $code,
+    challenge: '12345678',
+    counter: 0,
+    replayStore: new InMemoryReplayStore(),
+    binding: 'user-42',
+);
+```
+
+## Provisioning
+
+### Generate `otpauth://` URIs
+
+```php
+$uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
+```
+
+### Render SVG QR
+
+```php
+$svg = $totp->getProvisioningUriQR('alice@example.com', 'Example App');
+```
+
+### Get enrollment payload
+
+```php
+$payload = $totp->getEnrollmentPayload(
+    'alice@example.com',
+    'Example App',
+    withQrSvg: true,
+);
+
+$payload->secret;
+$payload->uri;
+$payload->qrPayload;
+$payload->issuer;
+$payload->label;
+$payload->qrSvg;
+```
+
+### Parse existing `otpauth://` URIs
+
+```php
+use Infocyph\OTP\TOTP;
+
+$parsed = TOTP::parseProvisioningUri($uri);
+
+$parsed->type;
+$parsed->secret;
+$parsed->label;
+$parsed->issuer;
+$parsed->algorithm;
+$parsed->digits;
+$parsed->period;
+$parsed->counter;
+$parsed->ocraSuite;
+```
+
+## Replay Protection
+
+The package ships with contracts plus an in-memory store for testing and lightweight use:
+
+- `Infocyph\OTP\Contracts\ReplayStoreInterface`
+- `Infocyph\OTP\Stores\InMemoryReplayStore`
+
+Recommended usage:
+
+- TOTP: store accepted timesteps per user/device binding
+- HOTP: store last accepted counter
+- OCRA: store used challenge/counter combinations where required
+
+## Recovery Codes
+
+```php
+use Infocyph\OTP\RecoveryCodes;
+use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
+
+$codes = new RecoveryCodes(new InMemoryRecoveryCodeStore());
+
+$generated = $codes->generate(
+    binding: 'user-42',
+    count: 10,
+    length: 10,
+    groupSize: 4,
+);
+
+$generated->plainCodes;
+$generated->totalGenerated;
+$generated->remainingCount;
+```
+
+Consume a code:
+
+```php
+$result = $codes->consume('user-42', $generated->plainCodes[0]);
+
+$result->consumed;
+$result->reason;
+$result->remainingCount;
+$result->totalGenerated;
+$result->lastUsedAt;
+```
+
+Notes:
+
+- Recovery codes are stored hashed
+- Generating a new set replaces the old set
+- Display formatting is separate from storage hashing
+
+## Secret Utilities
+
+Base32 helpers live in `Infocyph\OTP\Support\SecretUtility`.
+
+```php
+use Infocyph\OTP\Support\SecretUtility;
+
+$secret = SecretUtility::generate(64);
+$normalized = SecretUtility::normalizeBase32('ab cd ef 234===');
+$isValid = SecretUtility::isValidBase32($normalized);
+```
+
+## Result Objects
+
+For richer flows, use the advanced APIs and inspect:
+
+- `Infocyph\OTP\Result\VerificationResult`
+- `Infocyph\OTP\Result\RecoveryCodeGenerationResult`
+- `Infocyph\OTP\Result\RecoveryCodeConsumptionResult`
+
+`VerificationResult` exposes:
+
+- `matched`
+- `reason`
+- `matchedTimestep`
+- `matchedCounter`
+- `driftOffset`
+- `replayDetected`
+- `verifiedAt`
+
+## Additional Helpers
+
+- `Infocyph\OTP\Support\StepUp`
+- `Infocyph\OTP\ValueObjects\DeviceEnrollment`
+
+Example:
+
+```php
+use Infocyph\OTP\Support\StepUp;
+
+$requiresFreshOtp = StepUp::requiresFreshOtp($verifiedAt, 300);
+```
+
+## Storage Guidance
+
+- OTP secrets are reversible secrets. If your application needs to generate OTPs later, hashing alone is not enough.
+- Recovery codes should usually be stored hashed.
+- Replay state may live in cache or a database depending on durability needs.
+- Generic OTP requires a PSR-6 cache pool implementation from the caller.
+
+## OCRA Suite Notes
+
+Example suite:
+
+```text
 OCRA-1:HOTP-SHA1-6:C-QN08-PSHA1
 ```
 
-Here `OCRA-1:HOTP-` is fixed as of current documentation.
+Supported suite parts include:
 
-- SHA1 is cryptographic hash function. (supported: SHA1, SHA256, SHA512)
-- 6 is the number of digits in the generated OTP. (supported: 0, 4-10)
-- C denotes counter support (optional)
-- QN08 denotes the mode (it can be either of QNxx, QAxx, QHxx)
-
-|    Format (F)    | Up to Length (xx) |
-|:----------------:|:-----------------:|
-| A (alphanumeric) |       04-64       |
-|   N (numeric)    |       04-64       |
-| H (hexadecimal)  |       04-64       |
-
-- Next part is optional & little tricky
-    - PSHA1 denotes the hash function used for pin support (it can be either of PSHA1, PSHA256, PSHA512)
-    - S (not in example) denotes session length (3 digits)
-    - T (not in example) denotes time format as of below table,
-
-| Time-Step Size (G) |           Examples           |
-|:------------------:|:----------------------------:|
-|      [1-59]S       | number of seconds, e.g., 20S |
-|      [1-59]M       | number of minutes, e.g., 5M  |
-|      [0-48]H       |  number of hours, e.g., 24H  |
-
-## Support
-
-Having trouble? Create an issue!
+- HMAC algorithms: `SHA1`, `SHA256`, `SHA512`
+- Digits: `0`, `4`-`10`
+- Challenge formats: numeric (`QNxx`), alphanumeric (`QAxx`), hexadecimal (`QHxx`)
+- Optional counter, PIN, session, and time components
 
 ## References
 

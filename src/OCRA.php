@@ -1,18 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\OTP;
 
 use DateTimeInterface;
 use Exception;
+use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Exceptions\OCRAException;
-use Infocyph\OTP\Traits\Common;
+use Infocyph\OTP\Result\VerificationResult;
+use Infocyph\OTP\Support\AlgorithmValidator;
+use Infocyph\OTP\Support\ProvisioningUriBuilder;
+use Infocyph\OTP\Support\ProvisioningUriParser;
+use Infocyph\OTP\Support\SecretUtility;
+use Infocyph\OTP\Support\SvgQrRenderer;
+use Infocyph\OTP\ValueObjects\EnrollmentPayload;
+use Infocyph\OTP\ValueObjects\OcraSuite;
+use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
 
 final class OCRA
 {
-    use Common;
+    private const string OCRA_REGEX = '/^OCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]|10):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(-(P(SHA1|SHA256|SHA512)|S\d{3}|(T((\d|[1-3]\d|4[0-8])H|(([1-9]|[1-5]\d)([SM]))))))*$/';
 
-    private const OCRA_REGEX = '/^OCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]|10):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(-(P(SHA1|SHA256|SHA512)|S\d{3}|(T((\d|[1-3]\d|4[0-8])H|(([1-9]|[1-5]\d)([SM]))))))*$/';
-
+    /**
+     * @var array{suite:string,algo:string,length:int,c:bool,q:array{format:string,value:int},optionals:array<int,array{format:string,value:int|string}>}
+     */
     private array $ocraSuite;
 
     private ?string $pin = null;
@@ -21,31 +33,153 @@ final class OCRA
 
     private ?string $time = null;
 
-    /**
-     * Constructor for the class.
-     *
-     * @param  string  $ocraSuite  The OCRA suite string.
-     * @param  string  $sharedKey  The shared key for the OCRA instance.
-     *
-     * @throws OCRAException If the OCRA suite is invalid.
-     */
     public function __construct(string $ocraSuite, private readonly string $sharedKey)
     {
         $this->validateAndParse($ocraSuite);
     }
 
     /**
-     * Sets the pin for the OCRA instance.
-     *
-     * Required if the suite supports PIN.
-     *
-     * @param  string  $pin  The pin to set.
-     *
-     * @throws OCRAException
+     * @throws Exception
      */
-    public function setPin(string $pin): OCRA
+    public static function generateSecret(int $bytes = 64): string
     {
-        if (empty($pin)) {
+        return SecretUtility::generate($bytes);
+    }
+
+    public static function parseProvisioningUri(string $uri): ParsedOtpAuthUri
+    {
+        return ProvisioningUriParser::parse($uri);
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function generate(string $challenge, int $counter = 0): string
+    {
+        $this->assertChallenge($challenge);
+        if ($counter < 0) {
+            throw new OCRAException('Counter must be non-negative.');
+        }
+
+        $msg = $this->ocraSuite['suite'] . "\0";
+        if ($this->ocraSuite['c']) {
+            $msg .= pack('NN', ($counter >> 32) & 0xFFFFFFFF, $counter & 0xFFFFFFFF);
+        }
+        $msg .= $this->calculateQ($challenge);
+        if ($this->ocraSuite['optionals'] !== []) {
+            $msg .= $this->calculateOptionals();
+        }
+
+        $hash = hash_hmac($this->ocraSuite['algo'], $msg, $this->sharedKey, true);
+        if ($this->ocraSuite['length'] === 0) {
+            return $hash;
+        }
+
+        $unpacked = unpack('Nvalue', substr($hash, ord(substr($hash, -1)) & 0x0F, 4));
+        if ($unpacked === false) {
+            throw new OCRAException('Unable to unpack OCRA hash fragment.');
+        }
+        $value = $unpacked['value'];
+        if (!is_int($value)) {
+            throw new OCRAException('Invalid OCRA hash fragment value.');
+        }
+
+        return str_pad(
+            (string) (($value & 0x7FFFFFFF) % (10 ** $this->ocraSuite['length'])),
+            $this->ocraSuite['length'],
+            '0',
+            STR_PAD_LEFT,
+        );
+    }
+
+    /**
+     * @param array<string> $include
+     * @param array<string, scalar|null> $additionalParameters
+     */
+    public function getEnrollmentPayload(
+        string $label,
+        string $issuer,
+        array $include = ['algorithm', 'digits'],
+        array $additionalParameters = [],
+        bool $withQrSvg = false,
+        int $imageSize = 200,
+    ): EnrollmentPayload {
+        $uri = $this->getProvisioningUri($label, $issuer, $include, $additionalParameters);
+
+        return ProvisioningUriBuilder::enrollmentPayload(
+            'ocra',
+            $this->sharedKey,
+            $label,
+            $issuer,
+            array_fill_keys($include, true),
+            $additionalParameters,
+            AlgorithmValidator::normalize($this->ocraSuite['algo']),
+            $this->ocraSuite['length'],
+            null,
+            null,
+            $this->ocraSuite['suite'],
+            $withQrSvg ? SvgQrRenderer::render($uri, $imageSize) : null,
+        );
+    }
+
+    /**
+     * @param array<string> $include
+     * @param array<string, scalar|null> $additionalParameters
+     */
+    public function getProvisioningUri(
+        string $label,
+        string $issuer,
+        array $include = ['algorithm', 'digits'],
+        array $additionalParameters = [],
+    ): string {
+        return ProvisioningUriBuilder::build(
+            'ocra',
+            $this->sharedKey,
+            $label,
+            $issuer,
+            array_fill_keys($include, true),
+            $additionalParameters,
+            AlgorithmValidator::normalize($this->ocraSuite['algo']),
+            $this->ocraSuite['length'],
+            null,
+            null,
+            $this->ocraSuite['suite'],
+        );
+    }
+
+    /**
+     * @param array<string> $include
+     * @param array<string, scalar|null> $additionalParameters
+     */
+    public function getProvisioningUriQR(
+        string $label,
+        string $issuer,
+        array $include = ['algorithm', 'digits'],
+        array $additionalParameters = [],
+        int $imageSize = 200,
+    ): string {
+        return SvgQrRenderer::render(
+            $this->getProvisioningUri($label, $issuer, $include, $additionalParameters),
+            $imageSize,
+        );
+    }
+
+    public function getSuite(): OcraSuite
+    {
+        return new OcraSuite(
+            $this->ocraSuite['suite'],
+            $this->ocraSuite['algo'],
+            $this->ocraSuite['length'],
+            $this->ocraSuite['c'],
+            $this->ocraSuite['q']['format'],
+            $this->ocraSuite['q']['value'],
+            $this->ocraSuite['optionals'],
+        );
+    }
+
+    public function setPin(string $pin): self
+    {
+        if ($pin === '') {
             throw new OCRAException('PIN cannot be empty.');
         }
         $this->pin = $pin;
@@ -53,18 +187,9 @@ final class OCRA
         return $this;
     }
 
-    /**
-     * Sets the session for the OCRA instance.
-     *
-     * Required if the suite supports session.
-     *
-     * @param  string  $session  The session to set.
-     *
-     * @throws OCRAException
-     */
-    public function setSession(string $session): OCRA
+    public function setSession(string $session): self
     {
-        if (empty($session)) {
+        if ($session === '') {
             throw new OCRAException('Session cannot be empty.');
         }
         $this->session = $session;
@@ -72,176 +197,133 @@ final class OCRA
         return $this;
     }
 
-    /**
-     * Sets the time for the OCRA instance.
-     *
-     * Only applicable if the suite supports time format.
-     *
-     * @param  DateTimeInterface  $dateTime  The DateTime object to set the time from.
-     */
-    public function setTime(DateTimeInterface $dateTime): OCRA
+    public function setTime(DateTimeInterface $dateTime): self
     {
         $this->time = $dateTime->format('U');
 
         return $this;
     }
 
-    /**
-     * Generates the OCRA code based on the input and optional counter.
-     *
-     * @param  string  $challenge  The challenge for generating the OCRA code.
-     * @param  int  $counter  The optional counter value (default is 0).
-     * @return string The generated OCRA code.
-     *
-     * @throws Exception
-     */
-    public function generate(string $challenge, int $counter = 0): string
+    public function verify(string $otp, string $challenge, int $counter = 0): bool
     {
-        $msg = $this->ocraSuite['suite']."\0";
-
-        if ($this->ocraSuite['c']) {
-            $msg .= pack('NN', ($counter >> 32) & 0xFFFFFFFF, $counter & 0xFFFFFFFF);
-        }
-
-        $msg .= $this->calculateQ($challenge);
-
-        if (! empty($this->ocraSuite['optionals'])) {
-            $msg .= $this->calculateOptionals();
-        }
-
-        $hash = hash_hmac((string) $this->ocraSuite['algo'], $msg, $this->sharedKey, true);
-
-        if (! $this->ocraSuite['length']) {
-            return $hash;
-        }
-
-        [, $value] = unpack('N', substr($hash, ord(substr($hash, -1)) & 0xF, 4));
-
-        return str_pad(
-            ($value & 0x7FFFFFFF) % 10 ** $this->ocraSuite['length'],
-            $this->ocraSuite['length'],
-            '0',
-            STR_PAD_LEFT
-        );
+        return $this->verifyWithResult($otp, $challenge, $counter)->matched;
     }
 
-    /**
-     * Calculates the value of Q based on the input and the format specified in the OCRA suite.
-     *
-     * @param  string  $input  The input value to calculate Q for.
-     * @return string The calculated value of Q.
-     */
-    private function calculateQ(string $input): string
+    public function verifyWithResult(
+        string $otp,
+        string $challenge,
+        int $counter = 0,
+        ?ReplayStoreInterface $replayStore = null,
+        ?string $binding = null,
+    ): VerificationResult {
+        $expected = $this->generate($challenge, $counter);
+        if (!hash_equals($expected, $otp)) {
+            return new VerificationResult(false, 'mismatch');
+        }
+
+        if ($replayStore !== null && $binding !== null) {
+            $token = $challenge . '|' . $counter;
+            if ($replayStore->hasConsumed('ocra:challenge', $binding, $token)) {
+                return new VerificationResult(false, 'replay', matchedCounter: $counter, replayDetected: true);
+            }
+
+            $replayStore->markConsumed('ocra:challenge', $binding, $token);
+            if ($this->ocraSuite['c']) {
+                $replayStore->setState('ocra:last_counter', $binding, $counter);
+            }
+        }
+
+        return new VerificationResult(true, 'matched', matchedCounter: $counter, verifiedAt: new \DateTimeImmutable());
+    }
+
+    private function assertChallenge(string $challenge): void
     {
-        return match ($this->ocraSuite['q']['format']) {
-            'n' => str_pad(pack('H*', dechex($input)), 128, "\0"),
-            'a' => str_pad(substr($input, 0, 128), 128, "\0"),
-            'h' => str_pad(pack('H*', substr($input, 0, 256)), 128, "\0")
+        $length = $this->ocraSuite['q']['value'];
+        match ($this->ocraSuite['q']['format']) {
+            'n' => preg_match('/^\d{' . $length . '}$/', $challenge) === 1 || throw new OCRAException('Challenge must be a numeric string of the expected length.'),
+            'a' => preg_match('/^[A-Za-z0-9]{1,128}$/', $challenge) === 1 || throw new OCRAException('Challenge must be alphanumeric and at most 128 characters.'),
+            'h' => preg_match('/^[A-Fa-f0-9]{1,' . ($length * 2) . '}$/', $challenge) === 1 || throw new OCRAException('Challenge must be hexadecimal.'),
+            default => throw new OCRAException('Invalid challenge format'),
         };
     }
 
-    /**
-     * Calculates the optional values based on the formats specified in the OCRA suite.
-     *
-     * @return string The concatenated calculated optional values.
-     *
-     * @throws OCRAException
-     */
     private function calculateOptionals(): string
     {
         $optionals = '';
         foreach ($this->ocraSuite['optionals'] as $optional) {
             $optionals .= match ($optional['format']) {
-                'p' => hash(
-                    (string) $optional['value'],
-                    $this->pin ?? throw new OCRAException('Missing PIN'),
-                    true
-                ),
-                's' => str_pad(
-                    pack('H*', $this->session ?? throw new OCRAException('Missing Session')),
-                    $optional['value'],
-                    "\0",
-                    STR_PAD_LEFT
-                ),
+                'p' => hash((string) $optional['value'], $this->pin ?? throw new OCRAException('Missing PIN'), true),
+                's' => str_pad(pack('H*', $this->session ?? throw new OCRAException('Missing Session')), (int) $optional['value'], "\0", STR_PAD_LEFT),
                 't' => [
-                    $time = (int) floor(($this->time ?? time()) / $optional['value']),
+                    $time = (int) floor(((int) ($this->time ?? (string) time())) / (int) $optional['value']),
                     pack('NN', ($time >> 32) & 0xFFFFFFFF, $time & 0xFFFFFFFF),
                 ][1],
-                default => throw new OCRAException('Invalid optional part format')
+                default => throw new OCRAException('Invalid optional part format'),
             };
         }
 
         return $optionals;
     }
 
-    /**
-     * Validate & parse OCRA String
-     *
-     * @param  string  $ocraSuite  The OCRA Suite
-     *
-     * @throws OCRAException
-     */
-    private function validateAndParse(string $ocraSuite): void
+    private function calculateQ(string $input): string
     {
-        if (! preg_match(self::OCRA_REGEX, $ocraSuite, $matches)) {
-            throw new OCRAException('Invalid OCRA Suite!');
-        }
-
-        if ($matches[0] !== $ocraSuite) {
-            throw new OCRAException('Invalid OCRA Suite (Optional fields are invalid/malformed!)');
-        }
-
-        $parts = explode(':', str_replace('-', ':', strtolower($ocraSuite)));
-        $this->ocraSuite = [
-            'suite' => $ocraSuite,
-            'algo' => $parts[3],
-            'length' => $parts[4],
-        ] + $this->prepareConditionalParts($parts);
+        return match ($this->ocraSuite['q']['format']) {
+            'n' => str_pad(pack('H*', dechex((int) $input)), 128, "\0"),
+            'a' => str_pad(substr($input, 0, 128), 128, "\0"),
+            'h' => str_pad(pack('H*', substr($input, 0, 256)), 128, "\0"),
+            default => throw new OCRAException('Unsupported challenge format.'),
+        };
     }
 
     /**
-     * Prepares the conditional parts of an OCRA suite based on the given array of parts.
-     *
-     * @param  array  $parts  The array of parts to prepare the conditional parts from.
-     * @return array The prepared conditional parts.
-     *
-     * @throws OCRAException
+     * @param array<int, string> $parts
+     * @return array{c:bool,q:array{format:string,value:int},optionals:array<int, array{format:string,value:int|string}>}
      */
     private function prepareConditionalParts(array $parts): array
     {
-        $conditionalParts = (
-            $parts[5] === 'c'
-            ? ['c' => true, 'q' => substr((string) $parts[6], 1), 'optionals' => array_slice($parts, 7)]
-            : ['c' => false, 'q' => substr((string) $parts[5], 1), 'optionals' => array_slice($parts, 6)]
-        );
+        $conditionalParts = $parts[5] === 'c'
+            ? ['c' => true, 'q' => substr($parts[6], 1), 'optionals' => array_slice($parts, 7)]
+            : ['c' => false, 'q' => substr($parts[5], 1), 'optionals' => array_slice($parts, 6)];
 
         $conditionalParts['q'] = [
             'format' => $conditionalParts['q'][0],
-            'value' => (int) ($conditionalParts['q'][1].$conditionalParts['q'][2]),
+            'value' => (int) substr($conditionalParts['q'], 1),
         ];
 
-        if (empty($conditionalParts['optionals'])) {
-            return $conditionalParts;
-        }
+        $conditionalParts['optionals'] = array_map(function (string $optional): array {
+            $value = substr($optional, 1);
 
-        $conditionalParts['optionals'] = array_map(fn ($optional) => [
-            'format' => $optional[0],
-            'value' => substr((string) $optional, 1),
-        ], $conditionalParts['optionals']);
-
-        foreach ($conditionalParts['optionals'] as &$optional) {
-            $optional['value'] = match ($optional['format']) {
-                's' => (int) $optional['value'],
-                'p' => $optional['value'],
-                't' => match (substr($optional['value'], -1)) {
-                    's' => (int) rtrim($optional['value'], 's'),
-                    'm' => (int) rtrim($optional['value'], 'm') * 60,
-                    'h' => (int) rtrim($optional['value'], 'h') * 3600,
-                    default => throw new OCRAException('Invalid time format')
-                }
-            };
-        }
+            return [
+                'format' => $optional[0],
+                'value' => match ($optional[0]) {
+                    's' => (int) $value,
+                    'p' => strtoupper($value),
+                    't' => match (substr($value, -1)) {
+                        's' => (int) rtrim($value, 's'),
+                        'm' => (int) rtrim($value, 'm') * 60,
+                        'h' => (int) rtrim($value, 'h') * 3600,
+                        default => throw new OCRAException('Invalid time format'),
+                    },
+                    default => throw new OCRAException('Invalid optional format'),
+                },
+            ];
+        }, $conditionalParts['optionals']);
 
         return $conditionalParts;
+    }
+
+    private function validateAndParse(string $ocraSuite): void
+    {
+        if (!preg_match(self::OCRA_REGEX, $ocraSuite, $matches) || $matches[0] !== $ocraSuite) {
+            throw new OCRAException('Invalid OCRA Suite.');
+        }
+
+        $parts = explode(':', str_replace('-', ':', strtolower($ocraSuite)));
+        $conditionalParts = $this->prepareConditionalParts($parts);
+        $this->ocraSuite = [
+            'suite' => $ocraSuite,
+            'algo' => AlgorithmValidator::normalize($parts[3]),
+            'length' => (int) $parts[4],
+        ] + $conditionalParts;
     }
 }

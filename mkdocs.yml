@@ -1,0 +1,59 @@
+site_name: OTP
+site_description: Standalone OTP and MFA primitives for PHP
+site_url: https://infocyph.github.io/otp/
+repo_url: https://github.com/infocyph/otp
+repo_name: infocyph/otp
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Migration: getting-started/migration.md
+  - Guides:
+      - TOTP: guides/totp.md
+      - HOTP: guides/hotp.md
+      - Generic OTP: guides/generic-otp.md
+      - OCRA: guides/ocra.md
+      - Provisioning: guides/provisioning.md
+      - Replay Protection: guides/replay-protection.md
+      - Recovery Codes: guides/recovery-codes.md
+      - Benchmarks: guides/benchmarks.md
+      - Storage Guidance: guides/storage.md
+  - API:
+      - Result Objects: api/results.md
+      - Support Layer: api/support.md
+      - Contracts: api/contracts.md
