@@ -24,6 +24,23 @@ Supports:
 
 - PHP 8.4+
 
+## Version Compatibility
+
+| OTP Library Line | PHP Requirement |
+| --- | --- |
+| `5.x` | `>=8.4` |
+| `4.x` | `>=8.2` |
+| `3.x` | `>=8.2` |
+| `2.x` | `>=8.0` |
+| `1.x` | `>=7.1` |
+
+Use a matching major line when your runtime is pinned to an older PHP version.
+
+## Project Policies
+
+- Security reporting: [SECURITY.md](SECURITY.md)
+- Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+
 ## Installation
 
 ```bash

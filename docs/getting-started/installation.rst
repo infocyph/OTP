@@ -4,7 +4,26 @@ Installation
 Requirements
 ------------
 
-- PHP 8.4 or newer
+- PHP 8.4 or newer for the current ``5.x`` line
+
+PHP and library version compatibility
+-------------------------------------
+
+.. list-table::
+   :header-rows: 1
+
+   * - OTP library line
+     - PHP requirement
+   * - ``5.x``
+     - ``>=8.4``
+   * - ``4.x``
+     - ``>=8.2``
+   * - ``3.x``
+     - ``>=8.2``
+   * - ``2.x``
+     - ``>=8.0``
+   * - ``1.x``
+     - ``>=7.1``
 
 Install from Packagist:
 
