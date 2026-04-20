@@ -22,6 +22,7 @@ You can generate a new Base32 secret directly from the TOTP class:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\TOTP;
 
    $secret = TOTP::generateSecret();
@@ -30,6 +31,7 @@ If you want to control the random byte length:
 
 .. code-block:: php
 
+   <?php
    $secret = TOTP::generateSecret(64);
 
 Creating a TOTP instance
@@ -37,6 +39,7 @@ Creating a TOTP instance
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\TOTP;
 
    $totp = new TOTP($secret, digitCount: 6, period: 30);
@@ -52,12 +55,14 @@ Generating an OTP
 
 .. code-block:: php
 
+   <?php
    $otp = $totp->getOTP();
 
 Generate for a specific timestamp:
 
 .. code-block:: php
 
+   <?php
    $otp = $totp->getOTP(1716532624);
 
 Basic verification
@@ -67,12 +72,14 @@ Use ``verify()`` when a boolean is enough:
 
 .. code-block:: php
 
+   <?php
    $totp->verify($otp);
 
 Or for a specific timestamp:
 
 .. code-block:: php
 
+   <?php
    $totp->verify($otp, timestamp: 1716532624);
 
 Windowed verification
@@ -90,6 +97,7 @@ Example with both past and future drift:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\ValueObjects\VerificationWindow;
 
    $result = $totp->verifyWithWindow(
@@ -108,6 +116,7 @@ Another example using the lightweight bool API:
 
 .. code-block:: php
 
+   <?php
    $isValid = $totp->verify(
        $otp,
        timestamp: time(),
@@ -120,6 +129,7 @@ Time helpers
 
 .. code-block:: php
 
+   <?php
    $totp->getCurrentTimeStep();
    $totp->getRemainingSeconds();
    $totp->getTimeStepFromTimestamp(1716532624);
@@ -144,6 +154,7 @@ Example with replay-aware verification:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
    use Infocyph\OTP\ValueObjects\VerificationWindow;
 
@@ -166,6 +177,7 @@ When rotating a secret, you may want a controlled overlap period:
 
 .. code-block:: php
 
+   <?php
    $rotation = $totp->rotateSecret($newSecret, gracePeriodInSeconds: 3600);
 
    $rotation['current'];
@@ -179,6 +191,7 @@ TOTP is commonly provisioned into authenticator apps using ``otpauth://`` URIs.
 
 .. code-block:: php
 
+   <?php
    $uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
    $svg = $totp->getProvisioningUriQR('alice@example.com', 'Example App');
 
@@ -186,6 +199,7 @@ Detailed QR setup example:
 
 .. code-block:: php
 
+   <?php
    $payload = $totp->getEnrollmentPayload(
        'alice@example.com',
        'Example App',

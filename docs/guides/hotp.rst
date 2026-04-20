@@ -22,6 +22,7 @@ You can generate a new Base32 secret directly from the HOTP class:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\HOTP;
 
    $secret = HOTP::generateSecret();
@@ -31,6 +32,7 @@ Creating an HOTP instance
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\HOTP;
 
    $hotp = (new HOTP($secret))
@@ -45,6 +47,7 @@ Generating OTPs
 
 .. code-block:: php
 
+   <?php
    $counter = 346;
    $otp = $hotp->getOTP($counter);
 
@@ -53,6 +56,7 @@ Basic verification
 
 .. code-block:: php
 
+   <?php
    $isValid = $hotp->verify($otp, 346);
 
 Look-ahead verification
@@ -62,6 +66,7 @@ HOTP often needs controlled counter resynchronization.
 
 .. code-block:: php
 
+   <?php
    $hotp->verify($otp, counter: 10, lookAhead: 5);
 
 This means the verifier will try the provided counter and then probe forward up to the configured look-ahead window.
@@ -71,6 +76,7 @@ Rich verification result
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
 
    $result = $hotp->verifyWithResult(
@@ -100,6 +106,7 @@ Example:
 
 .. code-block:: php
 
+   <?php
    $storedCounter = 100;
 
    $result = $hotp->verifyWithResult(
@@ -122,12 +129,14 @@ HOTP is also commonly shared via ``otpauth://`` URIs, especially when interopera
 
 .. code-block:: php
 
+   <?php
    $uri = $hotp->getProvisioningUri('alice@example.com', 'Example App');
 
 QR example:
 
 .. code-block:: php
 
+   <?php
    $svg = $hotp->getProvisioningUriQR('alice@example.com', 'Example App');
 
 See :doc:`provisioning` for additional provisioning and QR examples.

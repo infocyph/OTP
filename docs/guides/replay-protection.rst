@@ -40,6 +40,7 @@ Example
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
    use Infocyph\OTP\ValueObjects\VerificationWindow;
 

@@ -68,6 +68,7 @@ You can generate one with:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\OCRA;
 
    $sharedKey = OCRA::generateSecret();
@@ -79,6 +80,7 @@ Creating an OCRA instance
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\OCRA;
 
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', $sharedKey);
@@ -95,6 +97,7 @@ Numeric challenge only
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', $sharedKey);
    $code = $ocra->generate('12345678');
 
@@ -103,6 +106,7 @@ Counter plus challenge plus PIN:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', $sharedKey);
    $ocra->setPin('1234');
 
@@ -116,6 +120,7 @@ Challenge-only flow:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', $sharedKey);
    $code = $ocra->generate('00000000');
 
@@ -124,6 +129,7 @@ Counter without PIN:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA512-8:C-QN08', $sharedKey);
    $code = $ocra->generate('12345678', 10);
 
@@ -132,6 +138,7 @@ PIN without counter:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', $sharedKey);
    $ocra->setPin('1234');
    $code = $ocra->generate('12345678');
@@ -141,6 +148,7 @@ Session-based flow:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', $sharedKey);
    $ocra->setSession('A1B2C3D4');
    $code = $ocra->generate('12345678');
@@ -150,6 +158,7 @@ Time-based flow:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA512-8:QN08-T1M', $sharedKey);
    $ocra->setTime(new DateTimeImmutable('2026-04-19 12:00:00 UTC'));
    $code = $ocra->generate('12345678');
@@ -159,6 +168,7 @@ Alphanumeric challenge flow:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QA08', $sharedKey);
    $code = $ocra->generate('CLI22220SRV11110');
 
@@ -167,6 +177,7 @@ Hexadecimal challenge flow:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QH08', $sharedKey);
    $code = $ocra->generate('A1B2C3D4');
 
@@ -177,12 +188,14 @@ Basic verification:
 
 .. code-block:: php
 
+   <?php
    $isValid = $ocra->verify($code, '12345678', 0);
 
 Challenge-only verification:
 
 .. code-block:: php
 
+   <?php
    $challengeOnly = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', $sharedKey);
    $otp = $challengeOnly->generate('00000000');
    $isValid = $challengeOnly->verify($otp, '00000000');
@@ -191,6 +204,7 @@ Rich verification result:
 
 .. code-block:: php
 
+   <?php
    $result = $ocra->verifyWithResult($code, '12345678', 0);
 
    $result->matched;
@@ -201,6 +215,7 @@ Verification with replay tracking:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
 
    $store = new InMemoryReplayStore();
@@ -225,6 +240,7 @@ Example with a session value:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', $sharedKey);
    $ocra->setSession('A1B2C3D4');
    $code = $ocra->generate('12345678');
@@ -233,6 +249,7 @@ Example with both counter and PIN:
 
 .. code-block:: php
 
+   <?php
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', $sharedKey);
    $ocra->setPin('1234');
    $code = $ocra->generate('12345678', 7);
@@ -249,6 +266,7 @@ Parsed suite details
 
 .. code-block:: php
 
+   <?php
    $suite = $ocra->getSuite();
 
    $suite->algorithm;
@@ -271,6 +289,7 @@ Examples:
 
 .. code-block:: php
 
+   <?php
    (new OCRA('OCRA-1:HOTP-SHA1-6:QN08', $sharedKey))->generate('12345678');
    (new OCRA('OCRA-1:HOTP-SHA256-8:QA08', $sharedKey))->generate('CLI22220SRV11110');
    (new OCRA('OCRA-1:HOTP-SHA256-8:QH08', $sharedKey))->generate('A1B2C3D4');
@@ -296,6 +315,7 @@ Example:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
 
    $result = $ocra->verifyWithResult(
@@ -324,6 +344,7 @@ If your OCRA client workflow supports provisioning via ``otpauth://``, you can g
 
 .. code-block:: php
 
+   <?php
    $uri = $ocra->getProvisioningUri('alice@example.com', 'Example App');
    $svg = $ocra->getProvisioningUriQR('alice@example.com', 'Example App');
 

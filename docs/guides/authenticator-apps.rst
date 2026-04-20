@@ -35,6 +35,7 @@ If you are provisioning a typical user-facing MFA app, prefer:
 
 .. code-block:: php
 
+   <?php
    $uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
 
 Use HOTP only when the app and server flow both expect it

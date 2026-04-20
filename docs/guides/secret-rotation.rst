@@ -19,6 +19,7 @@ TOTP rotation planning
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\TOTP;
 
    $totp = (new TOTP(TOTP::generateSecret()))
@@ -45,6 +46,7 @@ HOTP rotation planning
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\HOTP;
 
    $hotp = (new HOTP(HOTP::generateSecret()))
@@ -67,6 +69,7 @@ OCRA rotation planning
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\OCRA;
 
    $ocra = new OCRA(
