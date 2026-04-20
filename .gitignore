@@ -3,6 +3,7 @@
 .phpunit.cache
 .vscode
 .windsurf
+.codex
 *~
 *.patch
 *.txt
