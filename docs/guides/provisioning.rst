@@ -20,6 +20,7 @@ For TOTP, HOTP, and OCRA, you can generate a new Base32 secret before building p
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\HOTP;
    use Infocyph\OTP\OCRA;
    use Infocyph\OTP\TOTP;
@@ -35,18 +36,21 @@ Generate a provisioning URI:
 
 .. code-block:: php
 
+   <?php
    $uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
 
 Render an SVG QR code:
 
 .. code-block:: php
 
+   <?php
    $svg = $totp->getProvisioningUriQR('alice@example.com', 'Example App');
 
 Full TOTP QR example:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\TOTP;
 
    $totp = (new TOTP($secret))
@@ -64,12 +68,14 @@ HOTP example:
 
 .. code-block:: php
 
+   <?php
    $uri = $hotp->getProvisioningUri('alice@example.com', 'Example App');
 
 HOTP QR example:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\HOTP;
 
    $hotp = (new HOTP($secret))
@@ -85,12 +91,14 @@ OCRA example:
 
 .. code-block:: php
 
+   <?php
    $uri = $ocra->getProvisioningUri('alice@example.com', 'Example App');
 
 OCRA QR example:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\OCRA;
 
    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', $sharedKey);
@@ -104,6 +112,7 @@ Enrollment payloads
 
 .. code-block:: php
 
+   <?php
    $payload = $totp->getEnrollmentPayload(
        'alice@example.com',
        'Example App',
@@ -125,6 +134,7 @@ Example:
 
 .. code-block:: php
 
+   <?php
    $payload = $totp->getEnrollmentPayload(
        'alice@example.com',
        'Example App',
@@ -142,6 +152,7 @@ Parsing existing URIs
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\TOTP;
 
    $parsed = TOTP::parseProvisioningUri($uri);

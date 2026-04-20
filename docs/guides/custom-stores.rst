@@ -213,6 +213,7 @@ Using the store
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\RecoveryCodes;
 
    $store = new PdoRecoveryCodeStore($pdo);
@@ -373,6 +374,7 @@ Using the replay store
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
    use Infocyph\OTP\TOTP;
    use Infocyph\OTP\ValueObjects\VerificationWindow;

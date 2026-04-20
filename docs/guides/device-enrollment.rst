@@ -13,6 +13,7 @@ Creating an enrollment record
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\ValueObjects\DeviceEnrollment;
 
    $enrollment = DeviceEnrollment::create(
@@ -28,6 +29,7 @@ Activation after first successful verification
 
 .. code-block:: php
 
+   <?php
    $activated = $enrollment->activate();
 
    $activated->isActive();
@@ -37,6 +39,7 @@ Renaming and reprovisioning
 
 .. code-block:: php
 
+   <?php
    $renamed = $activated->rename('Primary phone');
    $rotated = $renamed->withSecretReference('secret-ref-002');
 
@@ -48,6 +51,7 @@ Revocation
 
 .. code-block:: php
 
+   <?php
    $revoked = $rotated->revoke();
 
    $revoked->isRevoked();

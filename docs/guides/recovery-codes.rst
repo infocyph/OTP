@@ -6,6 +6,7 @@ Generating codes
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\RecoveryCodes;
    use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 
@@ -27,6 +28,7 @@ Consuming a code
 
 .. code-block:: php
 
+   <?php
    $result = $codes->consume('user-42', $generated->plainCodes[0]);
 
    $result->consumed;

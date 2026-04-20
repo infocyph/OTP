@@ -6,6 +6,7 @@ TOTP
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\TOTP;
 
    $secret = TOTP::generateSecret();
@@ -20,6 +21,7 @@ Advanced TOTP verification:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Stores\InMemoryReplayStore;
    use Infocyph\OTP\ValueObjects\VerificationWindow;
 
@@ -41,6 +43,7 @@ HOTP
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\HOTP;
 
    $secret = HOTP::generateSecret();
@@ -56,6 +59,7 @@ Generic OTP
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\OTP;
    use Psr\Cache\CacheItemPoolInterface;
 
@@ -76,6 +80,7 @@ Recovery codes
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\RecoveryCodes;
    use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 

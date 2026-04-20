@@ -24,6 +24,7 @@ The generic OTP class requires a PSR-6 cache pool implementation:
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\OTP;
 
    $otp = new OTP(
@@ -46,6 +47,7 @@ Basic flow
 
 .. code-block:: php
 
+   <?php
    $code = $otp->generate('signup:alice@example.com');
    $otp->verify('signup:alice@example.com', $code);
    $otp->delete('signup:alice@example.com');
@@ -54,6 +56,7 @@ Another example for a password reset flow:
 
 .. code-block:: php
 
+   <?php
    $signature = 'password-reset:user-42';
    $code = $otp->generate($signature);
 
@@ -67,6 +70,7 @@ Example for SMS or IM delivery:
 
 .. code-block:: php
 
+   <?php
    $signature = 'login-otp:user-42:phone:+15551234567';
    $code = $otp->generate($signature);
 
@@ -83,6 +87,7 @@ The third argument of ``verify()`` controls whether a found record should be rem
 
 .. code-block:: php
 
+   <?php
    $otp->verify('signup:alice@example.com', $code, deleteIfFound: false);
 
 When ``deleteIfFound`` is ``false``, the record remains until it is verified, runs out of retries, or expires.

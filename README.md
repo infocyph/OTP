@@ -46,6 +46,7 @@ composer require infocyph/otp
 ### TOTP
 
 ```php
+<?php
 use Infocyph\OTP\TOTP;
 
 $secret = TOTP::generateSecret();
@@ -61,6 +62,7 @@ $isValid = $totp->verify($otp);
 Advanced verification with drift windows:
 
 ```php
+<?php
 use Infocyph\OTP\Stores\InMemoryReplayStore;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 
@@ -85,6 +87,7 @@ $result->replayDetected;
 Useful helpers:
 
 ```php
+<?php
 $totp->getCurrentTimeStep();
 $totp->getRemainingSeconds();
 $totp->getTimeStepFromTimestamp(1716532624);
@@ -93,6 +96,7 @@ $totp->getTimeStepFromTimestamp(1716532624);
 ### HOTP
 
 ```php
+<?php
 use Infocyph\OTP\HOTP;
 
 $secret = HOTP::generateSecret();
@@ -108,6 +112,7 @@ $isValid = $hotp->verify($otp, 346);
 Look-ahead verification with matched-counter result:
 
 ```php
+<?php
 use Infocyph\OTP\Stores\InMemoryReplayStore;
 
 $result = $hotp->verifyWithResult(
@@ -128,6 +133,7 @@ $result->driftOffset;
 Generic OTP is now string-based and uses a caller-provided PSR-6 cache pool.
 
 ```php
+<?php
 use Infocyph\OTP\OTP;
 use Psr\Cache\CacheItemPoolInterface;
 
@@ -155,6 +161,7 @@ Notes:
 ### OCRA
 
 ```php
+<?php
 use Infocyph\OTP\OCRA;
 
 $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', '12345678901234567890123456789012');
@@ -168,6 +175,7 @@ $isValid = $ocra->verify($code, '12345678', 0);
 Replay-aware verification:
 
 ```php
+<?php
 use Infocyph\OTP\Stores\InMemoryReplayStore;
 
 $result = $ocra->verifyWithResult(
@@ -184,18 +192,21 @@ $result = $ocra->verifyWithResult(
 ### Generate `otpauth://` URIs
 
 ```php
+<?php
 $uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
 ```
 
 ### Render SVG QR
 
 ```php
+<?php
 $svg = $totp->getProvisioningUriQR('alice@example.com', 'Example App');
 ```
 
 ### Get enrollment payload
 
 ```php
+<?php
 $payload = $totp->getEnrollmentPayload(
     'alice@example.com',
     'Example App',
@@ -213,6 +224,7 @@ $payload->qrSvg;
 ### Parse existing `otpauth://` URIs
 
 ```php
+<?php
 use Infocyph\OTP\TOTP;
 
 $parsed = TOTP::parseProvisioningUri($uri);
@@ -244,6 +256,7 @@ Recommended usage:
 ## Recovery Codes
 
 ```php
+<?php
 use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 
@@ -264,6 +277,7 @@ $generated->remainingCount;
 Consume a code:
 
 ```php
+<?php
 $result = $codes->consume('user-42', $generated->plainCodes[0]);
 
 $result->consumed;
@@ -284,6 +298,7 @@ Notes:
 Base32 helpers live in `Infocyph\OTP\Support\SecretUtility`.
 
 ```php
+<?php
 use Infocyph\OTP\Support\SecretUtility;
 
 $secret = SecretUtility::generate(64);
@@ -317,6 +332,7 @@ For richer flows, use the advanced APIs and inspect:
 Example:
 
 ```php
+<?php
 use Infocyph\OTP\Support\StepUp;
 
 $requiresFreshOtp = StepUp::requiresFreshOtp($verifiedAt, 300);

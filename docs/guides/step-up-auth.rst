@@ -17,6 +17,7 @@ Quick example
 
 .. code-block:: php
 
+   <?php
    use Infocyph\OTP\Support\StepUp;
 
    $requiresFreshOtp = StepUp::requiresFreshOtp($verifiedAt, 300);
@@ -26,6 +27,7 @@ Assessing freshness in detail
 
 .. code-block:: php
 
+   <?php
    $assessment = StepUp::assess($verifiedAt, 300);
 
    $assessment->requiresFreshOtp;
@@ -40,6 +42,7 @@ Checking a custom reference time
 
 .. code-block:: php
 
+   <?php
    $assessment = StepUp::assess(
        verifiedAt: $verifiedAt,
        seconds: 300,
