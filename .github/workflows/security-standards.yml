@@ -1,0 +1,26 @@
+name: "Security & Standards"
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master", "develop", "development" ]
+
+jobs:
+  phpforge:
+    uses: infocyph/phpforge/.github/workflows/security-standards.yml@main
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    with:
+      php_versions: '["8.4","8.5"]'
+      dependency_versions: '["prefer-lowest","prefer-stable"]'
+      php_extensions: ""
+      coverage: "xdebug"
+      composer_flags: ""
+      phpstan_memory_limit: "1G"
+      psalm_threads: "1"
+      run_analysis: true

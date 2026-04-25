@@ -15,11 +15,15 @@
                 "options": []
             },
             {
-                "action": "composer release:audit",
+                "action": "composer normalize --dry-run",
                 "options": []
             },
             {
-                "action": "composer tests",
+                "action": "composer ic:release:audit",
+                "options": []
+            },
+            {
+                "action": "composer ic:tests",
                 "options": []
             }
         ]
