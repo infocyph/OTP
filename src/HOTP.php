@@ -9,15 +9,12 @@ use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
 use Infocyph\OTP\Support\OtpMath;
-use Infocyph\OTP\Support\ProvisioningUriBuilder;
-use Infocyph\OTP\Support\ProvisioningUriParser;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
-use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
 use Infocyph\OTP\ValueObjects\SecretRotation;
 
-final class HOTP
+final class HOTP extends AbstractOtpAuthenticator
 {
     private readonly string $secret;
 
@@ -44,11 +41,6 @@ final class HOTP
         return SecretUtility::generate($bytes);
     }
 
-    public static function parseProvisioningUri(string $uri): ParsedOtpAuthUri
-    {
-        return ProvisioningUriParser::parse($uri);
-    }
-
     /**
      * @param array<string> $include
      * @param array<string, scalar|null> $additionalParameters
@@ -63,19 +55,20 @@ final class HOTP
     ): EnrollmentPayload {
         $uri = $this->getProvisioningUri($label, $issuer, $include, $additionalParameters);
 
-        return ProvisioningUriBuilder::enrollmentPayload(
+        return $this->buildEnrollmentPayload(
             'hotp',
             $this->secret,
             $label,
             $issuer,
-            array_fill_keys($include, true),
+            $include,
             $additionalParameters,
             $this->algorithm,
             $this->digitCount,
             null,
             $this->counter,
-            null,
-            $withQrSvg ? SvgQrRenderer::render($uri, $imageSize) : null,
+            $withQrSvg,
+            $imageSize,
+            $uri,
         );
     }
 
@@ -94,12 +87,12 @@ final class HOTP
         array $include = ['algorithm', 'digits', 'counter'],
         array $additionalParameters = [],
     ): string {
-        return ProvisioningUriBuilder::build(
+        return $this->buildProvisioningUri(
             'hotp',
             $this->secret,
             $label,
             $issuer,
-            array_fill_keys($include, true),
+            $include,
             $additionalParameters,
             $this->algorithm,
             $this->digitCount,
@@ -187,7 +180,7 @@ final class HOTP
         ?ReplayStoreInterface $replayStore = null,
         ?string $binding = null,
     ): VerificationResult {
-        $this->assertOtp($otp);
+        $this->assertOtp($otp, $this->digitCount);
         if ($counter < 0 || $lookAhead < 0) {
             throw new \InvalidArgumentException('Counter and look-ahead window must be non-negative.');
         }
@@ -216,12 +209,5 @@ final class HOTP
         }
 
         return new VerificationResult(false, 'mismatch');
-    }
-
-    private function assertOtp(string $otp): void
-    {
-        if (!preg_match('/^\d+$/', $otp) || strlen($otp) !== $this->digitCount) {
-            throw new \InvalidArgumentException('OTP must be a numeric string matching the configured digit count.');
-        }
     }
 }
