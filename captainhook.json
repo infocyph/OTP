@@ -23,7 +23,7 @@
                 "options": []
             },
             {
-                "action": "composer ic:tests",
+                "action": "composer ic:ci",
                 "options": []
             }
         ]

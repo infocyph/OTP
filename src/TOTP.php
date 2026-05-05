@@ -9,16 +9,13 @@ use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
 use Infocyph\OTP\Support\OtpMath;
-use Infocyph\OTP\Support\ProvisioningUriBuilder;
-use Infocyph\OTP\Support\ProvisioningUriParser;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
-use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
 use Infocyph\OTP\ValueObjects\SecretRotation;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 
-final class TOTP
+final class TOTP extends AbstractOtpAuthenticator
 {
     private readonly string $secret;
 
@@ -47,11 +44,6 @@ final class TOTP
         return SecretUtility::generate($bytes);
     }
 
-    public static function parseProvisioningUri(string $uri): ParsedOtpAuthUri
-    {
-        return ProvisioningUriParser::parse($uri);
-    }
-
     public function getCurrentTimeStep(?int $timestamp = null): int
     {
         return $this->getTimeStepFromTimestamp($timestamp ?? time());
@@ -71,19 +63,20 @@ final class TOTP
     ): EnrollmentPayload {
         $uri = $this->getProvisioningUri($label, $issuer, $include, $additionalParameters);
 
-        return ProvisioningUriBuilder::enrollmentPayload(
+        return $this->buildEnrollmentPayload(
             'totp',
             $this->secret,
             $label,
             $issuer,
-            array_fill_keys($include, true),
+            $include,
             $additionalParameters,
             $this->algorithm,
             $this->digitCount,
             $this->period,
             null,
-            null,
-            $withQrSvg ? SvgQrRenderer::render($uri, $imageSize) : null,
+            $withQrSvg,
+            $imageSize,
+            $uri,
         );
     }
 
@@ -107,16 +100,17 @@ final class TOTP
         array $include = ['algorithm', 'digits', 'period'],
         array $additionalParameters = [],
     ): string {
-        return ProvisioningUriBuilder::build(
+        return $this->buildProvisioningUri(
             'totp',
             $this->secret,
             $label,
             $issuer,
-            array_fill_keys($include, true),
+            $include,
             $additionalParameters,
             $this->algorithm,
             $this->digitCount,
             $this->period,
+            null,
         );
     }
 
@@ -229,7 +223,7 @@ final class TOTP
         ?string $binding = null,
         bool $singleUse = true,
     ): VerificationResult {
-        $this->assertOtp($otp);
+        $this->assertOtp($otp, $this->digitCount);
         $window ??= new VerificationWindow();
         if ($window->past < 0 || $window->future < 0) {
             throw new \InvalidArgumentException('Verification windows must be non-negative.');
@@ -266,12 +260,5 @@ final class TOTP
         }
 
         return new VerificationResult(false, 'mismatch');
-    }
-
-    private function assertOtp(string $otp): void
-    {
-        if (!preg_match('/^\d+$/', $otp) || strlen($otp) !== $this->digitCount) {
-            throw new \InvalidArgumentException('OTP must be a numeric string matching the configured digit count.');
-        }
     }
 }
