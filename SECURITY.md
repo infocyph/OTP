@@ -2,33 +2,48 @@
 
 ## Supported Versions
 
-Security updates are provided for the latest major line.
-
-| OTP library line | Security support | PHP requirement |
-| --- | --- | --- |
-| `5.x` | Yes | `>=8.4` |
-| `4.x` and earlier | No | See release `composer.json` |
+The project currently supports security updates for the latest release.
 
 ## Reporting a Vulnerability
 
-Please do not report security issues in public GitHub issues.
+Please report vulnerabilities privately.
 
-Use one of the following private channels:
+1. Use GitHub private vulnerability reporting for this repository (`Security` -> `Advisories` -> `Report a vulnerability`).
+2. If private reporting is unavailable, contact maintainers through a private channel.
+3. Do not open a public issue for security vulnerabilities.
 
-1. GitHub Security Advisory (preferred): https://github.com/infocyph/OTP/security/advisories/new
-2. Email: infocyph@gmail.com
+Please include:
 
-When reporting, include:
-
-- A clear description of the issue and impact
-- Steps to reproduce
-- A minimal proof of concept if available
-- The affected version(s) and environment details
+- Affected package version(s)
+- PHP version and runtime environment
+- Reproduction steps or proof of concept
+- Impact assessment (confidentiality/integrity/availability)
+- Any known workaround
 
 ## Response Process
 
-- Initial acknowledgment target: within 72 hours
-- Status updates target: every 7 days until resolution
-- A fix is released as soon as verification and review are complete
+- Initial acknowledgment: best effort, typically within a few days
+- Triage: best effort, based on maintainer availability
+- Fix and release timeline depends on severity and exploitability
 
-We appreciate responsible disclosure and coordinated timelines.
+If a report is accepted, a patched release will be prepared and published. Credit will be provided unless you request otherwise.
+
+## Protected by PHPForge
+
+This project is protected by [PHPForge](https://github.com/infocyph/PHPForge), an automated quality and security tooling layer for Infocyph PHP projects.
+
+PHPForge helps keep the project reliable by running checks for:
+
+- Code style and standards
+- Tests and syntax validation
+- Static analysis and type safety
+- Security and taint analysis
+- Dependency vulnerability audit
+- Architecture boundary validation
+- Duplicate-code detection
+- API snapshot and comment-policy checks
+- Refactor safety checks
+- Benchmark and release-readiness checks
+- Git hooks and CI workflow protection
+
+These automated gates strengthen code quality, reduce security risk and help prevent regressions before merge or release.

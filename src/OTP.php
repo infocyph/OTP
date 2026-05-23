@@ -16,6 +16,9 @@ final readonly class OTP
      *
      * @param int $digitCount The number of digits.
      * @param int $validUpto The number of seconds until the code expires.
+     * @param $retry The number of allowed retries.
+     * @param $hashAlgorithm Hashing algorithm used for stored OTPs.
+     * @param $cacheAdapter PSR-6 cache adapter.
      */
     public function __construct(
         private int $digitCount = 6,
@@ -121,6 +124,7 @@ final readonly class OTP
     /**
      * Generate Secure random number of given length
      *
+     * @param $length Number of digits to generate.
      * @throws Exception
      */
     private function number(int $length): string

@@ -44,7 +44,9 @@ final class ProvisioningUriParser
     }
 
     /**
-     * @param array<array-key, mixed> $query
+     * @param $query Parsed URI query values.
+     * @param $key Query parameter name.
+     * @phpstan-param array<array-key, mixed> $query
      */
     private static function optionalStringQueryValue(array $query, string $key): ?string
     {
@@ -61,7 +63,9 @@ final class ProvisioningUriParser
     }
 
     /**
-     * @param array<array-key, mixed> $query
+     * @param $query Parsed URI query values.
+     * @param $key Query parameter name.
+     * @phpstan-param array<array-key, mixed> $query
      */
     private static function stringQueryValue(array $query, string $key): string
     {

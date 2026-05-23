@@ -40,6 +40,7 @@ final class OCRA
     }
 
     /**
+     * @param $bytes Secret byte length.
      * @throws Exception
      */
     public static function generateSecret(int $bytes = 64): string
@@ -53,6 +54,8 @@ final class OCRA
     }
 
     /**
+     * @param $challenge Challenge value.
+     * @param $counter Counter value when suite requires `C`.
      * @throws Exception
      */
     public function generate(string $challenge, int $counter = 0): string
@@ -94,8 +97,14 @@ final class OCRA
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $withQrSvg Whether to render QR SVG.
+     * @param $imageSize QR image size.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function getEnrollmentPayload(
         string $label,
@@ -124,8 +133,12 @@ final class OCRA
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function getProvisioningUri(
         string $label,
@@ -149,8 +162,13 @@ final class OCRA
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $imageSize QR image size.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function getProvisioningUriQR(
         string $label,
@@ -179,8 +197,17 @@ final class OCRA
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $newSecret Replacement Base32 secret.
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $gracePeriodInSeconds Optional overlap duration.
+     * @param $now Current timestamp override.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $withQrSvg Whether to render QR SVG.
+     * @param $imageSize QR image size.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function planSecretRotation(
         string $newSecret,
@@ -306,8 +333,10 @@ final class OCRA
     }
 
     /**
-     * @param array<int, string> $parts
-     * @return array{c:bool,q:array{format:string,value:int},optionals:array<int, array{format:string,value:int|string}>}
+     * @param $parts Parsed OCRA suite parts.
+     * @return array Parsed conditional suite data.
+     * @phpstan-param array<int, string> $parts
+     * @phpstan-return array{c:bool,q:array{format:string,value:int},optionals:array<int, array{format:string,value:int|string}>}
      */
     private function prepareConditionalParts(array $parts): array
     {

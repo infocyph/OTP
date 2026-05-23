@@ -1,0 +1,48 @@
+name: CI failure
+description: Report a reproducible CI or workflow failure
+title: "[CI]: "
+labels:
+  - ci
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when CI fails unexpectedly and can be reproduced.
+  - type: input
+    id: workflow
+    attributes:
+      label: Workflow/job name
+      placeholder: security-standards / phpforge
+    validations:
+      required: true
+  - type: input
+    id: run_url
+    attributes:
+      label: Failing run URL
+      placeholder: https://github.com/OWNER/REPOSITORY/actions/runs/...
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Failing command
+      description: Exact command or step that failed.
+      placeholder: composer ic:ci
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      description: Paste the relevant error section.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: local_check
+    attributes:
+      label: Local reproduction
+      description: Can you reproduce locally? If yes, include steps.
+      placeholder: Yes/No + details
+    validations:
+      required: true

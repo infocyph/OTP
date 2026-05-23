@@ -36,11 +36,6 @@ Supports:
 
 Use a matching major line when your runtime is pinned to an older PHP version.
 
-## Project Policies
-
-- Security reporting: [SECURITY.md](SECURITY.md)
-- Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-
 ## Installation
 
 ```bash
@@ -382,3 +377,19 @@ Supported suite parts include:
 - HOTP (RFC4226): https://tools.ietf.org/html/rfc4226
 - TOTP (RFC6238): https://tools.ietf.org/html/rfc6238
 - OCRA (RFC6287): https://tools.ietf.org/html/rfc6287
+
+## Security
+
+Protected by [PHPForge](https://github.com/infocyph/PHPForge) — an automated quality and security gate for PHP projects.
+
+---
+
+<div align="center">
+  <sub><strong>Made with ❤️ for the PHP community</strong></sub><br />
+  <sub><a href="LICENSE">MIT Licensed</a></sub><br />
+  <a href="https://docs.infocyph.com/projects/OTP">Documentation</a> •
+  <a href="SECURITY.md">Security</a> •
+  <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> •
+  <a href="CONTRIBUTING.md">Contributing</a> •
+  <a href="https://github.com/infocyph/OTP/issues">Report | Request | Suggest</a>
+</div>

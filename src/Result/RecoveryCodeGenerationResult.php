@@ -9,7 +9,11 @@ use DateTimeImmutable;
 final readonly class RecoveryCodeGenerationResult
 {
     /**
-     * @param array<string> $plainCodes
+     * @param $plainCodes Generated plain recovery codes.
+     * @param $totalGenerated Total issued code count.
+     * @param $remainingCount Remaining unconsumed code count.
+     * @param $lastUsedAt Last code consumption timestamp.
+     * @phpstan-param list<string> $plainCodes
      */
     public function __construct(
         public array $plainCodes,

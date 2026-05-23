@@ -19,7 +19,8 @@ final class AlgorithmValidator
     }
 
     /**
-     * @return array<string>
+     * @return array Supported OTP algorithm names.
+     * @phpstan-return list<string>
      */
     public static function supported(): array
     {

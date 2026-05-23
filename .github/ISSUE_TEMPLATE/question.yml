@@ -1,0 +1,40 @@
+name: Question
+description: Ask a usage or integration question
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for usage questions. For confirmed defects, use the bug report form.
+  - type: textarea
+    id: context
+    attributes:
+      label: What are you trying to do?
+      description: Describe your goal and expected outcome.
+      placeholder: I want to...
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What have you tried?
+      description: Include commands, config snippets, or links you already checked.
+      placeholder: I tried...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Current output or behavior
+      description: Include relevant command output, logs, or errors.
+      render: shell
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: PHP version, Composer version, OS, CI provider (if relevant).
+      placeholder: PHP 8.3, Composer 2.9, Ubuntu 24.04...
+    validations:
+      required: true
