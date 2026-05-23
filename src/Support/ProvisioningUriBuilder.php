@@ -9,8 +9,19 @@ use Infocyph\OTP\ValueObjects\EnrollmentPayload;
 final class ProvisioningUriBuilder
 {
     /**
-     * @param array<string, scalar|null> $additionalParameters
-     * @param array<string, bool> $include
+     * @param $type OTP type (`totp`, `hotp`, or `ocra`).
+     * @param $secret Normalized Base32 secret.
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $algorithm HMAC algorithm name.
+     * @param $digits OTP digit length.
+     * @param $period TOTP period in seconds.
+     * @param $counter HOTP counter value.
+     * @param $ocraSuite OCRA suite string.
+     * @phpstan-param array<string, bool> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public static function build(
         string $type,
@@ -46,8 +57,20 @@ final class ProvisioningUriBuilder
     }
 
     /**
-     * @param array<string, bool> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $type OTP type (`totp`, `hotp`, or `ocra`).
+     * @param $secret Normalized Base32 secret.
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $algorithm HMAC algorithm name.
+     * @param $digits OTP digit length.
+     * @param $period TOTP period in seconds.
+     * @param $counter HOTP counter value.
+     * @param $ocraSuite OCRA suite string.
+     * @param $qrSvg Optional rendered QR SVG.
+     * @phpstan-param array<string, bool> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public static function enrollmentPayload(
         string $type,

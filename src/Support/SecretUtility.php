@@ -11,6 +11,7 @@ use ParagonIE\ConstantTime\Base32;
 final class SecretUtility
 {
     /**
+     * @param $bytes Secret byte length.
      * @throws Exception
      */
     public static function generate(int $bytes = 64): string

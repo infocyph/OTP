@@ -34,6 +34,7 @@ final class HOTP extends AbstractOtpAuthenticator
     }
 
     /**
+     * @param $bytes Secret byte length.
      * @throws Exception
      */
     public static function generateSecret(int $bytes = 64): string
@@ -42,8 +43,14 @@ final class HOTP extends AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $withQrSvg Whether to render QR SVG.
+     * @param $imageSize QR image size.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function getEnrollmentPayload(
         string $label,
@@ -78,8 +85,12 @@ final class HOTP extends AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function getProvisioningUri(
         string $label,
@@ -102,8 +113,13 @@ final class HOTP extends AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $imageSize QR image size.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function getProvisioningUriQR(
         string $label,
@@ -119,8 +135,17 @@ final class HOTP extends AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $newSecret Replacement Base32 secret.
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $gracePeriodInSeconds Optional overlap duration.
+     * @param $now Current timestamp override.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $withQrSvg Whether to render QR SVG.
+     * @param $imageSize QR image size.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     public function planSecretRotation(
         string $newSecret,

@@ -19,10 +19,22 @@ jobs:
       php_versions: '["8.4","8.5"]'
       dependency_versions: '["prefer-lowest","prefer-stable"]'
       php_extensions: ""
-      coverage: "xdebug"
       composer_flags: ""
       phpstan_memory_limit: "1G"
       psalm_threads: "1"
       run_analysis: true
       run_svg_report: true
+      fail_on_skipped_tests: false
+      enable_redis_service: false
+      enable_valkey_service: false
+      enable_memcached_service: false
+      enable_postgres_service: false
+      enable_mysql_service: false
+      enable_scylladb_service: false
+      enable_elasticsearch_service: false
+      enable_mongodb_service: false
+      service_db_name: "phpforge"
+      service_db_user: "phpforge"
+      service_db_password: "phpforge"
       artifact_retention_days: 61
+

@@ -44,7 +44,10 @@ final class LabelHelper
     }
 
     /**
-     * @return array{issuer:?string,label:string}
+     * @param $label Provisioning label.
+     * @param $issuer Optional issuer override.
+     * @return array Parsed issuer/label parts.
+     * @phpstan-return array{issuer:?string,label:string}
      */
     public static function parseLabel(string $label, ?string $issuer = null): array
     {

@@ -1,0 +1,51 @@
+name: Regression report
+description: Report behavior that previously worked but now fails
+title: "[Regression]: "
+labels:
+  - regression
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Regression summary
+      placeholder: This worked before, but now...
+    validations:
+      required: true
+  - type: input
+    id: last_known_good
+    attributes:
+      label: Last known working version/commit
+      placeholder: v1.2.3 or abc1234
+    validations:
+      required: true
+  - type: input
+    id: first_bad
+    attributes:
+      label: First broken version/commit
+      placeholder: v1.2.4 or def5678
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected vs actual behavior
+      placeholder: Expected ..., but got ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: PHP version, Composer version, OS, CI provider (if relevant).
+      placeholder: PHP 8.3, Composer 2.9, Ubuntu 24.04...
+    validations:
+      required: true

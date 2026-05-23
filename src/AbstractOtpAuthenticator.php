@@ -25,8 +25,21 @@ abstract class AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $otpType OTP type (`totp`, `hotp`, or `ocra`).
+     * @param $secret Normalized Base32 secret.
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $algorithm HMAC algorithm name.
+     * @param $digitCount OTP digit length.
+     * @param $period TOTP period in seconds.
+     * @param $counter HOTP counter value.
+     * @param $withQrSvg Whether to render QR SVG.
+     * @param $imageSize QR image size.
+     * @param $uri Provisioning URI.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     final protected function buildEnrollmentPayload(
         string $otpType,
@@ -60,8 +73,18 @@ abstract class AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @param array<string, scalar|null> $additionalParameters
+     * @param $otpType OTP type (`totp`, `hotp`, or `ocra`).
+     * @param $secret Normalized Base32 secret.
+     * @param $label Account label.
+     * @param $issuer Issuer name.
+     * @param $include Optional provisioning flags.
+     * @param $additionalParameters Additional query parameters.
+     * @param $algorithm HMAC algorithm name.
+     * @param $digitCount OTP digit length.
+     * @param $period TOTP period in seconds.
+     * @param $counter HOTP counter value.
+     * @phpstan-param list<string> $include
+     * @phpstan-param array<string, scalar|null> $additionalParameters
      */
     final protected function buildProvisioningUri(
         string $otpType,
@@ -90,8 +113,10 @@ abstract class AbstractOtpAuthenticator
     }
 
     /**
-     * @param array<string> $include
-     * @return array<string, bool>
+     * @param $include Optional provisioning flags.
+     * @return array Include flags keyed by name.
+     * @phpstan-param list<string> $include
+     * @phpstan-return array<string, bool>
      */
     final protected function includeFlags(array $include): array
     {

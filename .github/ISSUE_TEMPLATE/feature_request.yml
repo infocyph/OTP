@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Please describe the use case first, then the proposed solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What limitation are you hitting?
+      placeholder: I need to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen?
+      placeholder: Add a command/config/workflow option that...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workaround or alternative approach you evaluated.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: Who benefits and what changes for users/CI?
+      placeholder: This would improve...
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Related issues, links, examples, or prior art.
