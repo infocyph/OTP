@@ -45,10 +45,21 @@ final readonly class RecoveryCodes
             throw new InvalidArgumentException('Invalid recovery code configuration.');
         }
 
+        $characters = $this->characterSet($characterSet);
+        if (!$this->canGenerateUniqueCodes($count, $length, count($characters))) {
+            throw new InvalidArgumentException('Recovery code configuration cannot produce the requested number of unique codes.');
+        }
+
         $plainCodes = [];
         $hashedCodes = [];
-        for ($i = 0; $i < $count; $i++) {
-            $code = $this->randomCode($length, $characterSet);
+        $generatedCodes = [];
+        while (count($plainCodes) < $count) {
+            $code = $this->randomCode($length, $characters);
+            if (isset($generatedCodes[$code])) {
+                continue;
+            }
+
+            $generatedCodes[$code] = true;
             $plainCodes[] = $groupSize > 0 ? trim(chunk_split($code, $groupSize, '-'), '-') : $code;
             $hashedCodes[] = $this->hash($code);
         }
@@ -60,21 +71,54 @@ final readonly class RecoveryCodes
         return new RecoveryCodeGenerationResult($plainCodes, $metadata['total'], $metadata['remaining'], $metadata['lastUsedAt']);
     }
 
+    private function canGenerateUniqueCodes(int $count, int $length, int $characterCount): bool
+    {
+        $capacity = 1;
+        for ($i = 0; $i < $length; $i++) {
+            if ($capacity >= $count || $capacity > intdiv($count - 1, $characterCount)) {
+                return true;
+            }
+
+            $capacity *= $characterCount;
+        }
+
+        return $capacity >= $count;
+    }
+
+    /**
+     * @param $characterSet Candidate recovery-code characters.
+     * @return array Unique recovery-code characters.
+     * @phpstan-return non-empty-list<string>
+     */
+    private function characterSet(string $characterSet): array
+    {
+        $characters = [];
+        foreach (str_split($characterSet) as $character) {
+            $characters[$character] = true;
+        }
+        if ($characters === []) {
+            throw new InvalidArgumentException('Recovery code character set cannot be empty.');
+        }
+
+        return array_keys($characters);
+    }
+
     private function hash(string $code): string
     {
         return hash_hmac($this->hashAlgorithm, $code, $this->hashKey ?? 'otp-recovery-codes');
     }
 
-    private function randomCode(int $length, string $characterSet): string
+    /**
+     * @param $length Recovery-code length.
+     * @param $characterSet Unique recovery-code characters.
+     * @phpstan-param non-empty-list<string> $characterSet
+     */
+    private function randomCode(int $length, array $characterSet): string
     {
-        $characters = array_values(array_unique(str_split($characterSet)));
-        if ($characters === []) {
-            throw new InvalidArgumentException('Recovery code character set cannot be empty.');
-        }
-
         $code = '';
+        $characterCount = count($characterSet);
         for ($i = 0; $i < $length; $i++) {
-            $code .= $characters[random_int(0, count($characters) - 1)];
+            $code .= $characterSet[random_int(0, $characterCount - 1)];
         }
 
         return $code;

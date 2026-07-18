@@ -187,10 +187,6 @@ final class TOTP extends AbstractOtpAuthenticator
         bool $withQrSvg = false,
         int $imageSize = 200,
     ): SecretRotation {
-        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
-            throw new \InvalidArgumentException('Grace period must be non-negative.');
-        }
-
         $rotation = $this->rotateSecret($newSecret, $gracePeriodInSeconds, $now);
         $next = new self($rotation['next'], $this->digitCount, $this->period);
         $next->setAlgorithm($this->algorithm);
@@ -215,6 +211,10 @@ final class TOTP extends AbstractOtpAuthenticator
         ?int $gracePeriodInSeconds = null,
         ?int $now = null,
     ): array {
+        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
+            throw new \InvalidArgumentException('Grace period must be non-negative.');
+        }
+
         $now ??= time();
 
         return [
@@ -254,9 +254,6 @@ final class TOTP extends AbstractOtpAuthenticator
     ): VerificationResult {
         $this->assertOtp($otp, $this->digitCount);
         $window ??= new VerificationWindow();
-        if ($window->past < 0 || $window->future < 0) {
-            throw new \InvalidArgumentException('Verification windows must be non-negative.');
-        }
 
         $baseTimestamp = $timestamp ?? time();
         $currentStep = $this->getTimeStepFromTimestamp($baseTimestamp);

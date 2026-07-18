@@ -54,6 +54,15 @@ test('totp secret rotation can prepare reprovisioning payloads', function () {
         ->and($rotation->nextEnrollment?->qrSvg)->toContain('<svg');
 });
 
+test('totp secret rotation rejects negative grace periods through every public entry point', function () {
+    $totp = new TOTP(TOTP::generateSecret());
+
+    expect(fn () => $totp->rotateSecret(TOTP::generateSecret(), -1))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $totp->planSecretRotation(TOTP::generateSecret(), 'alice@example.com', 'Example App', -1))
+        ->toThrow(InvalidArgumentException::class);
+});
+
 test('hotp and ocra secret rotation can prepare replacement enrollment payloads', function () {
     $hotp = (new HOTP(HOTP::generateSecret()))->setAlgorithm('sha512')->setCounter(5);
     $hotpRotation = $hotp->planSecretRotation(

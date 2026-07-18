@@ -28,7 +28,13 @@ final class ProvisioningUriParser
         $labelParts = LabelHelper::parseLabel(ltrim((string) ($parts['path'] ?? ''), '/'), $issuer);
         $algorithmValue = self::optionalStringQueryValue($query, 'algorithm');
         $algorithm = $algorithmValue !== null ? AlgorithmValidator::normalize($algorithmValue) : 'sha1';
-        $digits = isset($query['digits']) ? (int) $query['digits'] : 6;
+        $digits = self::optionalNonNegativeIntQueryValue($query, 'digits') ?? 6;
+        if (($type === 'hotp' || $type === 'totp') && ($digits < 4 || $digits > 10)) {
+            throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 4 and 10.');
+        }
+
+        $period = self::optionalPositiveIntQueryValue($query, 'period');
+        $counter = self::optionalNonNegativeIntQueryValue($query, 'counter');
 
         return new ParsedOtpAuthUri(
             $type,
@@ -37,10 +43,43 @@ final class ProvisioningUriParser
             $labelParts['issuer'],
             $algorithm,
             $digits,
-            isset($query['period']) ? (int) $query['period'] : null,
-            isset($query['counter']) ? (int) $query['counter'] : null,
+            $period,
+            $counter,
             self::optionalStringQueryValue($query, 'ocraSuite'),
         );
+    }
+
+    /**
+     * @param $query Parsed URI query values.
+     * @param $key Query parameter name.
+     * @phpstan-param array<array-key, mixed> $query
+     */
+    private static function optionalNonNegativeIntQueryValue(array $query, string $key): ?int
+    {
+        $value = self::optionalStringQueryValue($query, $key);
+        if ($value === null) {
+            return null;
+        }
+        if (!ctype_digit($value)) {
+            throw new InvalidArgumentException(sprintf('Invalid non-negative integer otpauth query parameter "%s".', $key));
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * @param $query Parsed URI query values.
+     * @param $key Query parameter name.
+     * @phpstan-param array<array-key, mixed> $query
+     */
+    private static function optionalPositiveIntQueryValue(array $query, string $key): ?int
+    {
+        $value = self::optionalNonNegativeIntQueryValue($query, $key);
+        if ($value !== null && $value < 1) {
+            throw new InvalidArgumentException(sprintf('Otpauth query parameter "%s" must be greater than zero.', $key));
+        }
+
+        return $value;
     }
 
     /**
