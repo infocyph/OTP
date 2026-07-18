@@ -49,7 +49,7 @@ final class InMemoryRecoveryCodeStore implements RecoveryCodeStoreInterface
 
         $this->storage[$binding] = [
             'codes' => $codes,
-            'total' => count($hashedCodes),
+            'total' => count($codes),
             'lastUsedAt' => null,
         ];
     }

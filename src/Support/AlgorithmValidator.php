@@ -11,11 +11,11 @@ final class AlgorithmValidator
     public static function normalize(string $algorithm): string
     {
         $algorithm = strtolower(trim($algorithm));
-        if (!in_array($algorithm, self::supported(), true)) {
-            throw new InvalidArgumentException('Unsupported OTP algorithm.');
-        }
 
-        return $algorithm;
+        return match ($algorithm) {
+            'sha1', 'sha256', 'sha512' => $algorithm,
+            default => throw new InvalidArgumentException('Unsupported OTP algorithm.'),
+        };
     }
 
     /**

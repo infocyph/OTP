@@ -19,11 +19,12 @@ final class StepUp
     {
         self::assertWindow($seconds);
         $now ??= new DateTimeImmutable();
+        $age = $verifiedAt !== null ? self::ageInSeconds($verifiedAt, $now) : null;
 
         return new StepUpResult(
-            self::requiresFreshOtp($verifiedAt, $seconds, $now),
+            $verifiedAt === null || $age > $seconds,
             $verifiedAt,
-            $verifiedAt !== null ? self::ageInSeconds($verifiedAt, $now) : null,
+            $age,
             $seconds,
             $verifiedAt?->modify(sprintf('+%d seconds', $seconds)),
         );

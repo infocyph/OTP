@@ -73,6 +73,13 @@ test('Recovery codes can be generated, consumed once, and regenerated', function
         ->and($regenerated->remainingCount)->toBe(10);
 });
 
+test('Recovery code generation rejects insufficient unique code space', function () {
+    $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore());
+
+    expect(fn () => $codes->generate('user-1', count: 2, length: 6, characterSet: 'A'))
+        ->toThrow(InvalidArgumentException::class);
+});
+
 test('otpauth URIs round-trip through parser with issuer-safe labels', function () {
     $secret = TOTP::generateSecret();
     $totp = (new TOTP($secret))->setAlgorithm('sha256');
@@ -84,4 +91,18 @@ test('otpauth URIs round-trip through parser with issuer-safe labels', function 
         ->and($parsed->label)->toBe('user@example.com')
         ->and($parsed->algorithm)->toBe('sha256')
         ->and($parsed->period)->toBe(30);
+});
+
+test('otpauth URI parser rejects malformed numeric parameters', function () {
+    $baseUri = 'otpauth://totp/Example:user?secret=JBSWY3DPEHPK3PXP';
+
+    foreach (['&digits=invalid', '&digits=3', '&period=0', '&counter=-1'] as $parameter) {
+        expect(fn () => ProvisioningUriParser::parse($baseUri . $parameter))
+            ->toThrow(InvalidArgumentException::class);
+    }
+});
+
+test('verification windows reject negative bounds when constructed', function () {
+    expect(fn () => new VerificationWindow(-1, 0))
+        ->toThrow(InvalidArgumentException::class);
 });

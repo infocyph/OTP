@@ -28,10 +28,6 @@ final readonly class DeviceEnrollment
         string $secretReference,
         ?DateTimeImmutable $createdAt = null,
     ): self {
-        self::assertNonEmpty('deviceId', $deviceId);
-        self::assertNonEmpty('label', $label);
-        self::assertNonEmpty('secretReference', $secretReference);
-
         return new self($deviceId, $label, $secretReference, $createdAt ?? new DateTimeImmutable());
     }
 
