@@ -12,14 +12,33 @@ use InvalidArgumentException;
 
 final readonly class RecoveryCodes
 {
+    private const int MAX_CODE_COUNT = 100;
+
+    private const int MAX_CODE_LENGTH = 128;
+
+    private string $hashAlgorithm;
+
+    private ?string $hashKey;
+
     public function __construct(
         private RecoveryCodeStoreInterface $store,
-        private string $hashAlgorithm = 'sha256',
-        private ?string $hashKey = null,
-    ) {}
+        string $hashAlgorithm = 'sha256',
+        ?string $hashKey = null,
+    ) {
+        $this->hashAlgorithm = match (strtolower(trim($hashAlgorithm))) {
+            'sha256' => 'sha256',
+            'sha512' => 'sha512',
+            default => throw new InvalidArgumentException('Recovery code hashing requires SHA-256 or SHA-512.'),
+        };
+        if ($hashKey !== null && strlen($hashKey) < 16) {
+            throw new InvalidArgumentException('Recovery code HMAC keys must contain at least 16 bytes.');
+        }
+        $this->hashKey = $hashKey;
+    }
 
     public function consume(string $binding, string $code): RecoveryCodeConsumptionResult
     {
+        self::assertBinding($binding);
         $usedAt = new DateTimeImmutable();
         $normalizedCode = strtoupper(str_replace([' ', '-'], '', trim($code)));
         $consumed = $this->store->consume($binding, $this->hash($normalizedCode), $usedAt);
@@ -41,7 +60,15 @@ final readonly class RecoveryCodes
         int $groupSize = 4,
         string $characterSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
     ): RecoveryCodeGenerationResult {
-        if ($count < 1 || $length < 6 || $groupSize < 0) {
+        self::assertBinding($binding);
+        if (
+            $count < 1
+            || $count > self::MAX_CODE_COUNT
+            || $length < 6
+            || $length > self::MAX_CODE_LENGTH
+            || $groupSize < 0
+            || $groupSize > $length
+        ) {
             throw new InvalidArgumentException('Invalid recovery code configuration.');
         }
 
@@ -71,18 +98,30 @@ final readonly class RecoveryCodes
         return new RecoveryCodeGenerationResult($plainCodes, $metadata['total'], $metadata['remaining'], $metadata['lastUsedAt']);
     }
 
+    private static function assertBinding(string $binding): void
+    {
+        if (trim($binding) === '' || strlen($binding) > 512) {
+            throw new InvalidArgumentException('Recovery code binding must contain between 1 and 512 bytes.');
+        }
+    }
+
     private function canGenerateUniqueCodes(int $count, int $length, int $characterCount): bool
     {
+        if ($characterCount < 2) {
+            return false;
+        }
+
+        $requiredCapacity = $count * 2;
         $capacity = 1;
         for ($i = 0; $i < $length; $i++) {
-            if ($capacity >= $count || $capacity > intdiv($count - 1, $characterCount)) {
+            if ($capacity >= $requiredCapacity || $capacity > intdiv($requiredCapacity - 1, $characterCount)) {
                 return true;
             }
 
             $capacity *= $characterCount;
         }
 
-        return $capacity >= $count;
+        return $capacity >= $requiredCapacity;
     }
 
     /**
@@ -92,12 +131,14 @@ final readonly class RecoveryCodes
      */
     private function characterSet(string $characterSet): array
     {
+        $characterSet = strtoupper($characterSet);
+        if ($characterSet === '' || preg_match('/^[A-Z0-9]+$/', $characterSet) !== 1) {
+            throw new InvalidArgumentException('Recovery code character set must contain only ASCII letters and digits.');
+        }
+
         $characters = [];
         foreach (str_split($characterSet) as $character) {
             $characters[$character] = true;
-        }
-        if ($characters === []) {
-            throw new InvalidArgumentException('Recovery code character set cannot be empty.');
         }
 
         return array_keys($characters);
@@ -105,7 +146,11 @@ final readonly class RecoveryCodes
 
     private function hash(string $code): string
     {
-        return hash_hmac($this->hashAlgorithm, $code, $this->hashKey ?? 'otp-recovery-codes');
+        if ($this->hashKey === null) {
+            return hash($this->hashAlgorithm, $code);
+        }
+
+        return hash_hmac($this->hashAlgorithm, $code, $this->hashKey);
     }
 
     /**

@@ -9,32 +9,41 @@ use InvalidArgumentException;
 
 final class ProvisioningUriParser
 {
+    private const int MAX_QUERY_PARAMETERS = 32;
+
+    private const int MAX_URI_LENGTH = 4096;
+
     public static function parse(string $uri): ParsedOtpAuthUri
     {
-        $parts = parse_url($uri);
-        if (!is_array($parts) || ($parts['scheme'] ?? null) !== 'otpauth') {
-            throw new InvalidArgumentException('Invalid otpauth URI.');
+        if ($uri === '' || strlen($uri) > self::MAX_URI_LENGTH) {
+            throw new InvalidArgumentException('Invalid otpauth URI length.');
         }
 
-        $type = strtolower($parts['host'] ?? '');
+        $parts = self::parseUriParts($uri);
+
+        $type = strtolower($parts['host']);
         if (!in_array($type, ['hotp', 'totp', 'ocra'], true)) {
             throw new InvalidArgumentException('Unsupported otpauth type.');
         }
 
-        parse_str($parts['query'] ?? '', $query);
+        $query = self::parseQuery($parts['query']);
         $secret = SecretUtility::normalizeBase32(self::stringQueryValue($query, 'secret'));
+        SecretUtility::decodeBase32($secret);
         $issuerValue = self::optionalStringQueryValue($query, 'issuer');
         $issuer = $issuerValue !== null ? LabelHelper::normalizeIssuer($issuerValue) : null;
-        $labelParts = LabelHelper::parseLabel(ltrim((string) ($parts['path'] ?? ''), '/'), $issuer);
+        $labelParts = LabelHelper::parseLabel(ltrim($parts['path'], '/'), $issuer);
         $algorithmValue = self::optionalStringQueryValue($query, 'algorithm');
         $algorithm = $algorithmValue !== null ? AlgorithmValidator::normalize($algorithmValue) : 'sha1';
-        $digits = self::optionalNonNegativeIntQueryValue($query, 'digits') ?? 6;
+        $digitsValue = self::optionalNonNegativeIntQueryValue($query, 'digits');
+        $digits = $digitsValue ?? 6;
         if (($type === 'hotp' || $type === 'totp') && ($digits < 4 || $digits > 10)) {
             throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 4 and 10.');
         }
 
         $period = self::optionalPositiveIntQueryValue($query, 'period');
         $counter = self::optionalNonNegativeIntQueryValue($query, 'counter');
+        $ocraSuite = self::optionalStringQueryValue($query, 'ocraSuite');
+        $digits = self::assertTypeParameters($type, $digits, $digitsValue !== null, $period, $counter, $ocraSuite);
 
         return new ParsedOtpAuthUri(
             $type,
@@ -45,14 +54,90 @@ final class ProvisioningUriParser
             $digits,
             $period,
             $counter,
-            self::optionalStringQueryValue($query, 'ocraSuite'),
+            $ocraSuite,
         );
+    }
+
+    private static function assertHotpParameters(
+        int $digits,
+        ?int $period,
+        ?int $counter,
+        ?string $ocraSuite,
+    ): int {
+        if ($counter === null) {
+            throw new InvalidArgumentException('HOTP provisioning URIs require a counter.');
+        }
+        if ($period !== null) {
+            throw new InvalidArgumentException('Only TOTP provisioning URIs may contain a period.');
+        }
+        if ($ocraSuite !== null) {
+            throw new InvalidArgumentException('Only OCRA provisioning URIs may contain an OCRA suite.');
+        }
+
+        return $digits;
+    }
+
+    private static function assertOcraParameters(
+        int $digits,
+        bool $digitsProvided,
+        ?int $period,
+        ?int $counter,
+        ?string $ocraSuite,
+    ): int {
+        if ($counter !== null) {
+            throw new InvalidArgumentException('Only HOTP provisioning URIs may contain a counter.');
+        }
+        if ($period !== null) {
+            throw new InvalidArgumentException('Only TOTP provisioning URIs may contain a period.');
+        }
+        if ($ocraSuite === null || $ocraSuite === '') {
+            throw new InvalidArgumentException('OCRA provisioning URIs require an OCRA suite.');
+        }
+
+        if (!OcraSuiteValidator::isValid($ocraSuite)) {
+            throw new InvalidArgumentException('Invalid OCRA suite in provisioning URI.');
+        }
+
+        $suiteDigits = OcraSuiteValidator::digitCount($ocraSuite);
+        if ($digitsProvided && $digits !== $suiteDigits) {
+            throw new InvalidArgumentException('OCRA digit count must match the provisioning suite.');
+        }
+
+        return $suiteDigits;
+    }
+
+    private static function assertTotpParameters(int $digits, ?int $counter, ?string $ocraSuite): int
+    {
+        if ($counter !== null) {
+            throw new InvalidArgumentException('Only HOTP provisioning URIs may contain a counter.');
+        }
+        if ($ocraSuite !== null) {
+            throw new InvalidArgumentException('Only OCRA provisioning URIs may contain an OCRA suite.');
+        }
+
+        return $digits;
+    }
+
+    private static function assertTypeParameters(
+        string $type,
+        int $digits,
+        bool $digitsProvided,
+        ?int $period,
+        ?int $counter,
+        ?string $ocraSuite,
+    ): int {
+        return match ($type) {
+            'hotp' => self::assertHotpParameters($digits, $period, $counter, $ocraSuite),
+            'totp' => self::assertTotpParameters($digits, $counter, $ocraSuite),
+            'ocra' => self::assertOcraParameters($digits, $digitsProvided, $period, $counter, $ocraSuite),
+            default => throw new InvalidArgumentException('Unsupported otpauth type.'),
+        };
     }
 
     /**
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
-     * @phpstan-param array<array-key, mixed> $query
+     * @phpstan-param array<string, string> $query
      */
     private static function optionalNonNegativeIntQueryValue(array $query, string $key): ?int
     {
@@ -63,6 +148,11 @@ final class ProvisioningUriParser
         if (!ctype_digit($value)) {
             throw new InvalidArgumentException(sprintf('Invalid non-negative integer otpauth query parameter "%s".', $key));
         }
+        $canonical = ltrim($value, '0');
+        $canonical = $canonical === '' ? '0' : $canonical;
+        if ((string) (int) $canonical !== $canonical) {
+            throw new InvalidArgumentException(sprintf('Otpauth query parameter "%s" exceeds the supported integer range.', $key));
+        }
 
         return (int) $value;
     }
@@ -70,13 +160,13 @@ final class ProvisioningUriParser
     /**
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
-     * @phpstan-param array<array-key, mixed> $query
+     * @phpstan-param array<string, string> $query
      */
     private static function optionalPositiveIntQueryValue(array $query, string $key): ?int
     {
         $value = self::optionalNonNegativeIntQueryValue($query, $key);
-        if ($value !== null && $value < 1) {
-            throw new InvalidArgumentException(sprintf('Otpauth query parameter "%s" must be greater than zero.', $key));
+        if ($value !== null && ($value < 1 || $value > 86400)) {
+            throw new InvalidArgumentException(sprintf('Otpauth query parameter "%s" must be between 1 and 86400.', $key));
         }
 
         return $value;
@@ -85,26 +175,99 @@ final class ProvisioningUriParser
     /**
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
-     * @phpstan-param array<array-key, mixed> $query
+     * @phpstan-param array<string, string> $query
      */
     private static function optionalStringQueryValue(array $query, string $key): ?string
     {
-        if (!array_key_exists($key, $query)) {
+        if (!isset($query[$key])) {
             return null;
         }
 
-        $value = $query[$key];
-        if (!is_string($value)) {
-            throw new InvalidArgumentException(sprintf('Invalid otpauth query parameter "%s".', $key));
+        return $query[$key];
+    }
+
+    /**
+     * @param $queryString Encoded URI query.
+     * @return array Parsed query values.
+     * @phpstan-return array<string, string>
+     */
+    private static function parseQuery(string $queryString): array
+    {
+        if ($queryString === '') {
+            return [];
         }
 
-        return $value;
+        $parameters = explode('&', $queryString);
+        if (count($parameters) > self::MAX_QUERY_PARAMETERS) {
+            throw new InvalidArgumentException('Too many otpauth query parameters.');
+        }
+
+        $query = [];
+        foreach ($parameters as $parameter) {
+            if ($parameter === '') {
+                throw new InvalidArgumentException('Invalid empty otpauth query parameter.');
+            }
+
+            [$encodedKey, $encodedValue] = array_pad(explode('=', $parameter, 2), 2, '');
+            if (
+                $encodedKey === ''
+                || preg_match('/%(?![A-Fa-f0-9]{2})/', $encodedKey . $encodedValue) === 1
+            ) {
+                throw new InvalidArgumentException('Invalid otpauth query encoding.');
+            }
+
+            $key = rawurldecode($encodedKey);
+            if (trim($key) === '' || preg_match('/[\x00-\x1F\x7F]/', $key) === 1) {
+                throw new InvalidArgumentException('Invalid otpauth query parameter name.');
+            }
+            if (isset($query[$key])) {
+                throw new InvalidArgumentException(sprintf('Duplicate otpauth query parameter "%s".', $key));
+            }
+
+            $query[$key] = rawurldecode($encodedValue);
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param $uri Provisioning URI.
+     * @return array Parsed URI components.
+     * @phpstan-return array{host:string,path:string,query:string}
+     */
+    private static function parseUriParts(string $uri): array
+    {
+        $parts = parse_url($uri);
+        $scheme = is_array($parts) ? ($parts['scheme'] ?? null) : null;
+        $host = is_array($parts) ? ($parts['host'] ?? null) : null;
+        if (
+            !is_array($parts)
+            || !is_string($scheme)
+            || strtolower($scheme) !== 'otpauth'
+            || !is_string($host)
+            || $host === ''
+        ) {
+            throw new InvalidArgumentException('Invalid otpauth URI.');
+        }
+        if (
+            isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['port'])
+            || isset($parts['fragment'])
+        ) {
+            throw new InvalidArgumentException('Invalid otpauth URI authority or fragment.');
+        }
+
+        $path = $parts['path'] ?? '';
+        $query = $parts['query'] ?? '';
+
+        return ['host' => $host, 'path' => $path, 'query' => $query];
     }
 
     /**
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
-     * @phpstan-param array<array-key, mixed> $query
+     * @phpstan-param array<string, string> $query
      */
     private static function stringQueryValue(array $query, string $key): string
     {

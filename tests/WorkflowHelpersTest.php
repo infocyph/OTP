@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\OCRA;
 use Infocyph\OTP\Support\StepUp;
@@ -7,7 +9,12 @@ use Infocyph\OTP\TOTP;
 use Infocyph\OTP\ValueObjects\DeviceEnrollment;
 
 test('device enrollment tracks pending activation and revocation lifecycle', function () {
-    $enrollment = DeviceEnrollment::create('device-1', 'Alice phone', 'secret-ref-1');
+    $enrollment = DeviceEnrollment::create(
+        'device-1',
+        'Alice phone',
+        'secret-ref-1',
+        new \DateTimeImmutable('2026-04-20 09:00:00'),
+    );
 
     $active = $enrollment->activate(new \DateTimeImmutable('2026-04-20 10:00:00'));
     $renamed = $active->rename('Primary phone');
@@ -84,4 +91,54 @@ test('hotp and ocra secret rotation can prepare replacement enrollment payloads'
         ->and($hotpRotation->nextEnrollment?->uri)->toContain('counter=5')
         ->and($ocraRotation->hasGracePeriod())->toBeTrue()
         ->and($ocraRotation->nextEnrollment?->uri)->toContain('ocraSuite=');
+});
+
+test('device enrollment enforces temporal state invariants', function () {
+    $createdAt = new \DateTimeImmutable('2026-04-20 10:00:00');
+
+    expect(fn () => new DeviceEnrollment(
+        'device-1',
+        'Phone',
+        'secret-ref',
+        $createdAt,
+        new \DateTimeImmutable('2026-04-20 09:00:00'),
+    ))->toThrow(InvalidArgumentException::class);
+
+    $active = DeviceEnrollment::create('device-1', 'Phone', 'secret-ref', $createdAt)
+        ->activate(new \DateTimeImmutable('2026-04-20 11:00:00'));
+
+    expect(fn () => $active->activate())
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $active->revoke(new \DateTimeImmutable('2026-04-20 10:30:00')))
+        ->toThrow(InvalidArgumentException::class);
+
+    $revoked = $active->revoke(new \DateTimeImmutable('2026-04-20 12:00:00'));
+    expect(fn () => $revoked->revoke())
+        ->toThrow(InvalidArgumentException::class);
+});
+
+test('secret rotation grace period ends at its expiration instant', function () {
+    $totp = new TOTP(TOTP::generateSecret());
+    $rotation = $totp->planSecretRotation(
+        TOTP::generateSecret(),
+        'alice@example.com',
+        'Example',
+        gracePeriodInSeconds: 60,
+        now: 1000,
+    );
+
+    expect($rotation->isDualSecretActive(new \DateTimeImmutable('@1059')))->toBeTrue()
+        ->and($rotation->isDualSecretActive(new \DateTimeImmutable('@1060')))->toBeFalse();
+});
+
+test('time and rotation helpers reject negative timestamps and unchanged secrets', function () {
+    $secret = TOTP::generateSecret();
+    $totp = new TOTP($secret);
+
+    expect(fn () => $totp->getRemainingSeconds(-1))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $totp->rotateSecret(TOTP::generateSecret(), now: -1))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $totp->rotateSecret($secret))
+        ->toThrow(InvalidArgumentException::class);
 });

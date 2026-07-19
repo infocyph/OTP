@@ -11,6 +11,7 @@ use Infocyph\OTP\Stores\InMemoryReplayStore;
 use Infocyph\OTP\Tests\Support\InMemoryCacheItemPool;
 use Infocyph\OTP\TOTP;
 use PhpBench\Attributes\BeforeMethods;
+use PhpBench\Attributes\Revs;
 
 #[BeforeMethods('setUp')]
 final class OtpBench
@@ -33,6 +34,8 @@ final class OtpBench
 
     private string $totpCode;
 
+    private InMemoryReplayStore $totpReplayStore;
+
     public function setUp(): void
     {
         $this->totp = (new TOTP(
@@ -53,7 +56,7 @@ final class OtpBench
             digitCount: 6,
             validUpto: 60,
             retry: 3,
-            hashAlgorithm: 'xxh128',
+            hashAlgorithm: 'sha256',
             cacheAdapter: new InMemoryCacheItemPool(),
         );
 
@@ -61,6 +64,13 @@ final class OtpBench
         $this->hotpCode = $this->hotp->getOTP(5);
         $this->ocraCode = $this->ocra->generate('12345678', 0);
         $this->genericCode = $this->genericOtp->generate($this->signature);
+        $this->totpReplayStore = new InMemoryReplayStore();
+        $this->totpReplayStore->consumeOnce(
+            'totp:step',
+            'bench-user',
+            (string) $this->totp->getCurrentTimeStep(1716532624),
+            90,
+        );
     }
 
     public function benchGenericOtpGenerate(): void
@@ -69,16 +79,22 @@ final class OtpBench
             digitCount: 6,
             validUpto: 60,
             retry: 3,
-            hashAlgorithm: 'xxh128',
+            hashAlgorithm: 'sha256',
             cacheAdapter: new InMemoryCacheItemPool(),
         );
 
         $otp->generate('bench:another@example.com');
     }
 
+    #[Revs(1)]
     public function benchGenericOtpVerify(): void
     {
         $this->genericOtp->verify($this->signature, $this->genericCode);
+    }
+
+    public function benchGenericOtpVerifyMalformed(): void
+    {
+        $this->genericOtp->verify($this->signature, 'invalid');
     }
 
     public function benchHotpGenerate(): void
@@ -91,6 +107,11 @@ final class OtpBench
         $this->hotp->verify($this->hotpCode, 5, 3);
     }
 
+    public function benchHotpVerifyInvalid(): void
+    {
+        $this->hotp->verify('000000', 5, 3);
+    }
+
     public function benchOcraGenerate(): void
     {
         $this->ocra->generate('12345678', 0);
@@ -99,6 +120,11 @@ final class OtpBench
     public function benchOcraVerify(): void
     {
         $this->ocra->verify($this->ocraCode, '12345678', 0);
+    }
+
+    public function benchOcraVerifyInvalid(): void
+    {
+        $this->ocra->verify('00000000', '12345678', 0);
     }
 
     public function benchTotpGenerate(): void
@@ -111,13 +137,33 @@ final class OtpBench
         $this->totp->verify($this->totpCode, 1716532624, 1, 1);
     }
 
-    public function benchTotpVerifyWithReplayStore(): void
+    public function benchTotpVerifyInvalid(): void
+    {
+        $this->totp->verify('000000', 1716532624, 1, 1);
+    }
+
+    public function benchTotpVerifyMalformed(): void
+    {
+        $this->totp->verify('invalid', 1716532624, 1, 1);
+    }
+
+    public function benchTotpVerifyReplayAccepted(): void
     {
         $store = new InMemoryReplayStore();
         $this->totp->verifyWithWindow(
             $this->totpCode,
             1716532624,
             replayStore: $store,
+            binding: 'bench-user',
+        );
+    }
+
+    public function benchTotpVerifyReplayRejected(): void
+    {
+        $this->totp->verifyWithWindow(
+            $this->totpCode,
+            1716532624,
+            replayStore: $this->totpReplayStore,
             binding: 'bench-user',
         );
     }

@@ -9,6 +9,7 @@ Replay protection is intentionally pluggable.
 Available contract:
 
 - ``Infocyph\OTP\Contracts\ReplayStoreInterface``
+- ``Infocyph\OTP\Contracts\AtomicReplayStoreInterface``
 
 Included store:
 
@@ -34,6 +35,7 @@ OCRA
 ~~~~
 
 - Reject reused challenge/counter combinations where the flow requires single use.
+- For counter-enabled suites, atomically require each accepted counter to be greater than the last accepted counter.
 
 Example
 -------
@@ -58,4 +60,6 @@ Persistent implementations
 
 The in-memory replay store is mainly for tests and lightweight scenarios.
 
-See :doc:`custom-stores` for a database-oriented example implementing ``ReplayStoreInterface``.
+Production implementations should use ``AtomicReplayStoreInterface`` and enforce ``consumeOnce()`` with a unique insert and ``advance()`` with a conditional atomic update. The package falls back to ``ReplayStoreInterface`` for compatibility, but its separate read/write calls cannot guarantee replay safety under concurrency.
+
+See :doc:`custom-stores` for database-oriented guidance.

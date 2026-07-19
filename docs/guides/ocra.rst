@@ -70,10 +70,16 @@ You can generate one with:
 
    <?php
    use Infocyph\OTP\OCRA;
+   use Infocyph\OTP\Support\SecretUtility;
 
-   $sharedKey = OCRA::generateSecret();
+   $base32Secret = OCRA::generateSecret();
+   $sharedKey = SecretUtility::decodeBase32($base32Secret);
+   $ocra = OCRA::fromBase32(
+       'OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1',
+       $base32Secret,
+   );
 
-If your integration needs a specific keying strategy, you can also supply an application-managed shared key when constructing the instance.
+``generateSecret()`` returns Base32 for safe storage and provisioning. Use ``fromBase32()`` to decode that representation once. If your integration already manages raw binary key bytes, pass those bytes to the constructor directly.
 
 Creating an OCRA instance
 -------------------------
@@ -83,7 +89,10 @@ Creating an OCRA instance
    <?php
    use Infocyph\OTP\OCRA;
 
-   $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', $sharedKey);
+   $ocra = OCRA::fromBase32(
+       'OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1',
+       $base32Secret,
+   );
    $ocra->setPin('1234');
 
    $code = $ocra->generate('12345678', 0);
@@ -258,7 +267,7 @@ Notes on optional inputs:
 
 - if the suite includes ``C``, you should provide a counter
 - if the suite includes ``PSHA1`` / ``PSHA256`` / ``PSHA512``, you should call ``setPin()``
-- if the suite includes ``Snnn``, you should call ``setSession()``
+- if the suite includes ``Snnn``, you should call ``setSession()`` with an even-length hexadecimal representation no longer than the configured byte length
 - if the suite includes ``T...``, you can optionally call ``setTime()`` to verify or generate for a specific moment
 
 Parsed suite details
@@ -310,6 +319,8 @@ For many OCRA use cases, you should reject:
 - reused challenge values
 - reused counter values where counters are present
 - previously accepted challenge and counter combinations
+
+For suites containing ``C``, atomic replay stores enforce a strictly increasing accepted counter. For suites without ``C``, the challenge/counter token is consumed once.
 
 Example:
 

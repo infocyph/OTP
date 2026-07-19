@@ -68,7 +68,7 @@ Generic OTP
        digitCount: 6,
        validUpto: 60,
        retry: 3,
-       hashAlgorithm: 'xxh128',
+       hashAlgorithm: 'sha256',
        cacheAdapter: $cachePool,
    );
 

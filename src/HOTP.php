@@ -9,6 +9,8 @@ use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
 use Infocyph\OTP\Support\OtpMath;
+use Infocyph\OTP\Support\ReplayProtection;
+use Infocyph\OTP\Support\SecretRotationPlanner;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
@@ -16,6 +18,10 @@ use Infocyph\OTP\ValueObjects\SecretRotation;
 
 final class HOTP extends AbstractOtpAuthenticator
 {
+    private const int MAX_LOOK_AHEAD = 100;
+
+    private readonly string $binarySecret;
+
     private readonly string $secret;
 
     private string $algorithm = 'sha1';
@@ -31,6 +37,7 @@ final class HOTP extends AbstractOtpAuthenticator
         }
 
         $this->secret = SecretUtility::normalizeBase32($secret);
+        $this->binarySecret = SecretUtility::decodeBase32($this->secret);
     }
 
     /**
@@ -81,7 +88,7 @@ final class HOTP extends AbstractOtpAuthenticator
 
     public function getOTP(int $counter): string
     {
-        return OtpMath::hotp($this->secret, $counter, $this->digitCount, $this->algorithm);
+        return OtpMath::hotpFromBinary($this->binarySecret, $counter, $this->digitCount, $this->algorithm);
     }
 
     /**
@@ -158,19 +165,15 @@ final class HOTP extends AbstractOtpAuthenticator
         bool $withQrSvg = false,
         int $imageSize = 200,
     ): SecretRotation {
-        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
-            throw new \InvalidArgumentException('Grace period must be non-negative.');
-        }
-
-        $normalizedSecret = SecretUtility::normalizeBase32($newSecret);
-        $next = new self($normalizedSecret, $this->digitCount);
+        $rotation = SecretRotationPlanner::prepare($this->secret, $newSecret, $gracePeriodInSeconds, $now);
+        $next = new self($rotation['nextSecret'], $this->digitCount);
         $next->setAlgorithm($this->algorithm);
         $next->setCounter($this->counter);
 
         return new SecretRotation(
             $this->secret,
-            $normalizedSecret,
-            $gracePeriodInSeconds !== null ? new \DateTimeImmutable()->setTimestamp(($now ?? time()) + $gracePeriodInSeconds) : null,
+            $rotation['nextSecret'],
+            $rotation['overlapUntil'] !== null ? new \DateTimeImmutable()->setTimestamp($rotation['overlapUntil']) : null,
             $next->getEnrollmentPayload($label, $issuer, $include, $additionalParameters, $withQrSvg, $imageSize),
         );
     }
@@ -205,34 +208,63 @@ final class HOTP extends AbstractOtpAuthenticator
         ?ReplayStoreInterface $replayStore = null,
         ?string $binding = null,
     ): VerificationResult {
-        $this->assertOtp($otp, $this->digitCount);
-        if ($counter < 0 || $lookAhead < 0) {
-            throw new \InvalidArgumentException('Counter and look-ahead window must be non-negative.');
+        if (!$this->isValidOtp($otp, $this->digitCount)) {
+            return new VerificationResult(false, 'malformed');
+        }
+        self::assertVerificationRange($counter, $lookAhead);
+        $this->assertReplayBinding($replayStore, $binding);
+
+        $matchedCounter = $this->findMatchingCounter($otp, $counter, $lookAhead);
+        if ($matchedCounter === null) {
+            return new VerificationResult(false, 'mismatch');
         }
 
+        if (
+            $replayStore !== null
+            && $binding !== null
+            && $this->isReplay($replayStore, $binding, $matchedCounter)
+        ) {
+            return new VerificationResult(false, 'replay', matchedCounter: $matchedCounter, replayDetected: true);
+        }
+
+        $offset = $matchedCounter - $counter;
+
+        return new VerificationResult(
+            true,
+            $offset === 0 ? 'matched' : 'resynchronized',
+            matchedCounter: $matchedCounter,
+            driftOffset: $offset,
+            verifiedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    private static function assertVerificationRange(int $counter, int $lookAhead): void
+    {
+        if ($counter < 0 || $lookAhead < 0 || $lookAhead > self::MAX_LOOK_AHEAD) {
+            throw new \InvalidArgumentException('Counter must be non-negative and look-ahead may not exceed 100.');
+        }
+        if ($lookAhead > PHP_INT_MAX - $counter) {
+            throw new \InvalidArgumentException('Counter and look-ahead window exceed the supported integer range.');
+        }
+    }
+
+    private function findMatchingCounter(string $otp, int $counter, int $lookAhead): ?int
+    {
         for ($offset = 0; $offset <= $lookAhead; $offset++) {
             $matchedCounter = $counter + $offset;
-            if (!hash_equals($otp, $this->getOTP($matchedCounter))) {
-                continue;
+            if (hash_equals($this->getOTP($matchedCounter), $otp)) {
+                return $matchedCounter;
             }
-
-            if ($replayStore !== null && $binding !== null) {
-                $lastCounter = $replayStore->getState('hotp:last_counter', $binding);
-                if (is_int($lastCounter) && $matchedCounter <= $lastCounter) {
-                    return new VerificationResult(false, 'replay', matchedCounter: $matchedCounter, replayDetected: true);
-                }
-                $replayStore->setState('hotp:last_counter', $binding, $matchedCounter);
-            }
-
-            return new VerificationResult(
-                true,
-                $offset === 0 ? 'matched' : 'resynchronized',
-                matchedCounter: $matchedCounter,
-                driftOffset: $offset,
-                verifiedAt: new \DateTimeImmutable(),
-            );
         }
 
-        return new VerificationResult(false, 'mismatch');
+        return null;
+    }
+
+    private function isReplay(
+        ReplayStoreInterface $replayStore,
+        string $binding,
+        int $matchedCounter,
+    ): bool {
+        return !ReplayProtection::advance($replayStore, 'hotp:last_counter', $binding, $matchedCounter);
     }
 }

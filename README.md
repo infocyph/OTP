@@ -154,8 +154,9 @@ $otp = new OTP(
     digitCount: 6,
     validUpto: 60,
     retry: 3,
-    hashAlgorithm: 'xxh128',
+    hashAlgorithm: 'sha256',
     cacheAdapter: $cachePool,
+    hashKey: $applicationOtpKey,
 );
 
 $code = $otp->generate('signup:alice@example.com');
@@ -169,6 +170,8 @@ Notes:
 - Codes are strings, not integers
 - Leading zeroes are preserved
 - Digit count must be between `4` and `10`
+- Stored OTP digests use SHA-256 or SHA-512; non-cryptographic hashes are rejected
+- For production, use a purpose-specific `hashKey` of at least 16 random bytes and keep it outside the OTP cache
 
 ### OCRA
 
@@ -257,7 +260,10 @@ $parsed->ocraSuite;
 The package ships with contracts plus an in-memory store for testing and lightweight use:
 
 - `Infocyph\OTP\Contracts\ReplayStoreInterface`
+- `Infocyph\OTP\Contracts\AtomicReplayStoreInterface`
 - `Infocyph\OTP\Stores\InMemoryReplayStore`
+
+Use `AtomicReplayStoreInterface` for production stores so consume-once and monotonic-counter updates remain safe under concurrent requests. Legacy `ReplayStoreInterface` implementations remain supported but cannot provide that atomic guarantee.
 
 Recommended usage:
 
@@ -298,6 +304,8 @@ $result->remainingCount;
 $result->totalGenerated;
 $result->lastUsedAt;
 ```
+
+For production, pass a purpose-specific secret `hashKey` of at least 16 random bytes and store it outside the recovery-code database.
 
 Notes:
 

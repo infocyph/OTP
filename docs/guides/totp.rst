@@ -87,6 +87,8 @@ Windowed verification
 
 Real-world authenticators can drift slightly. RFC6238 deployments commonly allow a small validation window around the current time-step.
 
+The current timestep is checked first for the common path. The combined past/future window is bounded to 100 steps, and configured periods are bounded to 86400 seconds.
+
 This library supports:
 
 - previous windows only

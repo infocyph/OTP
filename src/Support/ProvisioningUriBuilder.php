@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP\Support;
 
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
+use InvalidArgumentException;
 
 final class ProvisioningUriBuilder
 {
@@ -36,8 +37,18 @@ final class ProvisioningUriBuilder
         ?int $counter = null,
         ?string $ocraSuite = null,
     ): string {
+        self::assertType($type);
+        self::assertAdditionalParameters($additionalParameters);
+        $algorithm = AlgorithmValidator::normalize($algorithm);
+        self::assertDigits($type, $digits);
+        $period = self::normalizePeriod($type, $period);
+        self::assertCounter($type, $counter);
+        self::assertOcraSuite($type, $ocraSuite);
+        $secret = SecretUtility::normalizeBase32($secret);
+        SecretUtility::decodeBase32($secret);
+
         $query = [
-            'secret' => SecretUtility::normalizeBase32($secret),
+            'secret' => $secret,
             'issuer' => LabelHelper::normalizeIssuer($issuer),
             'algorithm' => $include['algorithm'] ?? false ? strtoupper($algorithm) : null,
             'digits' => $include['digits'] ?? false ? $digits : null,
@@ -48,12 +59,17 @@ final class ProvisioningUriBuilder
 
         $label = rawurlencode(LabelHelper::formatLabel($label, $issuer));
 
-        return sprintf(
+        $uri = sprintf(
             'otpauth://%s/%s?%s',
             $type,
             $label,
             http_build_query(array_filter($query, static fn($value) => $value !== null), '', '&', PHP_QUERY_RFC3986),
         );
+        if (strlen($uri) > 4096) {
+            throw new InvalidArgumentException('Provisioning URI cannot exceed 4096 bytes.');
+        }
+
+        return $uri;
     }
 
     /**
@@ -86,6 +102,10 @@ final class ProvisioningUriBuilder
         ?string $ocraSuite = null,
         ?string $qrSvg = null,
     ): EnrollmentPayload {
+        $secret = SecretUtility::normalizeBase32($secret);
+        SecretUtility::decodeBase32($secret);
+        $label = LabelHelper::formatLabel($label);
+        $issuer = LabelHelper::normalizeIssuer($issuer);
         $uri = self::build(
             $type,
             $secret,
@@ -101,5 +121,94 @@ final class ProvisioningUriBuilder
         );
 
         return new EnrollmentPayload($secret, $uri, $uri, $issuer, $label, $qrSvg);
+    }
+
+    /**
+     * @param $additionalParameters Additional query parameters.
+     * @phpstan-param array<string, scalar|null> $additionalParameters
+     */
+    private static function assertAdditionalParameters(array $additionalParameters): void
+    {
+        if (count($additionalParameters) > 24) {
+            throw new InvalidArgumentException('Provisioning URIs may contain at most 24 additional parameters.');
+        }
+
+        $reservedParameters = array_fill_keys(
+            ['secret', 'issuer', 'algorithm', 'digits', 'period', 'counter', 'ocraSuite'],
+            true,
+        );
+        foreach ($additionalParameters as $key => $value) {
+            if (
+                trim($key) === ''
+                || strlen($key) > 64
+                || preg_match('/[\x00-\x1F\x7F]/', $key) === 1
+            ) {
+                throw new InvalidArgumentException('Provisioning query parameter names must contain between 1 and 64 printable bytes.');
+            }
+            if (isset($reservedParameters[$key])) {
+                throw new InvalidArgumentException(sprintf('Provisioning query parameter "%s" is reserved.', $key));
+            }
+            if (is_string($value) && strlen($value) > 1024) {
+                throw new InvalidArgumentException('Provisioning query parameter values cannot exceed 1024 bytes.');
+            }
+        }
+    }
+
+    private static function assertCounter(string $type, ?int $counter): void
+    {
+        if ($type === 'hotp' && ($counter === null || $counter < 0)) {
+            throw new InvalidArgumentException('HOTP counter must be non-negative.');
+        }
+        if ($type !== 'hotp' && $counter !== null) {
+            throw new InvalidArgumentException('Only HOTP provisioning may contain a counter.');
+        }
+    }
+
+    private static function assertDigits(string $type, int $digits): void
+    {
+        if (($type === 'hotp' || $type === 'totp') && ($digits < 4 || $digits > 10)) {
+            throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 4 and 10.');
+        }
+        if ($type === 'ocra' && $digits !== 0 && ($digits < 4 || $digits > 10)) {
+            throw new InvalidArgumentException('OCRA digit count must be zero or between 4 and 10.');
+        }
+    }
+
+    private static function assertOcraSuite(string $type, ?string $ocraSuite): void
+    {
+        if ($type === 'ocra' && ($ocraSuite === null || $ocraSuite === '')) {
+            throw new InvalidArgumentException('OCRA provisioning requires an OCRA suite.');
+        }
+        if ($type === 'ocra' && !OcraSuiteValidator::isValid($ocraSuite)) {
+            throw new InvalidArgumentException('OCRA provisioning requires a valid OCRA suite.');
+        }
+        if ($type !== 'ocra' && $ocraSuite !== null) {
+            throw new InvalidArgumentException('Only OCRA provisioning may contain an OCRA suite.');
+        }
+    }
+
+    private static function assertType(string $type): void
+    {
+        if (!in_array($type, ['hotp', 'totp', 'ocra'], true)) {
+            throw new InvalidArgumentException('Unsupported OTP provisioning type.');
+        }
+    }
+
+    private static function normalizePeriod(string $type, ?int $period): ?int
+    {
+        if ($type !== 'totp') {
+            if ($period !== null) {
+                throw new InvalidArgumentException('Only TOTP provisioning may contain a period.');
+            }
+
+            return null;
+        }
+
+        $period ??= 30;
+        if ($period < 1 || $period > 86400) {
+            throw new InvalidArgumentException('TOTP period must be between 1 and 86400 seconds.');
+        }
+
+        return $period;
     }
 }

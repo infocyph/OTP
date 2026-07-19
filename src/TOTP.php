@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Exception;
+use Infocyph\OTP\Contracts\AtomicReplayStoreInterface;
 use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
 use Infocyph\OTP\Support\OtpMath;
+use Infocyph\OTP\Support\SecretRotationPlanner;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
@@ -17,6 +19,10 @@ use Infocyph\OTP\ValueObjects\VerificationWindow;
 
 final class TOTP extends AbstractOtpAuthenticator
 {
+    private const int MAX_PERIOD = 86400;
+
+    private readonly string $binarySecret;
+
     private readonly string $secret;
 
     private string $algorithm = 'sha1';
@@ -29,11 +35,12 @@ final class TOTP extends AbstractOtpAuthenticator
         if ($digitCount < 4 || $digitCount > 10) {
             throw new \InvalidArgumentException('Digit count must be between 4 and 10.');
         }
-        if ($period < 1) {
-            throw new \InvalidArgumentException('Period must be greater than zero.');
+        if ($period < 1 || $period > self::MAX_PERIOD) {
+            throw new \InvalidArgumentException('Period must be between 1 and 86400 seconds.');
         }
 
         $this->secret = SecretUtility::normalizeBase32($secret);
+        $this->binarySecret = SecretUtility::decodeBase32($this->secret);
     }
 
     /**
@@ -89,8 +96,8 @@ final class TOTP extends AbstractOtpAuthenticator
 
     public function getOTP(?int $timestamp = null): string
     {
-        return OtpMath::hotp(
-            $this->secret,
+        return OtpMath::hotpFromBinary(
+            $this->binarySecret,
             $this->getTimeStepFromTimestamp($timestamp ?? time()),
             $this->digitCount,
             $this->algorithm,
@@ -150,6 +157,9 @@ final class TOTP extends AbstractOtpAuthenticator
     public function getRemainingSeconds(?int $timestamp = null): int
     {
         $timestamp ??= time();
+        if ($timestamp < 0) {
+            throw new \InvalidArgumentException('Timestamp must be non-negative.');
+        }
 
         return $this->period - ($timestamp % $this->period);
     }
@@ -211,16 +221,12 @@ final class TOTP extends AbstractOtpAuthenticator
         ?int $gracePeriodInSeconds = null,
         ?int $now = null,
     ): array {
-        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
-            throw new \InvalidArgumentException('Grace period must be non-negative.');
-        }
-
-        $now ??= time();
+        $rotation = SecretRotationPlanner::prepare($this->secret, $newSecret, $gracePeriodInSeconds, $now);
 
         return [
             'current' => $this->secret,
-            'next' => SecretUtility::normalizeBase32($newSecret),
-            'overlapUntil' => $gracePeriodInSeconds !== null ? $now + $gracePeriodInSeconds : null,
+            'next' => $rotation['nextSecret'],
+            'overlapUntil' => $rotation['overlapUntil'],
         ];
     }
 
@@ -252,39 +258,95 @@ final class TOTP extends AbstractOtpAuthenticator
         ?string $binding = null,
         bool $singleUse = true,
     ): VerificationResult {
-        $this->assertOtp($otp, $this->digitCount);
+        if (!$this->isValidOtp($otp, $this->digitCount)) {
+            return new VerificationResult(false, 'malformed');
+        }
         $window ??= new VerificationWindow();
+        $this->assertReplayBinding($replayStore, $binding);
 
         $baseTimestamp = $timestamp ?? time();
         $currentStep = $this->getTimeStepFromTimestamp($baseTimestamp);
-        for ($offset = -$window->past; $offset <= $window->future; $offset++) {
-            $matchedStep = $currentStep + $offset;
-            if ($matchedStep < 0) {
-                continue;
-            }
-
-            if (!hash_equals($otp, OtpMath::hotp($this->secret, $matchedStep, $this->digitCount, $this->algorithm))) {
-                continue;
-            }
-
-            if ($replayStore !== null && $binding !== null && $singleUse) {
-                $token = (string) $matchedStep;
-                if ($replayStore->hasConsumed('totp:step', $binding, $token)) {
-                    return new VerificationResult(false, 'replay', matchedTimestep: $matchedStep, driftOffset: $offset, replayDetected: true);
-                }
-                $replayStore->markConsumed('totp:step', $binding, $token, $this->period * max(1, $window->past + $window->future + 1));
-                $replayStore->setState('totp:last_timestep', $binding, $matchedStep);
-            }
-
-            return new VerificationResult(
-                true,
-                $offset === 0 ? 'matched' : 'drifted',
-                matchedTimestep: $matchedStep,
-                driftOffset: $offset,
-                verifiedAt: new \DateTimeImmutable(),
-            );
+        $match = $this->findMatch($otp, $currentStep, $window);
+        if ($match === null) {
+            return new VerificationResult(false, 'mismatch');
         }
 
-        return new VerificationResult(false, 'mismatch');
+        if (
+            $replayStore !== null
+            && $binding !== null
+            && $singleUse
+            && $this->isReplay($replayStore, $binding, $match['step'], $window)
+        ) {
+            return new VerificationResult(false, 'replay', matchedTimestep: $match['step'], driftOffset: $match['offset'], replayDetected: true);
+        }
+
+        return new VerificationResult(
+            true,
+            $match['offset'] === 0 ? 'matched' : 'drifted',
+            matchedTimestep: $match['step'],
+            driftOffset: $match['offset'],
+            verifiedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * @param $otp Submitted OTP.
+     * @param $currentStep Current TOTP step.
+     * @param $window Allowed verification window.
+     * @return array|null Matched step and drift offset.
+     * @phpstan-return array{step:int,offset:int}|null
+     */
+    private function findMatch(string $otp, int $currentStep, VerificationWindow $window): ?array
+    {
+        if ($this->matches($otp, $currentStep)) {
+            return ['step' => $currentStep, 'offset' => 0];
+        }
+
+        $maximumDrift = max($window->past, $window->future);
+        for ($distance = 1; $distance <= $maximumDrift; $distance++) {
+            $pastStep = $currentStep - $distance;
+            if ($distance <= $window->past && $pastStep >= 0 && $this->matches($otp, $pastStep)) {
+                return ['step' => $pastStep, 'offset' => -$distance];
+            }
+            if ($distance <= $window->future && $currentStep <= PHP_INT_MAX - $distance && $this->matches($otp, $currentStep + $distance)) {
+                return ['step' => $currentStep + $distance, 'offset' => $distance];
+            }
+        }
+
+        return null;
+    }
+
+    private function isReplay(
+        ReplayStoreInterface $replayStore,
+        string $binding,
+        int $matchedStep,
+        VerificationWindow $window,
+    ): bool {
+        $token = (string) $matchedStep;
+        $ttl = $this->period * ($window->past + $window->future + 1);
+        if ($replayStore instanceof AtomicReplayStoreInterface) {
+            $consumed = $replayStore->consumeOnce('totp:step', $binding, $token, $ttl);
+        } else {
+            $consumed = !$replayStore->hasConsumed('totp:step', $binding, $token);
+            if ($consumed) {
+                $replayStore->markConsumed('totp:step', $binding, $token, $ttl);
+            }
+        }
+
+        if (!$consumed) {
+            return true;
+        }
+
+        $replayStore->setState('totp:last_timestep', $binding, $matchedStep);
+
+        return false;
+    }
+
+    private function matches(string $otp, int $step): bool
+    {
+        return hash_equals(
+            OtpMath::hotpFromBinary($this->binarySecret, $step, $this->digitCount, $this->algorithm),
+            $otp,
+        );
     }
 }

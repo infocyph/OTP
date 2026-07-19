@@ -27,7 +27,11 @@ For TOTP, HOTP, and OCRA, you can generate a new Base32 secret before building p
 
    $totpSecret = TOTP::generateSecret();
    $hotpSecret = HOTP::generateSecret();
-   $ocraSharedKey = OCRA::generateSecret();
+   $ocraSecret = OCRA::generateSecret();
+   $ocra = OCRA::fromBase32(
+       'OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1',
+       $ocraSecret,
+   );
 
 Provisioning URIs
 -----------------
@@ -101,7 +105,10 @@ OCRA QR example:
    <?php
    use Infocyph\OTP\OCRA;
 
-   $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', $sharedKey);
+   $ocra = OCRA::fromBase32(
+       'OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1',
+       $ocraSecret,
+   );
    $svg = $ocra->getProvisioningUriQR(
        'alice@example.com',
        'Example App',
@@ -176,4 +183,6 @@ The provisioning layer:
 
 - normalizes issuers
 - safely formats labels
+- rejects duplicate query parameters and conflicting issuer identities while parsing
+- validates canonical Base32 secrets and bounds URI/query sizes
 - separates URI generation from QR rendering

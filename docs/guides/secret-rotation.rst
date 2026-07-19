@@ -76,9 +76,10 @@ OCRA rotation planning
        'OCRA-1:HOTP-SHA256-8:QN08-PSHA1',
        '12345678901234567890123456789012',
    );
+   $nextSecret = OCRA::generateSecret();
 
    $rotation = $ocra->planSecretRotation(
-       'abcdefghijklmnopqrstuvwxyz123456',
+       $nextSecret,
        label: 'alice@example.com',
        issuer: 'Example App',
        gracePeriodInSeconds: 900,
