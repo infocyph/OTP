@@ -71,6 +71,8 @@ HOTP often needs controlled counter resynchronization.
 
 This means the verifier will try the provided counter and then probe forward up to the configured look-ahead window.
 
+The look-ahead is bounded to 100 counters to keep verification work predictable and resistant to resource-exhaustion configuration.
+
 Rich verification result
 ------------------------
 

@@ -15,6 +15,7 @@ The relevant contracts are:
 
 - ``Infocyph\OTP\Contracts\RecoveryCodeStoreInterface``
 - ``Infocyph\OTP\Contracts\ReplayStoreInterface``
+- ``Infocyph\OTP\Contracts\AtomicReplayStoreInterface``
 - ``Infocyph\OTP\Contracts\SecretStoreInterface``
 
 Secret storage guidance
@@ -83,6 +84,8 @@ That means your system can answer, day to day:
 
 Example PDO store
 ~~~~~~~~~~~~~~~~~
+
+The following class illustrates the legacy read/write contract. It is suitable for understanding the data model, but separate ``hasConsumed()``/``markConsumed()`` and ``getState()``/``setState()`` calls are not atomic.
 
 .. code-block:: php
 
@@ -395,4 +398,6 @@ Notes
 - The SQL above is illustrative. You may need to adapt syntax for PostgreSQL, MySQL, SQLite or SQL Server.
 - Recovery code consumption should be atomic to prevent double-use under concurrency.
 - Replay stores should apply indexes on namespace, binding and token.
+- Production replay stores should implement ``AtomicReplayStoreInterface``. Implement ``consumeOnce()`` as a single unique insert (or equivalent compare-and-set) and ``advance()`` as a conditional atomic update that succeeds only when the new counter is greater.
+- Do not implement either atomic method as a read followed by a write; that recreates the race the interface is designed to prevent.
 - Recovery code hashes should be treated as sensitive authentication data even though they are hashed.

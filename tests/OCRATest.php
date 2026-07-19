@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\OTP\Exceptions\OCRAException;
 use Infocyph\OTP\OCRA;
 use Infocyph\OTP\Stores\InMemoryReplayStore;
+use Infocyph\OTP\Support\SecretUtility;
 
 const KEY_20 = '12345678901234567890';
 const KEY_32 = "12345678901234567890123456789012";
@@ -147,13 +150,17 @@ test('OCRA replay protection rejects reusing accepted challenge and counter comb
     $ocra->setPin('1234');
     $store = new InMemoryReplayStore();
     $otp = $ocra->generate('12345678', 4);
+    $differentChallengeOtp = $ocra->generate('87654321', 4);
 
     $first = $ocra->verifyWithResult($otp, '12345678', 4, $store, 'user-42');
     $second = $ocra->verifyWithResult($otp, '12345678', 4, $store, 'user-42');
+    $counterReplay = $ocra->verifyWithResult($differentChallengeOtp, '87654321', 4, $store, 'user-42');
 
     expect($first->matched)->toBeTrue()
         ->and($second->matched)->toBeFalse()
-        ->and($second->replayDetected)->toBeTrue();
+        ->and($second->replayDetected)->toBeTrue()
+        ->and($counterReplay->matched)->toBeFalse()
+        ->and($counterReplay->replayDetected)->toBeTrue();
 });
 
 test('OCRA exposes parsed suite details', function () {
@@ -179,4 +186,40 @@ test('OCRA rejects invalid challenge formats', function () {
     expect(fn () => $numeric->generate('ABC12345'))->toThrow(OCRAException::class)
         ->and(fn () => $alpha->generate(str_repeat('A', 129)))->toThrow(OCRAException::class)
         ->and(fn () => $hex->generate('XYZ'))->toThrow(OCRAException::class);
+});
+
+test('OCRA handles numeric challenges beyond the platform integer range', function () {
+    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN64', KEY_32);
+    $first = $ocra->generate(str_repeat('8', 64));
+    $second = $ocra->generate(str_repeat('9', 64));
+
+    expect($first)->toHaveLength(8)
+        ->and($second)->toHaveLength(8)
+        ->and($first)->not->toBe($second);
+});
+
+test('OCRA Base32 construction and provisioning use the same key bytes', function () {
+    $secret = OCRA::generateSecret(32);
+    $fromBase32 = OCRA::fromBase32('OCRA-1:HOTP-SHA256-8:QN08', $secret);
+    $fromRaw = new OCRA(
+        'OCRA-1:HOTP-SHA256-8:QN08',
+        SecretUtility::decodeBase32($secret),
+    );
+    $uri = $fromBase32->getProvisioningUri('user@example.com', 'Example');
+    $parsed = OCRA::parseProvisioningUri($uri);
+
+    expect($fromBase32->generate('12345678'))->toBe($fromRaw->generate('12345678'))
+        ->and($parsed->secret)->toBe($secret);
+});
+
+test('OCRA validates optional and replay inputs at the boundary', function () {
+    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', KEY_32);
+    $store = new InMemoryReplayStore();
+
+    expect(fn () => $ocra->setSession('not-hex'))
+        ->toThrow(OCRAException::class)
+        ->and(fn () => $ocra->verifyWithResult('00000000', '12345678', replayStore: $store))
+        ->toThrow(OCRAException::class)
+        ->and(fn () => new OCRA('OCRA-1:HOTP-SHA256-8:QN08', 'short'))
+        ->toThrow(OCRAException::class);
 });

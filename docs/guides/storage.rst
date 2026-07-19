@@ -51,6 +51,7 @@ Contracts
 The package includes contracts you can implement in your own infrastructure:
 
 - ``Infocyph\OTP\Contracts\ReplayStoreInterface``
+- ``Infocyph\OTP\Contracts\AtomicReplayStoreInterface``
 - ``Infocyph\OTP\Contracts\RecoveryCodeStoreInterface``
 - ``Infocyph\OTP\Contracts\SecretStoreInterface``
 

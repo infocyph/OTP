@@ -23,6 +23,19 @@ Generating codes
    $generated->totalGenerated;
    $generated->remainingCount;
 
+For production, provide a purpose-specific HMAC key kept outside the recovery-code store:
+
+.. code-block:: php
+
+   <?php
+   $codes = new RecoveryCodes(
+       $store,
+       hashAlgorithm: 'sha256',
+       hashKey: $applicationRecoveryCodeKey,
+   );
+
+The HMAC key must contain at least 16 bytes. Without a key, the package stores a SHA-256 or SHA-512 digest.
+
 Consuming a code
 ----------------
 
@@ -41,8 +54,10 @@ Behavior
 
 - Codes are displayed in a user-friendly grouped format.
 - Stored values are hashed before persistence.
+- Hash algorithms are restricted to SHA-256 and SHA-512.
 - Generating a new set replaces the old set.
 - A consumed code cannot be reused.
+- Counts, lengths, grouping, and character sets are bounded and validated before generation.
 
 Persistent tracking
 -------------------

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP;
 
+use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
 use Infocyph\OTP\Support\ProvisioningUriParser;
 use Infocyph\OTP\Support\SvgQrRenderer;
@@ -19,8 +20,20 @@ abstract class AbstractOtpAuthenticator
 
     final protected function assertOtp(string $otp, int $digitCount): void
     {
-        if (!preg_match('/^\d+$/', $otp) || strlen($otp) !== $digitCount) {
+        if (!$this->isValidOtp($otp, $digitCount)) {
             throw new \InvalidArgumentException('OTP must be a numeric string matching the configured digit count.');
+        }
+    }
+
+    final protected function assertReplayBinding(
+        ?ReplayStoreInterface $replayStore,
+        ?string $binding,
+    ): void {
+        if (($replayStore === null) !== ($binding === null)) {
+            throw new \InvalidArgumentException('Replay store and binding must be provided together.');
+        }
+        if ($binding !== null && (trim($binding) === '' || strlen($binding) > 512)) {
+            throw new \InvalidArgumentException('Replay binding must contain between 1 and 512 bytes.');
         }
     }
 
@@ -38,6 +51,7 @@ abstract class AbstractOtpAuthenticator
      * @param $withQrSvg Whether to render QR SVG.
      * @param $imageSize QR image size.
      * @param $uri Provisioning URI.
+     *
      * @phpstan-param list<string> $include
      * @phpstan-param array<string, scalar|null> $additionalParameters
      */
@@ -83,6 +97,7 @@ abstract class AbstractOtpAuthenticator
      * @param $digitCount OTP digit length.
      * @param $period TOTP period in seconds.
      * @param $counter HOTP counter value.
+     *
      * @phpstan-param list<string> $include
      * @phpstan-param array<string, scalar|null> $additionalParameters
      */
@@ -113,7 +128,7 @@ abstract class AbstractOtpAuthenticator
     }
 
     /**
-     * @param $include Optional provisioning flags.
+     * @param array $include Optional provisioning flags.
      * @return array Include flags keyed by name.
      * @phpstan-param list<string> $include
      * @phpstan-return array<string, bool>
@@ -121,5 +136,10 @@ abstract class AbstractOtpAuthenticator
     final protected function includeFlags(array $include): array
     {
         return array_fill_keys($include, true);
+    }
+
+    final protected function isValidOtp(string $otp, int $digitCount): bool
+    {
+        return strlen($otp) === $digitCount && ctype_digit($otp);
     }
 }

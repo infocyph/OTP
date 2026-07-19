@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\OTP\HOTP;
 
 test('Dynamic generation', function () {

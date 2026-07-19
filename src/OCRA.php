@@ -6,22 +6,28 @@ namespace Infocyph\OTP;
 
 use DateTimeInterface;
 use Exception;
+use Infocyph\OTP\Contracts\AtomicReplayStoreInterface;
 use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Exceptions\OCRAException;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
+use Infocyph\OTP\Support\OcraSuiteValidator;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
 use Infocyph\OTP\Support\ProvisioningUriParser;
+use Infocyph\OTP\Support\ReplayProtection;
+use Infocyph\OTP\Support\SecretRotationPlanner;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
 use Infocyph\OTP\ValueObjects\OcraSuite;
 use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
 use Infocyph\OTP\ValueObjects\SecretRotation;
+use InvalidArgumentException;
+use ParagonIE\ConstantTime\Base32;
 
 final class OCRA
 {
-    private const string OCRA_REGEX = '/^OCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]|10):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(-(P(SHA1|SHA256|SHA512)|S\d{3}|(T((\d|[1-3]\d|4[0-8])H|(([1-9]|[1-5]\d)([SM]))))))*$/';
+    private readonly string $base32Secret;
 
     /**
      * @var array{suite:string,algo:string,length:int,c:bool,q:array{format:string,value:int},optionals:array<int,array{format:string,value:int|string}>}
@@ -36,7 +42,17 @@ final class OCRA
 
     public function __construct(string $ocraSuite, private readonly string $sharedKey)
     {
+        if (strlen($sharedKey) < 16 || strlen($sharedKey) > 1024) {
+            throw new OCRAException('OCRA shared keys must contain between 16 and 1024 bytes.');
+        }
+
+        $this->base32Secret = rtrim(Base32::encodeUpper($sharedKey), '=');
         $this->validateAndParse($ocraSuite);
+    }
+
+    public static function fromBase32(string $ocraSuite, string $secret): self
+    {
+        return new self($ocraSuite, SecretUtility::decodeBase32($secret));
     }
 
     /**
@@ -118,7 +134,7 @@ final class OCRA
 
         return ProvisioningUriBuilder::enrollmentPayload(
             'ocra',
-            $this->sharedKey,
+            $this->base32Secret,
             $label,
             $issuer,
             array_fill_keys($include, true),
@@ -148,7 +164,7 @@ final class OCRA
     ): string {
         return ProvisioningUriBuilder::build(
             'ocra',
-            $this->sharedKey,
+            $this->base32Secret,
             $label,
             $issuer,
             array_fill_keys($include, true),
@@ -220,24 +236,31 @@ final class OCRA
         bool $withQrSvg = false,
         int $imageSize = 200,
     ): SecretRotation {
-        if ($gracePeriodInSeconds !== null && $gracePeriodInSeconds < 0) {
-            throw new OCRAException('Grace period must be non-negative.');
+        try {
+            $rotation = SecretRotationPlanner::prepare(
+                $this->base32Secret,
+                $newSecret,
+                $gracePeriodInSeconds,
+                $now,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw new OCRAException($exception->getMessage(), previous: $exception);
         }
 
-        $next = new self($this->ocraSuite['suite'], $newSecret);
+        $next = self::fromBase32($this->ocraSuite['suite'], $rotation['nextSecret']);
 
         return new SecretRotation(
-            $this->sharedKey,
-            $newSecret,
-            $gracePeriodInSeconds !== null ? new \DateTimeImmutable()->setTimestamp(($now ?? time()) + $gracePeriodInSeconds) : null,
+            $this->base32Secret,
+            $rotation['nextSecret'],
+            $rotation['overlapUntil'] !== null ? new \DateTimeImmutable()->setTimestamp($rotation['overlapUntil']) : null,
             $next->getEnrollmentPayload($label, $issuer, $include, $additionalParameters, $withQrSvg, $imageSize),
         );
     }
 
     public function setPin(string $pin): self
     {
-        if ($pin === '') {
-            throw new OCRAException('PIN cannot be empty.');
+        if ($pin === '' || strlen($pin) > 1024) {
+            throw new OCRAException('PIN must contain between 1 and 1024 bytes.');
         }
         $this->pin = $pin;
 
@@ -246,8 +269,13 @@ final class OCRA
 
     public function setSession(string $session): self
     {
-        if ($session === '') {
-            throw new OCRAException('Session cannot be empty.');
+        if ($session === '' || strlen($session) % 2 !== 0 || !ctype_xdigit($session)) {
+            throw new OCRAException('Session must be a non-empty, even-length hexadecimal string.');
+        }
+        foreach ($this->ocraSuite['optionals'] as $optional) {
+            if ($optional['format'] === 's' && strlen($session) > ((int) $optional['value'] * 2)) {
+                throw new OCRAException('Session exceeds the byte length configured by the OCRA suite.');
+            }
         }
         $this->session = $session;
 
@@ -256,6 +284,9 @@ final class OCRA
 
     public function setTime(DateTimeInterface $dateTime): self
     {
+        if ($dateTime->getTimestamp() < 0) {
+            throw new OCRAException('OCRA timestamps must be non-negative.');
+        }
         $this->time = $dateTime->format('U');
 
         return $this;
@@ -273,35 +304,76 @@ final class OCRA
         ?ReplayStoreInterface $replayStore = null,
         ?string $binding = null,
     ): VerificationResult {
+        if (
+            $this->ocraSuite['length'] > 0
+            && (strlen($otp) !== $this->ocraSuite['length'] || !ctype_digit($otp))
+        ) {
+            return new VerificationResult(false, 'malformed');
+        }
+        $this->assertReplayBinding($replayStore, $binding);
         $expected = $this->generate($challenge, $counter);
         if (!hash_equals($expected, $otp)) {
             return new VerificationResult(false, 'mismatch');
         }
 
-        if ($replayStore !== null && $binding !== null) {
-            $token = $challenge . '|' . $counter;
-            if ($replayStore->hasConsumed('ocra:challenge', $binding, $token)) {
-                return new VerificationResult(false, 'replay', matchedCounter: $counter, replayDetected: true);
-            }
-
-            $replayStore->markConsumed('ocra:challenge', $binding, $token);
-            if ($this->ocraSuite['c']) {
-                $replayStore->setState('ocra:last_counter', $binding, $counter);
-            }
+        if (
+            $replayStore !== null
+            && $binding !== null
+            && $this->isReplay($replayStore, $binding, $challenge, $counter)
+        ) {
+            return new VerificationResult(false, 'replay', matchedCounter: $counter, replayDetected: true);
         }
 
         return new VerificationResult(true, 'matched', matchedCounter: $counter, verifiedAt: new \DateTimeImmutable());
+    }
+
+    private static function decimalToBinary(string $decimal): string
+    {
+        $decimal = ltrim($decimal, '0');
+        if ($decimal === '') {
+            return "\0";
+        }
+
+        $binary = '';
+        while ($decimal !== '') {
+            $quotient = '';
+            $remainder = 0;
+            $length = strlen($decimal);
+            for ($index = 0; $index < $length; $index++) {
+                $value = ($remainder * 10) + (ord($decimal[$index]) - 48);
+                $digit = intdiv($value, 16);
+                if ($quotient !== '' || $digit !== 0) {
+                    $quotient .= (string) $digit;
+                }
+                $remainder = $value % 16;
+            }
+
+            $binary = dechex($remainder) . $binary;
+            $decimal = $quotient;
+        }
+
+        return pack('H*', $binary);
     }
 
     private function assertChallenge(string $challenge): void
     {
         $length = $this->ocraSuite['q']['value'];
         match ($this->ocraSuite['q']['format']) {
-            'n' => preg_match('/^\d{' . $length . '}$/', $challenge) === 1 || throw new OCRAException('Challenge must be a numeric string of the expected length.'),
+            'n' => preg_match('/^\d{1,' . $length . '}$/', $challenge) === 1 || throw new OCRAException('Challenge must be a numeric string within the configured length.'),
             'a' => preg_match('/^[A-Za-z0-9]{1,128}$/', $challenge) === 1 || throw new OCRAException('Challenge must be alphanumeric and at most 128 characters.'),
-            'h' => preg_match('/^[A-Fa-f0-9]{1,' . ($length * 2) . '}$/', $challenge) === 1 || throw new OCRAException('Challenge must be hexadecimal.'),
+            'h' => preg_match('/^[A-Fa-f0-9]{1,' . $length . '}$/', $challenge) === 1 || throw new OCRAException('Challenge must be hexadecimal.'),
             default => throw new OCRAException('Invalid challenge format'),
         };
+    }
+
+    private function assertReplayBinding(?ReplayStoreInterface $replayStore, ?string $binding): void
+    {
+        if (($replayStore === null) !== ($binding === null)) {
+            throw new OCRAException('Replay store and binding must be provided together.');
+        }
+        if ($binding !== null && (trim($binding) === '' || strlen($binding) > 512)) {
+            throw new OCRAException('Replay binding must contain between 1 and 512 bytes.');
+        }
     }
 
     private function calculateOptionals(): string
@@ -325,11 +397,46 @@ final class OCRA
     private function calculateQ(string $input): string
     {
         return match ($this->ocraSuite['q']['format']) {
-            'n' => str_pad(pack('H*', dechex((int) $input)), 128, "\0"),
+            'n' => str_pad(self::decimalToBinary($input), 128, "\0"),
             'a' => str_pad(substr($input, 0, 128), 128, "\0"),
             'h' => str_pad(pack('H*', substr($input, 0, 256)), 128, "\0"),
             default => throw new OCRAException('Unsupported challenge format.'),
         };
+    }
+
+    private function isCounterReplay(
+        ReplayStoreInterface $replayStore,
+        string $binding,
+        int $counter,
+    ): bool {
+        return !ReplayProtection::advance($replayStore, 'ocra:last_counter', $binding, $counter);
+    }
+
+    private function isReplay(
+        ReplayStoreInterface $replayStore,
+        string $binding,
+        string $challenge,
+        int $counter,
+    ): bool {
+        if ($this->ocraSuite['c']) {
+            return $this->isCounterReplay($replayStore, $binding, $counter);
+        }
+
+        $token = $challenge . '|' . $counter;
+        if ($replayStore instanceof AtomicReplayStoreInterface) {
+            $consumed = $replayStore->consumeOnce('ocra:challenge', $binding, $token);
+        } else {
+            $consumed = !$replayStore->hasConsumed('ocra:challenge', $binding, $token);
+            if ($consumed) {
+                $replayStore->markConsumed('ocra:challenge', $binding, $token);
+            }
+        }
+
+        if (!$consumed) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -373,7 +480,7 @@ final class OCRA
 
     private function validateAndParse(string $ocraSuite): void
     {
-        if (!preg_match(self::OCRA_REGEX, $ocraSuite, $matches) || $matches[0] !== $ocraSuite) {
+        if (!OcraSuiteValidator::isValid($ocraSuite)) {
             throw new OCRAException('Invalid OCRA Suite.');
         }
 
@@ -384,5 +491,11 @@ final class OCRA
             'algo' => AlgorithmValidator::normalize($parts[3]),
             'length' => (int) $parts[4],
         ] + $conditionalParts;
+
+        foreach ($this->ocraSuite['optionals'] as $optional) {
+            if ($optional['format'] === 's' && ((int) $optional['value'] < 1 || (int) $optional['value'] > 512)) {
+                throw new OCRAException('OCRA session length must be between 1 and 512 bytes.');
+            }
+        }
     }
 }

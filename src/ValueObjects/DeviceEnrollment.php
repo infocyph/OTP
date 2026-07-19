@@ -20,6 +20,15 @@ final readonly class DeviceEnrollment
         self::assertNonEmpty('deviceId', $deviceId);
         self::assertNonEmpty('label', $label);
         self::assertNonEmpty('secretReference', $secretReference);
+        if ($activatedAt !== null && $activatedAt < $createdAt) {
+            throw new InvalidArgumentException('Enrollment activation cannot precede creation.');
+        }
+        if ($revokedAt !== null && $revokedAt < $createdAt) {
+            throw new InvalidArgumentException('Enrollment revocation cannot precede creation.');
+        }
+        if ($activatedAt !== null && $revokedAt !== null && $revokedAt < $activatedAt) {
+            throw new InvalidArgumentException('Enrollment revocation cannot precede activation.');
+        }
     }
 
     public static function create(
@@ -35,6 +44,9 @@ final readonly class DeviceEnrollment
     {
         if ($this->isRevoked()) {
             throw new InvalidArgumentException('Revoked enrollments cannot be activated.');
+        }
+        if ($this->isActive()) {
+            throw new InvalidArgumentException('Active enrollments cannot be activated again.');
         }
 
         return new self(
@@ -78,6 +90,10 @@ final readonly class DeviceEnrollment
 
     public function revoke(?DateTimeImmutable $revokedAt = null): self
     {
+        if ($this->isRevoked()) {
+            throw new InvalidArgumentException('Revoked enrollments cannot be revoked again.');
+        }
+
         return new self(
             $this->deviceId,
             $this->label,

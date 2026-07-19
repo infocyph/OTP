@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 use Infocyph\OTP\Stores\InMemoryReplayStore;
 use Infocyph\OTP\Support\ProvisioningUriParser;
+use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\TOTP;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 
@@ -104,5 +107,95 @@ test('otpauth URI parser rejects malformed numeric parameters', function () {
 
 test('verification windows reject negative bounds when constructed', function () {
     expect(fn () => new VerificationWindow(-1, 0))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => new VerificationWindow(51, 50))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+test('HOTP and TOTP reject malformed codes without exception control flow', function () {
+    $secret = TOTP::generateSecret();
+    $totp = new TOTP($secret);
+    $hotp = new HOTP($secret);
+
+    expect($totp->verify('invalid'))->toBeFalse()
+        ->and($totp->verifyWithWindow('123')->reason)->toBe('malformed')
+        ->and($hotp->verify('invalid', 0))->toBeFalse()
+        ->and($hotp->verifyWithResult('123', 0)->reason)->toBe('malformed');
+});
+
+test('verification work and replay configuration are bounded', function () {
+    $secret = TOTP::generateSecret();
+    $totp = new TOTP($secret);
+    $hotp = new HOTP($secret);
+    $store = new InMemoryReplayStore();
+
+    expect(fn () => $hotp->verify(str_repeat('0', 6), 0, 101))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $totp->verifyWithWindow($totp->getOTP(), replayStore: $store))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => new TOTP($secret, period: 86401))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+test('Base32 secrets must be decodable and canonical', function () {
+    expect(SecretUtility::isValidBase32('A'))->toBeFalse()
+        ->and(SecretUtility::isValidBase32('MZ'))->toBeFalse()
+        ->and(SecretUtility::isValidBase32('MY'))->toBeTrue();
+});
+
+test('recovery code configuration is bounded and normalizes custom alphabets', function () {
+    $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), hashKey: str_repeat('k', 32));
+    $generated = $codes->generate('user-1', count: 2, length: 6, characterSet: 'ab');
+
+    expect($generated->plainCodes)->each->toMatch('/^[AB-]+$/')
+        ->and($codes->consume('user-1', strtolower($generated->plainCodes[0]))->consumed)->toBeTrue()
+        ->and(fn () => new RecoveryCodes(new InMemoryRecoveryCodeStore(), 'xxh128'))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $codes->generate('user-1', count: 101))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+test('otpauth parser rejects ambiguous identities and duplicate parameters', function () {
+    $secret = 'JBSWY3DPEHPK3PXP';
+
+    expect(fn () => ProvisioningUriParser::parse(
+        'otpauth://totp/IssuerA:user?secret=' . $secret . '&issuer=IssuerB',
+    ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Issuer:user?secret=' . $secret . '&secret=' . $secret,
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+        'otpauth://hotp/Issuer:user?secret=' . $secret,
+        ))->toThrow(InvalidArgumentException::class);
+});
+
+test('otpauth provisioning rejects type-conflicting and reserved parameters', function () {
+    $secret = TOTP::generateSecret();
+    $totp = new TOTP($secret);
+
+    expect(fn () => ProvisioningUriParser::parse(
+        'otpauth://totp/Issuer:user?secret=' . $secret . '&counter=0',
+    ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://hotp/Issuer:user?secret=' . $secret . '&counter=0&period=30',
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://ocra/Issuer:user?secret=' . $secret . '&ocraSuite=OCRA-1:HOTP-SHA256-8:QN08-invalid',
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $totp->getProvisioningUri(
+            'user',
+            'Issuer',
+            additionalParameters: ['secret' => $secret],
+        ))->toThrow(InvalidArgumentException::class);
+});
+
+test('atomic in-memory replay state advances monotonically and validates TTLs', function () {
+    $store = new InMemoryReplayStore();
+
+    expect($store->advance('hotp:last_counter', 'device-1', 5))->toBeTrue()
+        ->and($store->advance('hotp:last_counter', 'device-1', 5))->toBeFalse()
+        ->and($store->advance('hotp:last_counter', 'device-1', 4))->toBeFalse()
+        ->and($store->advance('hotp:last_counter', 'device-1', 6))->toBeTrue()
+        ->and(fn () => $store->markConsumed('totp:step', 'user-1', '1', 0))
         ->toThrow(InvalidArgumentException::class);
 });

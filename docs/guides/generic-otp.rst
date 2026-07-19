@@ -31,8 +31,9 @@ The generic OTP class requires a PSR-6 cache pool implementation:
        digitCount: 6,
        validUpto: 60,
        retry: 3,
-       hashAlgorithm: 'xxh128',
+       hashAlgorithm: 'sha256',
        cacheAdapter: $cachePool,
+       hashKey: $applicationOtpKey,
    );
 
 Codes are strings
@@ -102,3 +103,14 @@ The generic OTP cache payload keeps:
 - the expiration moment
 
 Because codes are strings, leading zeroes are preserved correctly.
+
+Security and limits
+-------------------
+
+- SHA-256 is the default stored-code digest; SHA-512 is also supported.
+- For production, provide a purpose-specific ``hashKey`` of at least 16 random bytes and keep it outside the OTP cache.
+- Non-cryptographic hashes are rejected because OTP verification is an authentication decision.
+- Signature cache keys use SHA-256 to prevent attacker-controlled non-cryptographic collisions.
+- Configuration is validated when the immutable OTP instance is constructed.
+- Validity is bounded to 86400 seconds, retries to 100, and signature input to 4096 bytes.
+- PSR-6 does not define an atomic consume operation. Use a cache/storage integration with an application-level atomic consume when concurrent verification of the same generic OTP must be prevented.

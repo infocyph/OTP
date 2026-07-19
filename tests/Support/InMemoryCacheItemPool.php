@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\OTP\Tests\Support;
 
 use DateInterval;

@@ -5,12 +5,24 @@ declare(strict_types=1);
 namespace Infocyph\OTP\Support;
 
 use InvalidArgumentException;
-use ParagonIE\ConstantTime\Base32;
 
 final class OtpMath
 {
     public static function hotp(string $secret, int $counter, int $digits, string $algorithm): string
     {
+        return self::hotpFromBinary(
+            SecretUtility::decodeBase32($secret),
+            $counter,
+            $digits,
+            AlgorithmValidator::normalize($algorithm),
+        );
+    }
+
+    public static function hotpFromBinary(string $binarySecret, int $counter, int $digits, string $algorithm): string
+    {
+        if ($binarySecret === '') {
+            throw new InvalidArgumentException('Binary OTP secret cannot be empty.');
+        }
         if ($counter < 0) {
             throw new InvalidArgumentException('Counter must be non-negative.');
         }
@@ -19,10 +31,9 @@ final class OtpMath
         }
 
         $algorithm = AlgorithmValidator::normalize($algorithm);
-        $secret = SecretUtility::normalizeBase32($secret);
         $binaryCounter = pack('N2', ($counter >> 32) & 0xFFFFFFFF, $counter & 0xFFFFFFFF);
-        $hash = hash_hmac($algorithm, $binaryCounter, Base32::decodeUpper($secret), true);
-        $offset = ord(substr($hash, -1)) & 0x0F;
+        $hash = hash_hmac($algorithm, $binaryCounter, $binarySecret, true);
+        $offset = ord($hash[-1]) & 0x0F;
         $unpacked = unpack('Nvalue', substr($hash, $offset, 4));
         if ($unpacked === false) {
             throw new InvalidArgumentException('Unable to unpack HOTP hash fragment.');
