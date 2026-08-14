@@ -34,7 +34,11 @@ final class Concurrency
                 }
                 try {
                     $result = $operation($worker);
-                } catch (Throwable) {
+                } catch (Throwable $failure) {
+                    file_put_contents(
+                        $barrier . '.error.' . $worker,
+                        $failure::class . ': ' . $failure->getMessage(),
+                    );
                     $result = 250;
                 }
                 file_put_contents($barrier . '.result.' . $worker, (string) max(0, min(255, $result)));
@@ -56,6 +60,7 @@ final class Concurrency
         file_put_contents($barrier . '.go', '1');
 
         $results = [];
+        $failures = [];
         foreach ($children as $worker => $processId) {
             pcntl_waitpid($processId, $status);
             $result = file_get_contents($barrier . '.result.' . $worker);
@@ -63,11 +68,20 @@ final class Concurrency
                 throw new RuntimeException('A concurrency worker returned no result.');
             }
             $results[] = (int) $result;
+            $errorPath = $barrier . '.error.' . $worker;
+            if (is_file($errorPath)) {
+                $failure = file_get_contents($errorPath);
+                $failures[] = sprintf('worker %d: %s', $worker, $failure === false ? 'unknown failure' : $failure);
+                unlink($errorPath);
+            }
             unlink($barrier . '.ready.' . $worker);
             unlink($barrier . '.result.' . $worker);
         }
         unlink($barrier . '.go');
         unlink($barrier);
+        if ($failures !== []) {
+            throw new RuntimeException('Concurrency operation failed: ' . implode('; ', $failures));
+        }
 
         return $results;
     }

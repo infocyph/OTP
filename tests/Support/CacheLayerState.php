@@ -9,7 +9,7 @@ use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\CacheLayer\Cache\Lock\FileLockProvider;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 
 final class CacheLayerState
 {
@@ -23,9 +23,9 @@ final class CacheLayerState
         return Cache::sqlite('otp-tests', $path, self::options());
     }
 
-    /** @return AuthenticationStateCacheInterface&MockObject */
+    /** @return AuthenticationStateCacheInterface&Stub */
     public static function configureMock(
-        AuthenticationStateCacheInterface&MockObject $cache,
+        AuthenticationStateCacheInterface&Stub $cache,
         ?LockProviderInterface $locks = null,
     ): AuthenticationStateCacheInterface
     {

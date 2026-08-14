@@ -232,6 +232,7 @@ test('concurrent challenge OCRA verification accepts one request', function () {
     expect($path)->toBeString();
     $suite = 'OCRA-1:HOTP-SHA256-8:QN08';
     $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678');
+    CacheLayerState::sqlite($path);
 
     $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
         $cache = CacheLayerState::sqlite($path);

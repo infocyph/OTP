@@ -137,13 +137,13 @@ test('generic OTP cache failure never returns a code', function () {
 
 test('lock release cleanup preserves failures and committed results', function () {
     $handle = new LockHandle('lock', 'token');
-    $locks = $this->createMock(LockProviderInterface::class);
+    $locks = $this->createStub(LockProviderInterface::class);
     $locks->method('acquire')->willReturn($handle);
     $locks->method('refresh')->willReturn(true);
     $locks->method('release')->willThrowException(new RuntimeException('Release failed.'));
 
     $readFailure = CacheLayerState::configureMock(
-        $this->createMock(AuthenticationStateCacheInterface::class),
+        $this->createStub(AuthenticationStateCacheInterface::class),
         $locks,
     );
     $readFailure->method('get')->willThrowException(new RuntimeException('Primary read failed.'));
@@ -276,7 +276,7 @@ test('generic OTP fails closed when its state lock cannot be acquired', function
     $locks = $this->createMock(LockProviderInterface::class);
     $locks->expects($this->once())->method('acquire')->willReturn(null);
     $cache = CacheLayerState::configureMock(
-        $this->createMock(AuthenticationStateCacheInterface::class),
+        $this->createStub(AuthenticationStateCacheInterface::class),
         $locks,
     );
 
