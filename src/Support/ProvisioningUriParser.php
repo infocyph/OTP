@@ -29,7 +29,7 @@ final class ProvisioningUriParser
 
         $query = self::parseQuery($parts['query']);
         $secret = SecretUtility::normalizeBase32(self::stringQueryValue($query, 'secret'));
-        SecretUtility::decodeBase32($secret);
+        SecretUtility::requireStrongBase32($secret);
         $issuerValue = self::optionalStringQueryValue($query, 'issuer');
         $issuer = $issuerValue !== null ? LabelHelper::normalizeIssuer($issuerValue) : null;
         $labelParts = LabelHelper::parseLabel(ltrim($parts['path'], '/'), $issuer);
@@ -286,7 +286,15 @@ final class ProvisioningUriParser
                 throw new InvalidArgumentException(sprintf('Reserved otpauth query parameter "%s" has invalid casing.', $key));
             }
 
-            $query[$key] = rawurldecode($encodedValue);
+            $value = rawurldecode($encodedValue);
+            if (
+                !isset($canonicalReserved[$lowerKey])
+                && (strlen($key) > 64 || strlen($value) > 1024)
+            ) {
+                throw new InvalidArgumentException('Otpauth extension names and values cannot exceed 64 and 1024 bytes.');
+            }
+
+            $query[$key] = $value;
         }
 
         return $query;

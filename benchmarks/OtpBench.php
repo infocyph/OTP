@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\Benchmarks;
 
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Cache\Cache;
+use Infocyph\CacheLayer\Cache\CacheOptions;
+use Infocyph\CacheLayer\Cache\Lock\FileLockProvider;
+use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\OCRA;
 use Infocyph\OTP\RecoveryCodes;
-use Infocyph\OTP\Stores\InMemoryOtpStore;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
-use Infocyph\OTP\Stores\InMemoryReplayStore;
 use Infocyph\OTP\Support\ProvisioningUriParser;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\TOTP;
@@ -21,15 +24,29 @@ use PhpBench\Attributes\Revs;
 #[BeforeMethods('setUp')]
 final class OtpBench
 {
+    private AuthenticationStateCacheInterface $cache;
+
     private string $genericCode;
 
     private GenericOtp $genericOtp;
 
+    private GenericOtp $genericOtpExhausted;
+
     private GenericOtp $genericOtpMissing;
+
+    private string $genericWrongCode;
 
     private HOTP $hotp;
 
     private string $hotpCode;
+
+    private string $hotpLookAhead100Code;
+
+    private string $hotpLookAhead25Code;
+
+    private AuthenticationStateCacheInterface $hotpReplayCache;
+
+    private LockProviderInterface $locks;
 
     private OCRA $ocra;
 
@@ -59,7 +76,15 @@ final class OtpBench
 
     private string $totpCode;
 
-    private InMemoryReplayStore $totpReplayStore;
+    private string $totpFuture50Code;
+
+    private string $totpFuture5Code;
+
+    private string $totpPast50Code;
+
+    private string $totpPast5Code;
+
+    private AuthenticationStateCacheInterface $totpReplayCache;
 
     private TOTP $totpSha1;
 
@@ -67,6 +92,14 @@ final class OtpBench
 
     public function setUp(): void
     {
+        $options = new CacheOptions(
+            integrityKey: str_repeat('i', 32),
+            allowClosures: false,
+            allowObjects: false,
+            failOpen: false,
+        );
+        $this->cache = Cache::memory('otp-bench', $options);
+        $this->locks = new FileLockProvider();
         $this->secret = 'DZJCKBRRJVSXNTALRREMD6ZCCMNEBP53Q424XLMVN6AOL6MCNIEUGK54OEQVXQXHQFGI3UHBBSLNXUYHW2QQNV2BLZD2QNOKTRL3WSI';
         $this->totp = new TOTP($this->secret, algorithm: 'sha256');
         $this->totpSha1 = new TOTP($this->secret);
@@ -86,31 +119,64 @@ final class OtpBench
         $this->ocraSession = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', '12345678901234567890123456789012');
         $this->ocraTime = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-T1M', '12345678901234567890123456789012');
         $this->genericOtp = new GenericOtp(
-            new InMemoryOtpStore(),
+            $this->cache,
             str_repeat('g', 32),
             ttlSeconds: 60,
         );
-        $this->genericOtpMissing = new GenericOtp(new InMemoryOtpStore(), str_repeat('g', 32));
+        $this->genericOtpMissing = new GenericOtp($this->cache, str_repeat('g', 32));
+        $this->genericOtpExhausted = new GenericOtp(
+            $this->cache,
+            str_repeat('g', 32),
+            maxAttempts: 1,
+        );
         $this->recoveryCodes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
 
         $this->totpCode = $this->totp->generate(1716532624);
         $this->hotpCode = $this->hotp->generate(5);
+        $this->hotpLookAhead25Code = $this->hotp->generate(25);
+        $this->hotpLookAhead100Code = $this->hotp->generate(100);
         $this->ocraCode = $this->ocra->generate('12345678', 0, '1234');
         $this->genericCode = $this->genericOtp->generate($this->signature);
+        $exhaustedCode = $this->genericOtpExhausted->generate('bench:exhausted');
+        $this->genericWrongCode = $exhaustedCode === '000000' ? '000001' : '000000';
         $this->recoveryCode = $this->recoveryCodes->generate('bench-user')->plainCodes[0];
         $this->provisioningUri = $this->totp->getProvisioningUri('user@example.com', 'Example');
-        $this->totpReplayStore = new InMemoryReplayStore();
-        $this->totpReplayStore->advance(
-            'totp:last_timestep',
-            'bench-user',
-            $this->totp->getCurrentTimeStep(1716532624),
-            90,
+        $this->totpReplayCache = Cache::memory('otp-bench-replay', $options);
+        $this->totp->verifyWithWindow(
+            $this->totpCode,
+            1_716_532_624,
+            cache: $this->totpReplayCache,
+            factorId: 'bench-user',
         );
+        $this->hotpReplayCache = Cache::memory('otp-bench-hotp-replay', $options);
+        $this->hotp->verifyWithResult(
+            $this->hotpCode,
+            5,
+            cache: $this->hotpReplayCache,
+            factorId: 'bench-user',
+        );
+        $currentStep = $this->totp->getCurrentTimeStep(1_716_532_624);
+        $this->totpPast5Code = $this->totp->generate(($currentStep - 5) * 30);
+        $this->totpPast50Code = $this->totp->generate(($currentStep - 50) * 30);
+        $this->totpFuture5Code = $this->totp->generate(($currentStep + 5) * 30);
+        $this->totpFuture50Code = $this->totp->generate(($currentStep + 50) * 30);
+    }
+
+    public function benchCacheLayerLockRoundTrip(): void
+    {
+        $handle = $this->locks->acquire('benchmark-lock', 1.0, 30.0);
+        $this->locks->release($handle);
+    }
+
+    public function benchCacheLayerStateRoundTrip(): void
+    {
+        $this->cache->set('benchmark-state', 1, 60);
+        $this->cache->get('benchmark-state');
     }
 
     public function benchGenericOtpConstruction(): void
     {
-        new GenericOtp(new InMemoryOtpStore(), str_repeat('g', 32));
+        new GenericOtp($this->cache, str_repeat('g', 32));
     }
 
     public function benchGenericOtpGenerate(): void
@@ -124,6 +190,13 @@ final class OtpBench
         $this->genericOtp->verify($this->signature, $this->genericCode);
     }
 
+    #[Revs(1)]
+    public function benchGenericOtpVerifyExhausted(): void
+    {
+        $this->genericOtpExhausted->verify('bench:exhausted', $this->genericWrongCode);
+    }
+
+    #[Revs(1)]
     public function benchGenericOtpVerifyFailedAttempt(): void
     {
         $this->genericOtp->verify($this->signature, '000000');
@@ -144,6 +217,15 @@ final class OtpBench
         $this->hotp->generate(5);
     }
 
+    public function benchHotpReplayAccepted(): void
+    {
+        $cache = Cache::memory(
+            'otp-bench-hotp-accept',
+            new CacheOptions(integrityKey: str_repeat('i', 32), failOpen: false),
+        );
+        $this->hotp->verifyWithResult($this->hotpCode, 5, cache: $cache, factorId: 'bench-user');
+    }
+
     public function benchHotpVerify(): void
     {
         $this->hotp->verify($this->hotpCode, 5, 3);
@@ -161,19 +243,38 @@ final class OtpBench
 
     public function benchHotpVerifyLookAhead100(): void
     {
-        $this->hotp->verify($this->hotpCode, 0, 100);
+        $this->hotp->verify($this->hotpLookAhead100Code, 0, 100);
     }
 
     public function benchHotpVerifyLookAhead25(): void
     {
-        $this->hotp->verify($this->hotpCode, 0, 25);
+        $this->hotp->verify($this->hotpLookAhead25Code, 0, 25);
     }
 
     public function benchHotpVerifyReplay(): void
     {
-        $store = new InMemoryReplayStore();
-        $store->advance('hotp:last_counter', 'bench-user', 5);
-        $this->hotp->verifyWithResult($this->hotpCode, 5, replayStore: $store, factorId: 'bench-user');
+        $this->hotp->verifyWithResult(
+            $this->hotpCode,
+            5,
+            cache: $this->hotpReplayCache,
+            factorId: 'bench-user',
+        );
+    }
+
+    public function benchOcraChallengeConsume(): void
+    {
+        $cache = Cache::memory(
+            'otp-bench-ocra',
+            new CacheOptions(integrityKey: str_repeat('i', 32), failOpen: false),
+        );
+        $code = $this->ocraChallenge->generate('12345678');
+        $this->ocraChallenge->verifyWithResult(
+            $code,
+            '12345678',
+            cache: $cache,
+            factorId: 'bench-user',
+            replayTtl: 300,
+        );
     }
 
     public function benchOcraGenerate(): void
@@ -315,6 +416,16 @@ final class OtpBench
         $this->totp->verify($this->totpCode, 1716532624, 1, 1);
     }
 
+    public function benchTotpVerifyFuture5(): void
+    {
+        $this->totp->verifyWithWindow($this->totpFuture5Code, 1_716_532_624, new VerificationWindow(0, 5));
+    }
+
+    public function benchTotpVerifyFuture50(): void
+    {
+        $this->totp->verifyWithWindow($this->totpFuture50Code, 1_716_532_624, new VerificationWindow(0, 50));
+    }
+
     public function benchTotpVerifyInvalid(): void
     {
         $this->totp->verify('000000', 1716532624, 1, 1);
@@ -325,13 +436,26 @@ final class OtpBench
         $this->totp->verify('invalid', 1716532624, 1, 1);
     }
 
+    public function benchTotpVerifyPast5(): void
+    {
+        $this->totp->verifyWithWindow($this->totpPast5Code, 1_716_532_624, new VerificationWindow(5));
+    }
+
+    public function benchTotpVerifyPast50(): void
+    {
+        $this->totp->verifyWithWindow($this->totpPast50Code, 1_716_532_624, new VerificationWindow(50));
+    }
+
     public function benchTotpVerifyReplayAccepted(): void
     {
-        $store = new InMemoryReplayStore();
+        $cache = Cache::memory(
+            'otp-bench-totp',
+            new CacheOptions(integrityKey: str_repeat('i', 32), failOpen: false),
+        );
         $this->totp->verifyWithWindow(
             $this->totpCode,
             1716532624,
-            replayStore: $store,
+            cache: $cache,
             factorId: 'bench-user',
         );
     }
@@ -341,7 +465,7 @@ final class OtpBench
         $this->totp->verifyWithWindow(
             $this->totpCode,
             1716532624,
-            replayStore: $this->totpReplayStore,
+            cache: $this->totpReplayCache,
             factorId: 'bench-user',
         );
     }
@@ -349,15 +473,5 @@ final class OtpBench
     public function benchTotpVerifyWindow0(): void
     {
         $this->totp->verifyWithWindow($this->totpCode, 1_716_532_624, new VerificationWindow());
-    }
-
-    public function benchTotpVerifyWindow5(): void
-    {
-        $this->totp->verifyWithWindow($this->totpCode, 1_716_532_624, new VerificationWindow(5, 5));
-    }
-
-    public function benchTotpVerifyWindow50(): void
-    {
-        $this->totp->verifyWithWindow($this->totpCode, 1_716_532_624, new VerificationWindow(50, 50));
     }
 }

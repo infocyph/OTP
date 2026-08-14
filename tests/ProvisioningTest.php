@@ -7,6 +7,7 @@ use Infocyph\OTP\OCRA;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
 use Infocyph\OTP\Support\ProvisioningUriParser;
 use Infocyph\OTP\TOTP;
+use ParagonIE\ConstantTime\Base32;
 
 test('TOTP, HOTP, and OCRA provisioning round-trip effective configuration', function () {
     $totp = new TOTP(TOTP::generateSecret(), 8, 60, 'sha256');
@@ -64,8 +65,12 @@ test('default TOTP provisioning is minimal and parser supplies effective default
 test('provisioning rejects reserved collisions, identity ambiguity, and excessive labels', function () {
     $secret = TOTP::generateSecret();
     $totp = new TOTP($secret);
+    $maximumCombinedLabel = $totp->getProvisioningUri(str_repeat('a', 127), str_repeat('i', 127));
 
-    expect(fn () => $totp->getProvisioningUri('alice', 'Bad:Issuer'))->toThrow(InvalidArgumentException::class)
+    expect($maximumCombinedLabel)->toContain(rawurlencode(str_repeat('i', 127) . ':' . str_repeat('a', 127)))
+        ->and(fn () => $totp->getProvisioningUri(str_repeat('a', 127), str_repeat('i', 128)))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $totp->getProvisioningUri('alice', 'Bad:Issuer'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $totp->getProvisioningUri('Issuer:alice', 'Issuer'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $totp->getProvisioningUri(str_repeat('a', 200), str_repeat('i', 100)))
         ->toThrow(InvalidArgumentException::class)
@@ -105,4 +110,46 @@ test('low-level provisioning builder also always emits HOTP counter', function (
     );
 
     expect($uri)->toContain('counter=0');
+});
+
+test('provisioning enforces factor-strength secret bounds on build and parse', function () {
+    $weak = rtrim(Base32::encodeUpper(str_repeat('w', 15)), '=');
+    $oversized = rtrim(Base32::encodeUpper(str_repeat('o', 1025)), '=');
+
+    expect(fn () => ProvisioningUriBuilder::build('totp', $weak, 'alice', 'Example', []))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Example:alice?secret=' . $weak . '&issuer=Example',
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriBuilder::build('totp', $oversized, 'alice', 'Example', []))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Example:alice?secret=' . $oversized . '&issuer=Example',
+        ))->toThrow(InvalidArgumentException::class);
+});
+
+test('parser applies account-label and extension bounds symmetrically', function () {
+    $secret = TOTP::generateSecret();
+    $withoutLabelIssuer = ProvisioningUriParser::parse(
+        'otpauth://totp/:alice?secret=' . $secret,
+    );
+    $unicode = ProvisioningUriParser::parse(
+        'otpauth://totp/Example:' . rawurlencode(' ব্যবহারকারী ') . '?secret=' . $secret . '&issuer=Example',
+    );
+
+    expect($withoutLabelIssuer->issuer)->toBeNull()
+        ->and($withoutLabelIssuer->label)->toBe('alice')
+        ->and($unicode->label)->toBe('ব্যবহারকারী')
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Example:alice:extra?secret=' . $secret . '&issuer=Example',
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Example:?secret=' . $secret . '&issuer=Example',
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Example:alice?secret=' . $secret . '&' . str_repeat('k', 65) . '=value',
+        ))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => ProvisioningUriParser::parse(
+            'otpauth://totp/Example:alice?secret=' . $secret . '&extension=' . str_repeat('v', 1025),
+        ))->toThrow(InvalidArgumentException::class);
 });

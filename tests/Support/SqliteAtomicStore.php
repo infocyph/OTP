@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace Infocyph\OTP\Tests\Support;
 
 use DateTimeImmutable;
-use Infocyph\OTP\Contracts\OtpStoreInterface;
 use Infocyph\OTP\Contracts\RecoveryCodeStoreInterface;
-use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use PDO;
 use Throwable;
 
 /** SQLite integration fixture exercising real cross-process atomic transitions. */
-final class SqliteAtomicStore implements OtpStoreInterface, RecoveryCodeStoreInterface, ReplayStoreInterface
+final class SqliteAtomicStore implements RecoveryCodeStoreInterface
 {
     private readonly PDO $database;
 
@@ -24,32 +22,6 @@ final class SqliteAtomicStore implements OtpStoreInterface, RecoveryCodeStoreInt
         ]);
         $this->database->exec('PRAGMA busy_timeout = 5000');
         $this->database->exec('PRAGMA journal_mode = WAL');
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS otp_challenges (
-                binding TEXT PRIMARY KEY,
-                digest TEXT NOT NULL,
-                expires_at INTEGER NOT NULL,
-                attempts INTEGER NOT NULL
-            )',
-        );
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS replay_progress (
-                namespace TEXT NOT NULL,
-                factor_id TEXT NOT NULL,
-                value INTEGER NOT NULL,
-                expires_at INTEGER,
-                PRIMARY KEY (namespace, factor_id)
-            )',
-        );
-        $this->database->exec(
-            'CREATE TABLE IF NOT EXISTS replay_tokens (
-                namespace TEXT NOT NULL,
-                factor_id TEXT NOT NULL,
-                token TEXT NOT NULL,
-                expires_at INTEGER,
-                PRIMARY KEY (namespace, factor_id, token)
-            )',
-        );
         $this->database->exec(
             'CREATE TABLE IF NOT EXISTS recovery_batches (
                 binding TEXT PRIMARY KEY,
@@ -65,110 +37,6 @@ final class SqliteAtomicStore implements OtpStoreInterface, RecoveryCodeStoreInt
                 PRIMARY KEY (binding, code_hash)
             )',
         );
-    }
-
-    public function advance(string $namespace, string $factorId, int $value, ?int $ttl = null): bool
-    {
-        return $this->transaction(function () use ($namespace, $factorId, $value, $ttl): bool {
-            $now = time();
-            $statement = $this->database->prepare(
-                'SELECT value, expires_at FROM replay_progress WHERE namespace = ? AND factor_id = ?',
-            );
-            $statement->execute([$namespace, $factorId]);
-            /** @var array{value:int,expires_at:?int}|false $current */
-            $current = $statement->fetch(PDO::FETCH_ASSOC);
-            if (
-                $current !== false
-                && ($current['expires_at'] === null || $current['expires_at'] > $now)
-                && $value <= $current['value']
-            ) {
-                return false;
-            }
-
-            $statement = $this->database->prepare(
-                'INSERT INTO replay_progress (namespace, factor_id, value, expires_at)
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT (namespace, factor_id)
-                 DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at',
-            );
-            $statement->execute([$namespace, $factorId, $value, $ttl === null ? null : $now + $ttl]);
-
-            return true;
-        });
-    }
-
-    public function consumeOnce(string $namespace, string $factorId, string $token, ?int $ttl = null): bool
-    {
-        return $this->transaction(function () use ($namespace, $factorId, $token, $ttl): bool {
-            $now = time();
-            $delete = $this->database->prepare(
-                'DELETE FROM replay_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?',
-            );
-            $delete->execute([$now]);
-            $insert = $this->database->prepare(
-                'INSERT OR IGNORE INTO replay_tokens (namespace, factor_id, token, expires_at) VALUES (?, ?, ?, ?)',
-            );
-            $insert->execute([$namespace, $factorId, $token, $ttl === null ? null : $now + $ttl]);
-
-            return $insert->rowCount() === 1;
-        });
-    }
-
-    public function delete(string $storageBinding): bool
-    {
-        $statement = $this->database->prepare('DELETE FROM otp_challenges WHERE binding = ?');
-        $statement->execute([$storageBinding]);
-
-        return $statement->rowCount() === 1;
-    }
-
-    public function issue(string $storageBinding, string $digest, int $expiresAt, int $maxAttempts): void
-    {
-        $this->transaction(function () use ($storageBinding, $digest, $expiresAt, $maxAttempts): void {
-            $statement = $this->database->prepare(
-                'INSERT INTO otp_challenges (binding, digest, expires_at, attempts)
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT (binding)
-                 DO UPDATE SET digest = excluded.digest, expires_at = excluded.expires_at, attempts = excluded.attempts',
-            );
-            $statement->execute([$storageBinding, $digest, $expiresAt, $maxAttempts]);
-        });
-    }
-
-    public function verifyAndConsume(string $storageBinding, string $candidateDigest, int $now): bool
-    {
-        return $this->transaction(function () use ($storageBinding, $candidateDigest, $now): bool {
-            $statement = $this->database->prepare(
-                'SELECT digest, expires_at, attempts FROM otp_challenges WHERE binding = ?',
-            );
-            $statement->execute([$storageBinding]);
-            /** @var array{digest:string,expires_at:int,attempts:int}|false $challenge */
-            $challenge = $statement->fetch(PDO::FETCH_ASSOC);
-            if ($challenge === false) {
-                return false;
-            }
-            if ($challenge['expires_at'] <= $now) {
-                $this->delete($storageBinding);
-
-                return false;
-            }
-            if (hash_equals($challenge['digest'], $candidateDigest)) {
-                $this->delete($storageBinding);
-
-                return true;
-            }
-
-            if ($challenge['attempts'] <= 1) {
-                $this->delete($storageBinding);
-            } else {
-                $update = $this->database->prepare(
-                    'UPDATE otp_challenges SET attempts = attempts - 1 WHERE binding = ?',
-                );
-                $update->execute([$storageBinding]);
-            }
-
-            return false;
-        });
     }
 
     public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array

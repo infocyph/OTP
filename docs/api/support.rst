@@ -1,12 +1,157 @@
 Support API
 ===========
 
-``ProvisioningUriBuilder`` and ``ProvisioningUriParser`` implement bounded,
-strict URI construction and parsing. ``SecretUtility`` validates canonical
-Base32 syntax separately from protocol strength. ``SvgQrRenderer`` produces
-bounded SVG output. ``OcraSuite`` parses OCRA exactly once. ``VerificationWindow``
-represents bounded past/future drift.
+Most applications should use ``HOTP``, ``TOTP``, ``OCRA``, ``GenericOtp``, and
+``RecoveryCodes`` directly. Support classes are public for import/export tooling,
+custom enrollment flows, validation, and advanced integrations.
 
-Algorithm validation, OTP math, label normalization, and rotation preparation
-are package support details and should not be treated as authentication workflow
-or persistence APIs.
+SecretUtility
+-------------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\SecretUtility;
+
+   $secret = SecretUtility::generate(bytes: 20);
+   $normalized = SecretUtility::normalizeBase32($userInput);
+   $binary = SecretUtility::decodeBase32($normalized);
+   $strongBinary = SecretUtility::requireStrongBase32($normalized);
+   $valid = SecretUtility::isValidBase32($userInput);
+
+``generate()`` accepts 16–1024 bytes. Normalization removes spaces, tabs, line
+breaks, hyphens, surrounding whitespace, and Base32 padding, then uppercases.
+Decoding verifies canonical round-trip encoding. ``requireStrongBase32()``
+requires 16–1024 decoded bytes.
+
+AlgorithmValidator
+------------------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\AlgorithmValidator;
+
+   $algorithm = AlgorithmValidator::normalize(' SHA256 '); // "sha256"
+   $supported = AlgorithmValidator::supported();          // sha1/sha256/sha512
+
+Unsupported names throw ``InvalidArgumentException``.
+
+ProvisioningUriBuilder
+----------------------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\ProvisioningUriBuilder;
+
+   $uri = ProvisioningUriBuilder::build(
+       type: 'totp',
+       secret: $secret,
+       label: 'alice@example.com',
+       issuer: 'Example App',
+       include: [
+           'algorithm' => true,
+           'digits' => true,
+           'period' => true,
+       ],
+       additionalParameters: ['tenant' => 'north'],
+       algorithm: 'sha256',
+       digits: 8,
+       period: 60,
+   );
+
+The builder also supports ``hotp`` with a required counter and ``ocra`` with a
+required suite whose algorithm/digits agree. Protocol convenience methods infer
+``include`` flags and are less error-prone for normal enrollment.
+
+``enrollmentPayload()`` builds a generic immutable payload when a custom flow
+already has all configuration values:
+
+.. code-block:: php
+
+   $payload = ProvisioningUriBuilder::enrollmentPayload(
+       type: 'totp',
+       secret: $secret,
+       label: 'alice@example.com',
+       issuer: 'Example App',
+       include: [],
+   );
+
+An optional ``qrSvg`` argument is attached as supplied; this method does not
+render the URI itself.
+
+ProvisioningUriParser
+---------------------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\ProvisioningUriParser;
+
+   $parsed = ProvisioningUriParser::parse($untrustedUri);
+
+The parser is strict and bounded. It returns ``ParsedOtpAuthUri`` with effective
+defaults and preserved unknown extensions. See :doc:`../guides/provisioning` for
+the complete rejection rules and round-trip example.
+
+SvgQrRenderer
+-------------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\SvgQrRenderer;
+
+   $svg = SvgQrRenderer::render(
+       payload: $uri,
+       imageSize: 256,
+   );
+
+Payload length is 1–4096 bytes and image size is 64–4096 pixels. The SVG embeds
+credential data indirectly and is sensitive.
+
+LabelHelper
+-----------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\LabelHelper;
+
+   $label = LabelHelper::normalizeAccountLabel('alice@example.com');
+   $issuer = LabelHelper::normalizeIssuer('Example   App');
+   $formatted = LabelHelper::formatLabel($label, $issuer);
+   $parts = LabelHelper::parseLabel(rawurlencode($formatted), $issuer);
+
+Text must contain 1–255 valid UTF-8 bytes without control characters. Account
+labels and issuers cannot contain a colon. Issuer internal whitespace is
+collapsed. Parsing rejects invalid percent encoding and issuer conflicts.
+
+OtpMath
+-------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Support\OtpMath;
+
+   $otp = OtpMath::hotp(
+       secret: $base32Secret,
+       counter: 0,
+       digits: 6,
+       algorithm: 'sha1',
+   );
+
+``hotpFromBinary()`` is available when a validated binary secret is already held.
+These methods perform calculation only; they do not validate factor-strength
+policy, persist counters, apply look-ahead, or protect replay. Prefer ``HOTP`` or
+``TOTP`` unless building a protocol adapter.
+
+Internal support
+----------------
+
+``CacheLock`` and ``SecretRotationPlanner`` are marked ``@internal``. They are
+implementation details, not supported application entry points. Use protocol
+``planRotation()`` methods for rotation; CacheLayer locking is consumed through
+the state-cache capability.
+
+Internal versus workflow responsibility
+---------------------------------------
+
+Public support methods provide bounded transformations. They do not authorize
+an import, persist a factor, prove activation, apply rate limits, or make a
+security policy decision. Keep those decisions at the application boundary.

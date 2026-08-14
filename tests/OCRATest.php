@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\OCRA;
-use Infocyph\OTP\Stores\InMemoryReplayStore;
+use Infocyph\OTP\Tests\Support\CacheLayerState;
+use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 
 const OCRA_KEY_20 = '12345678901234567890';
@@ -63,11 +65,23 @@ test('odd-nibble numeric and hexadecimal challenges match independent reference 
 
 test('non-counter OCRA rejects irrelevant counters and cannot vary replay identity', function () {
     $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
-    $store = new InMemoryReplayStore();
+    $cache = CacheLayerState::memory();
     $otp = $ocra->generate('12345678');
 
-    $first = $ocra->verifyWithResult($otp, '12345678', replayStore: $store, factorId: 'factor-v1');
-    $second = $ocra->verifyWithResult($otp, '12345678', replayStore: $store, factorId: 'factor-v1');
+    $first = $ocra->verifyWithResult(
+        $otp,
+        '12345678',
+        cache: $cache,
+        factorId: 'factor-v1',
+        replayTtl: 300,
+    );
+    $second = $ocra->verifyWithResult(
+        $otp,
+        '12345678',
+        cache: $cache,
+        factorId: 'factor-v1',
+        replayTtl: 300,
+    );
 
     expect($first->matched)->toBeTrue()
         ->and($second->replayDetected)->toBeTrue()
@@ -77,14 +91,27 @@ test('non-counter OCRA rejects irrelevant counters and cannot vary replay identi
 
 test('counter OCRA advances monotonically and exposes next counter', function () {
     $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', OCRA_KEY_32);
-    $store = new InMemoryReplayStore();
+    $cache = CacheLayerState::memory();
     $otp = $ocra->generate('12345678', 4);
-    $result = $ocra->verifyWithResult($otp, '12345678', 4, replayStore: $store, factorId: 'factor-v1');
+    $result = $ocra->verifyWithResult($otp, '12345678', 4, cache: $cache, factorId: 'factor-v1');
 
     expect($result->matched)->toBeTrue()
         ->and($result->matchedCounter)->toBe(4)
         ->and($result->nextCounter)->toBe(5)
-        ->and($ocra->verifyWithResult($otp, '12345678', 4, replayStore: $store, factorId: 'factor-v1')->replayDetected)->toBeTrue();
+        ->and($ocra->verifyWithResult(
+            $otp,
+            '12345678',
+            4,
+            cache: $cache,
+            factorId: 'factor-v1',
+        )->replayDetected)->toBeTrue()
+        ->and($ocra->verifyWithResult(
+            $ocra->generate('12345678', 3),
+            '12345678',
+            3,
+            cache: $cache,
+            factorId: 'factor-v1',
+        )->replayDetected)->toBeTrue();
 });
 
 test('OCRA rejects missing and irrelevant suite inputs', function () {
@@ -102,19 +129,21 @@ test('OCRA rejects missing and irrelevant suite inputs', function () {
         ->and(fn () => $time->generate('12345678'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => $counter->generate('12345678'))->toThrow(InvalidArgumentException::class)
         ->and($session->generate('12345678', session: 'ABC'))
-        ->toBe($session->generate('12345678', session: OCRA::sessionHex('414243')));
+        ->toBe($session->generate('12345678', session: OCRA::sessionHex('414243')))
+        ->and(fn () => OCRA::sessionHex('FF'))
+        ->toThrow(InvalidArgumentException::class, 'valid UTF-8');
 });
 
 test('OCRA time verification supports explicit bounded drift and replay', function () {
     $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-T1M', OCRA_KEY_32);
-    $store = new InMemoryReplayStore();
+    $cache = CacheLayerState::memory();
     $otp = $ocra->generate('12345678', timestamp: 1060);
     $result = $ocra->verifyWithResult(
         $otp,
         '12345678',
         timestamp: 1000,
         timeWindow: new VerificationWindow(0, 1),
-        replayStore: $store,
+        cache: $cache,
         factorId: 'factor-v1',
         replayTtl: 120,
     );
@@ -126,7 +155,7 @@ test('OCRA time verification supports explicit bounded drift and replay', functi
             '12345678',
             timestamp: 1000,
             timeWindow: new VerificationWindow(0, 1),
-            replayStore: $store,
+            cache: $cache,
             factorId: 'factor-v1',
             replayTtl: 120,
         )->replayDetected)->toBeTrue()
@@ -171,4 +200,74 @@ test('OCRA suite parsing is authoritative', function () {
         ->and($suite->sessionLength)->toBe(64)
         ->and($suite->timeStepSeconds)->toBe(60)
         ->and(fn () => new OCRA('OCRA-1:HOTP-SHA256-10:QN08', OCRA_KEY_32))->toThrow(InvalidArgumentException::class);
+});
+
+test('concurrent counter OCRA verification accepts one request', function () {
+    $path = tempnam(sys_get_temp_dir(), 'otp-ocra-');
+    expect($path)->toBeString();
+    $suite = 'OCRA-1:HOTP-SHA256-8:C-QN08';
+    $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678', 4);
+    CacheLayerState::sqlite($path);
+
+    $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
+        $cache = CacheLayerState::sqlite($path);
+        $result = (new OCRA($suite, OCRA_KEY_32))->verifyWithResult(
+            $otp,
+            '12345678',
+            4,
+            cache: $cache,
+            factorId: 'factor-concurrent',
+        );
+
+        return $result->matched ? 1 : 0;
+    });
+    sort($results);
+
+    expect($results)->toBe([0, 1]);
+    unlink($path);
+});
+
+test('concurrent challenge OCRA verification accepts one request', function () {
+    $path = tempnam(sys_get_temp_dir(), 'otp-ocra-challenge-');
+    expect($path)->toBeString();
+    $suite = 'OCRA-1:HOTP-SHA256-8:QN08';
+    $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678');
+    CacheLayerState::sqlite($path);
+
+    $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
+        $cache = CacheLayerState::sqlite($path);
+        $result = (new OCRA($suite, OCRA_KEY_32))->verifyWithResult(
+            $otp,
+            '12345678',
+            cache: $cache,
+            factorId: 'factor-concurrent-challenge',
+            replayTtl: 300,
+        );
+
+        return $result->matched ? 1 : 0;
+    });
+    sort($results);
+
+    expect($results)->toBe([0, 1]);
+    unlink($path);
+});
+
+test('non-counter OCRA passes the application replay TTL to CacheLayer', function () {
+    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
+    $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
+    $cache->method('get')->willReturn(null);
+    $cache->expects($this->once())->method('set')->with(
+        $this->callback(static fn (string $key): bool => strlen($key) === 64),
+        1,
+        300,
+    )->willReturn(true);
+    $otp = $ocra->generate('12345678');
+
+    expect($ocra->verifyWithResult(
+        $otp,
+        '12345678',
+        cache: $cache,
+        factorId: 'factor-v1',
+        replayTtl: 300,
+    )->matched)->toBeTrue();
 });

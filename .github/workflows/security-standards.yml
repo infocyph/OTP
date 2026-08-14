@@ -18,7 +18,7 @@ jobs:
     with:
       php_versions: '["8.4","8.5"]'
       dependency_versions: '["prefer-lowest","prefer-stable"]'
-      php_extensions: ""
+      php_extensions: "redis"
       composer_flags: ""
       phpstan_memory_limit: "1G"
       psalm_threads: "1"
@@ -31,7 +31,7 @@ jobs:
       benchmark_baseline_file: ""
       benchmark_max_regression_percent: 2
       benchmark_stable_environment: false
-      enable_redis_service: false
+      enable_redis_service: true
       enable_valkey_service: false
       enable_memcached_service: false
       enable_postgres_service: false
