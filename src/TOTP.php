@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP;
 
-use Infocyph\OTP\Contracts\ReplayStoreInterface;
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
+use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Support\LabelHelper;
 use Infocyph\OTP\Support\OtpMath;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
@@ -23,8 +24,6 @@ final readonly class TOTP
     private const int MAX_FACTOR_ID_LENGTH = 190;
 
     private const int MAX_PERIOD = 86400;
-
-    private const string REPLAY_NAMESPACE = 'totp:last_timestep';
 
     private string $algorithm;
 
@@ -208,11 +207,11 @@ final readonly class TOTP
         string $otp,
         ?int $timestamp = null,
         ?VerificationWindow $window = null,
-        ?ReplayStoreInterface $replayStore = null,
+        ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
     ): VerificationResult {
         $window ??= new VerificationWindow();
-        self::assertReplayConfiguration($replayStore, $factorId);
+        self::assertReplayConfiguration($cache, $factorId);
         $currentStep = $this->getTimeStepFromTimestamp($timestamp ?? time());
         if (strlen($otp) !== $this->digits || !ctype_digit($otp)) {
             return VerificationResult::malformed();
@@ -223,9 +222,9 @@ final readonly class TOTP
             return VerificationResult::mismatch();
         }
 
-        if ($replayStore !== null && $factorId !== null) {
+        if ($cache !== null && $factorId !== null) {
             $ttl = $this->period * ($window->past + $window->future + 1);
-            if (!$replayStore->advance(self::REPLAY_NAMESPACE, $factorId, $match['step'], $ttl)) {
+            if (!$this->advanceReplayState($cache, $factorId, $match['step'], $ttl)) {
                 return VerificationResult::replay($match['step'], driftOffset: $match['offset']);
             }
         }
@@ -237,14 +236,31 @@ final readonly class TOTP
         );
     }
 
-    private static function assertReplayConfiguration(?ReplayStoreInterface $store, ?string $factorId): void
-    {
-        if (($store === null) !== ($factorId === null)) {
-            throw new InvalidArgumentException('Replay store and factor ID must be provided together.');
+    private static function assertReplayConfiguration(
+        ?AuthenticationStateCacheInterface $cache,
+        ?string $factorId,
+    ): void {
+        if (($cache === null) !== ($factorId === null)) {
+            throw new InvalidArgumentException('CacheLayer authentication state cache and factor ID must be provided together.');
         }
         if ($factorId !== null && ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH)) {
             throw new InvalidArgumentException('Factor IDs must contain between 1 and 190 bytes.');
         }
+        if ($cache !== null) {
+            CacheLock::assertSafe($cache);
+        }
+    }
+
+    private function advanceReplayState(
+        AuthenticationStateCacheInterface $cache,
+        string $factorId,
+        int $timeStep,
+        int $ttl,
+    ): bool {
+        $stateKey = hash('sha256', "infocyph:otp:totp:timestep:v1\0" . $factorId);
+        $lockKey = hash('sha256', "infocyph:otp:totp:lock:v1\0" . $factorId);
+
+        return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'TOTP replay');
     }
 
     /**

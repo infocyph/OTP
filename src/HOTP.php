@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP;
 
-use Infocyph\OTP\Contracts\ReplayStoreInterface;
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
+use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Support\LabelHelper;
 use Infocyph\OTP\Support\OtpMath;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
@@ -22,8 +23,6 @@ final readonly class HOTP
     private const int MAX_FACTOR_ID_LENGTH = 190;
 
     private const int MAX_LOOK_AHEAD = 100;
-
-    private const string REPLAY_NAMESPACE = 'hotp:last_counter';
 
     private string $algorithm;
 
@@ -184,10 +183,10 @@ final readonly class HOTP
         string $otp,
         int $counter,
         int $lookAhead = 0,
-        ?ReplayStoreInterface $replayStore = null,
+        ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
     ): VerificationResult {
-        self::assertVerificationConfiguration($counter, $lookAhead, $replayStore, $factorId);
+        self::assertVerificationConfiguration($counter, $lookAhead, $cache, $factorId);
         if (strlen($otp) !== $this->digits || !ctype_digit($otp)) {
             return VerificationResult::malformed();
         }
@@ -196,7 +195,11 @@ final readonly class HOTP
         if ($matchedCounter === null) {
             return VerificationResult::mismatch();
         }
-        if ($replayStore !== null && $factorId !== null && !$replayStore->advance(self::REPLAY_NAMESPACE, $factorId, $matchedCounter)) {
+        if (
+            $cache !== null
+            && $factorId !== null
+            && !$this->advanceReplayState($cache, $factorId, $matchedCounter)
+        ) {
             return VerificationResult::replay(matchedCounter: $matchedCounter);
         }
 
@@ -210,20 +213,25 @@ final readonly class HOTP
         );
     }
 
-    private static function assertReplayConfiguration(?ReplayStoreInterface $store, ?string $factorId): void
-    {
-        if (($store === null) !== ($factorId === null)) {
-            throw new InvalidArgumentException('Replay store and factor ID must be provided together.');
+    private static function assertReplayConfiguration(
+        ?AuthenticationStateCacheInterface $cache,
+        ?string $factorId,
+    ): void {
+        if (($cache === null) !== ($factorId === null)) {
+            throw new InvalidArgumentException('CacheLayer authentication state cache and factor ID must be provided together.');
         }
         if ($factorId !== null && ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH)) {
             throw new InvalidArgumentException('Factor IDs must contain between 1 and 190 bytes.');
+        }
+        if ($cache !== null) {
+            CacheLock::assertSafe($cache);
         }
     }
 
     private static function assertVerificationConfiguration(
         int $counter,
         int $lookAhead,
-        ?ReplayStoreInterface $replayStore,
+        ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
     ): void {
         if ($counter < 0 || $lookAhead < 0 || $lookAhead > self::MAX_LOOK_AHEAD) {
@@ -232,7 +240,18 @@ final readonly class HOTP
         if ($lookAhead > PHP_INT_MAX - $counter) {
             throw new InvalidArgumentException('Counter and look-ahead exceed the supported integer range.');
         }
-        self::assertReplayConfiguration($replayStore, $factorId);
+        self::assertReplayConfiguration($cache, $factorId);
+    }
+
+    private function advanceReplayState(
+        AuthenticationStateCacheInterface $cache,
+        string $factorId,
+        int $counter,
+    ): bool {
+        $stateKey = hash('sha256', "infocyph:otp:hotp:counter:v1\0" . $factorId);
+        $lockKey = hash('sha256', "infocyph:otp:hotp:lock:v1\0" . $factorId);
+
+        return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'HOTP replay');
     }
 
     private function findMatchingCounter(string $otp, int $counter, int $lookAhead): ?int

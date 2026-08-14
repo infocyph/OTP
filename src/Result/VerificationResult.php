@@ -62,8 +62,20 @@ final readonly class VerificationResult
         if (!in_array($reason, [VerificationReason::Matched, VerificationReason::Drifted, VerificationReason::Resynchronized], true)) {
             throw new InvalidArgumentException('Successful verification requires a successful reason.');
         }
-        if ($nextCounter !== null && ($matchedCounter === null || $nextCounter <= $matchedCounter)) {
-            throw new InvalidArgumentException('Next counter must be greater than the matched counter.');
+        if ($reason === VerificationReason::Matched && $driftOffset !== 0) {
+            throw new InvalidArgumentException('An exact match must have a zero drift offset.');
+        }
+        if ($reason === VerificationReason::Drifted && ($matchedTimestep === null || $matchedCounter !== null || $driftOffset === 0)) {
+            throw new InvalidArgumentException('A drifted match requires a timestep, no counter, and a non-zero offset.');
+        }
+        if ($reason === VerificationReason::Resynchronized && ($matchedCounter === null || $matchedTimestep !== null || $driftOffset <= 0)) {
+            throw new InvalidArgumentException('A resynchronized match requires a counter and a positive offset.');
+        }
+        $expectedNextCounter = $matchedCounter === null || $matchedCounter === PHP_INT_MAX
+            ? null
+            : $matchedCounter + 1;
+        if ($nextCounter !== $expectedNextCounter) {
+            throw new InvalidArgumentException('Next counter must be the immediate successor of the matched counter.');
         }
 
         return new self(

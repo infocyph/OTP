@@ -72,8 +72,9 @@ final class SecretUtility
     public static function requireStrongBase32(#[\SensitiveParameter] string $secret): string
     {
         $decoded = self::decodeBase32($secret);
-        if (strlen($decoded) < 16) {
-            throw new InvalidArgumentException('OTP factor secrets must contain at least 16 decoded bytes.');
+        $length = strlen($decoded);
+        if ($length < 16 || $length > 1024) {
+            throw new InvalidArgumentException('OTP factor secrets must contain between 16 and 1024 decoded bytes.');
         }
 
         return $decoded;

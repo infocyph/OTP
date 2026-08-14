@@ -100,10 +100,7 @@ final class LabelHelper
     {
         [$labelIssuer, $account] = explode(':', $decoded, 2);
         $labelIssuer = trim($labelIssuer);
-        $account = trim($account);
-        if ($account === '') {
-            throw new InvalidArgumentException('Provisioning account label cannot be empty.');
-        }
+        $account = self::normalizeAccountLabel($account);
 
         $labelIssuer = $labelIssuer !== '' ? self::normalizeIssuer($labelIssuer) : '';
         if ($labelIssuer !== '' && $queryIssuer !== null && $labelIssuer !== $queryIssuer) {

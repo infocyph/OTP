@@ -47,7 +47,7 @@ final class ProvisioningUriBuilder
         self::assertCounter($type, $counter);
         self::assertOcraSuite($type, $ocraSuite, $algorithm, $digits);
         $secret = SecretUtility::normalizeBase32($secret);
-        SecretUtility::decodeBase32($secret);
+        SecretUtility::requireStrongBase32($secret);
 
         $query = [
             'secret' => $secret,
@@ -106,7 +106,7 @@ final class ProvisioningUriBuilder
         ?string $qrSvg = null,
     ): EnrollmentPayload {
         $secret = SecretUtility::normalizeBase32($secret);
-        SecretUtility::decodeBase32($secret);
+        SecretUtility::requireStrongBase32($secret);
         $label = LabelHelper::normalizeAccountLabel($label);
         $issuer = LabelHelper::normalizeIssuer($issuer);
         $uri = self::build(

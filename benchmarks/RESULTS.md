@@ -1,34 +1,55 @@
-# Benchmark comparison
+# CacheLayer migration benchmark
 
 Recorded on 2026-08-14 with PHP 8.4.24, PHPBench 1.7.0, no Xdebug, and no
-OPcache. Both runs used 10 revolutions and 3 iterations. The baseline was the
-committed pre-redesign tree (`e5b896d`) in an isolated temporary checkout; the
-updated run used `composer ic:bench:quick`.
+OPcache. The release run used ``composer ic:bench:run`` and completed all 54
+subjects with zero failures. A supplementary quick run used 10 revolutions and
+3 iterations for repeatable, non-destructive subjects.
 
-These quick results are regression signals, not stable hardware-independent
-performance guarantees. Store implementations and persistence latency will
-dominate the in-memory timings in production.
+These are component microbenchmarks, not application-throughput or RPM claims.
+The in-memory CacheLayer backend and filesystem lock isolate library overhead;
+production Redis/database latency, persistence, contention, and failover must
+be measured in the deployment environment.
 
-| Shared subject | Before | After | Change |
-| --- | ---: | ---: | ---: |
-| Generic OTP issue | 4.640 µs | 2.506 µs | -46.0% |
-| Generic OTP verify | 2.333 µs | 1.394 µs | -40.2% |
-| Generic OTP malformed | 0.206 µs | 0.200 µs | -2.9% |
-| HOTP generate | 3.444 µs | 1.494 µs | -56.6% |
-| HOTP verify | 12.215 µs | 3.606 µs | -70.5% |
-| HOTP invalid | 15.758 µs | 6.994 µs | -55.6% |
-| OCRA generate | 6.606 µs | 6.612 µs | +0.1% |
-| OCRA verify | 19.648 µs | 14.858 µs | -24.4% |
-| OCRA invalid | 12.300 µs | 9.288 µs | -24.5% |
-| TOTP generate | 1.500 µs | 1.094 µs | -27.1% |
-| TOTP verify | 17.759 µs | 3.500 µs | -80.3% |
-| TOTP invalid | 13.500 µs | 5.094 µs | -62.3% |
-| TOTP malformed | 8.188 µs | 0.994 µs | -87.9% |
-| TOTP replay accepted | 17.604 µs | 4.659 µs | -73.5% |
-| TOTP replay rejected | 12.616 µs | 3.400 µs | -73.1% |
+## Corrected edge workloads
 
-The redesigned suite also records 32 additional subjects for algorithm,
-window/look-ahead, OCRA input mode, recovery-code, provisioning/QR, and secret
-utility coverage. OCRA generation is intentionally flat; its correctness fixes
-did not introduce a measurable regression in this quick run. QR rendering
-remains a separate millisecond-scale subject so it does not distort URI costs.
+The subjects below now measure the operation named: Generic OTP failed-attempt
+transitions use one revolution so setup creates a fresh finite-attempt record,
+HOTP look-ahead codes match at the final searched counter, and TOTP window
+codes match at the requested past/future edge. The timing modes are from the
+supplementary quick run except the destructive Generic OTP transition, which
+is from the full release run and deliberately uses one revolution.
+
+| Subject | Workload | Mode |
+| --- | --- | ---: |
+| Generic OTP failed attempt | Fresh valid record, wrong code, one decrement | 92.000 µs |
+| HOTP look-ahead 0 | Match counter 5 at exact position | 2.079 µs |
+| HOTP look-ahead 25 | Match counter 25 from counter 0 | 24.886 µs |
+| HOTP look-ahead 100 | Match counter 100 from counter 0 | 105.340 µs |
+| TOTP exact | Match current step | 2.194 µs |
+| TOTP past 5 | Match final past step | 5.636 µs |
+| TOTP past 50 | Match final past step | 37.450 µs |
+| TOTP future 5 | Match final future step | 6.242 µs |
+| TOTP future 50 | Match final future step | 41.345 µs |
+
+## Security-state diagnostics
+
+| Subject | Mode |
+| --- | ---: |
+| CacheLayer state set/get round trip | 11.794 µs |
+| CacheLayer lock acquire/release round trip | 7.288 µs |
+| Generic OTP generate/replace | 34.000 µs |
+| Generic OTP successful consume | 92.000 µs |
+| Generic OTP exhausted transition | 87.000 µs |
+| Generic OTP missing state | 21.000 µs |
+| HOTP monotonic first acceptance | 30.000 µs |
+| HOTP replay rejection | 56.000 µs |
+| TOTP replay first acceptance | 39.000 µs |
+| TOTP replay rejection | 69.000 µs |
+| OCRA challenge consumption | 76.000 µs |
+
+The stateful figures include authenticated CacheLayer payload handling and the
+binding/factor-scoped lock. The former in-memory OTP/replay stores performed
+direct array mutations and could not coordinate multiple workers or hosts, so
+these figures are not a like-for-like optimization regression. The full raw
+suite remains the authoritative release gate; this document highlights the
+security-sensitive and corrected worst-case subjects.

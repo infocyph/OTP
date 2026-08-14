@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP;
 
-use Infocyph\OTP\Contracts\ReplayStoreInterface;
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Result\VerificationResult;
+use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Support\LabelHelper;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
 use Infocyph\OTP\Support\SecretRotationPlanner;
@@ -22,10 +23,6 @@ use RuntimeException;
 final readonly class OCRA
 {
     private const int MAX_FACTOR_ID_LENGTH = 190;
-
-    private const string REPLAY_CHALLENGE_NAMESPACE = 'ocra:challenge';
-
-    private const string REPLAY_COUNTER_NAMESPACE = 'ocra:last_counter';
 
     private string $base32Secret;
 
@@ -57,7 +54,12 @@ final readonly class OCRA
             throw new InvalidArgumentException('Hexadecimal session input must be non-empty.');
         }
 
-        return self::hexToBytes($hex);
+        $session = self::hexToBytes($hex);
+        if (preg_match('//u', $session) !== 1) {
+            throw new InvalidArgumentException('Hexadecimal session input must decode to valid UTF-8.');
+        }
+
+        return $session;
     }
 
     public function generate(
@@ -267,7 +269,7 @@ final readonly class OCRA
         ?string $session = null,
         ?int $timestamp = null,
         ?VerificationWindow $timeWindow = null,
-        ?ReplayStoreInterface $replayStore = null,
+        ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
         ?int $replayTtl = null,
     ): VerificationResult {
@@ -279,25 +281,31 @@ final readonly class OCRA
             $session,
             $timestamp,
             $timeWindow,
-            $replayStore,
+            $cache,
             $factorId,
             $replayTtl,
         );
     }
 
     private static function assertReplayConfiguration(
-        ?ReplayStoreInterface $store,
+        ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
         ?int $ttl,
     ): void {
-        if (($store === null) !== ($factorId === null)) {
-            throw new InvalidArgumentException('Replay store and factor ID must be provided together.');
+        if (($cache === null) !== ($factorId === null)) {
+            throw new InvalidArgumentException('CacheLayer authentication state cache and factor ID must be provided together.');
         }
         if ($factorId !== null && ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH)) {
             throw new InvalidArgumentException('Factor IDs must contain between 1 and 190 bytes.');
         }
         if ($ttl !== null && $ttl < 1) {
             throw new InvalidArgumentException('OCRA replay TTL must be positive.');
+        }
+        if ($cache === null && $ttl !== null) {
+            throw new InvalidArgumentException('OCRA replay TTL requires CacheLayer replay protection.');
+        }
+        if ($cache !== null) {
+            CacheLock::assertSafe($cache);
         }
     }
 
@@ -348,6 +356,17 @@ final readonly class OCRA
         return pack('NN', ($value >> 32) & 0xFFFFFFFF, $value & 0xFFFFFFFF);
     }
 
+    private function advanceCounter(
+        AuthenticationStateCacheInterface $cache,
+        string $factorId,
+        int $counter,
+    ): bool {
+        $stateKey = hash('sha256', "infocyph:otp:ocra:counter:v1\0" . $factorId);
+        $lockKey = hash('sha256', "infocyph:otp:ocra:counter-lock:v1\0" . $factorId);
+
+        return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'OCRA counter');
+    }
+
     private function assertChallenge(string $challenge, bool $composite = false): void
     {
         $length = $composite ? 128 : $this->suite->challengeLength;
@@ -395,13 +414,19 @@ final readonly class OCRA
 
     private function assertVerificationWindow(
         VerificationWindow $window,
-        ?ReplayStoreInterface $replayStore,
+        ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
         ?int $replayTtl,
     ): void {
-        self::assertReplayConfiguration($replayStore, $factorId, $replayTtl);
+        self::assertReplayConfiguration($cache, $factorId, $replayTtl);
         if (!$this->suite->usesTime() && ($window->past !== 0 || $window->future !== 0)) {
             throw new InvalidArgumentException('OCRA time windows require a suite containing T.');
+        }
+        if ($cache !== null && $this->suite->counterEnabled && $replayTtl !== null) {
+            throw new InvalidArgumentException('Counter-based OCRA replay state must not expire.');
+        }
+        if ($cache !== null && !$this->suite->counterEnabled && $replayTtl === null) {
+            throw new InvalidArgumentException('Non-counter OCRA replay protection requires a positive replay TTL.');
         }
         if ($replayTtl === null || $this->suite->timeStepSeconds === null) {
             return;
@@ -476,6 +501,18 @@ final readonly class OCRA
         }
 
         return $first . $second;
+    }
+
+    private function consumeMessage(
+        AuthenticationStateCacheInterface $cache,
+        string $factorId,
+        string $message,
+        int $ttl,
+    ): bool {
+        $stateKey = hash('sha256', "infocyph:otp:ocra:message:v1\0" . $factorId . "\0" . $message);
+        $lockKey = hash('sha256', "infocyph:otp:ocra:message-lock:v1\0" . $factorId . "\0" . $message);
+
+        return CacheLock::consumeOnce($cache, $stateKey, $lockKey, $ttl, 'OCRA replay');
     }
 
     private function encodeChallenge(string $challenge): string
@@ -554,22 +591,17 @@ final readonly class OCRA
     }
 
     private function isReplay(
-        ReplayStoreInterface $store,
+        AuthenticationStateCacheInterface $cache,
         string $factorId,
         int $counter,
         string $message,
         ?int $ttl,
     ): bool {
         if ($this->suite->counterEnabled) {
-            return !$store->advance(self::REPLAY_COUNTER_NAMESPACE, $factorId, $counter);
+            return !$this->advanceCounter($cache, $factorId, $counter);
         }
 
-        return !$store->consumeOnce(
-            self::REPLAY_CHALLENGE_NAMESPACE,
-            $factorId,
-            hash('sha256', $message),
-            $ttl,
-        );
+        return !$this->consumeMessage($cache, $factorId, $message, $ttl ?? 0);
     }
 
     /**
@@ -659,14 +691,14 @@ final readonly class OCRA
         ?string $session,
         ?int $timestamp,
         ?VerificationWindow $timeWindow,
-        ?ReplayStoreInterface $replayStore = null,
+        ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
         ?int $replayTtl = null,
         bool $composite = false,
     ): VerificationResult {
         $window = $timeWindow ?? new VerificationWindow();
         $operation = $this->prepareOperation($challenge, $counter, $pin, $session, $timestamp, $composite);
-        $this->assertVerificationWindow($window, $replayStore, $factorId, $replayTtl);
+        $this->assertVerificationWindow($window, $cache, $factorId, $replayTtl);
         if (!$this->validOutputShape($otp)) {
             return VerificationResult::malformed();
         }
@@ -676,18 +708,28 @@ final readonly class OCRA
             return VerificationResult::mismatch();
         }
         if (
-            $replayStore !== null
+            $cache !== null
             && $factorId !== null
-            && $this->isReplay($replayStore, $factorId, $counter ?? 0, $match['message'], $replayTtl)
+            && $this->isReplay($cache, $factorId, $counter ?? 0, $match['message'], $replayTtl)
         ) {
             return VerificationResult::replay(matchedCounter: $counter, driftOffset: $match['offset']);
         }
 
+        if ($match['offset'] !== 0) {
+            return VerificationResult::success(
+                VerificationReason::Drifted,
+                matchedTimestep: intdiv(
+                    $timestamp ?? throw new RuntimeException('Missing OCRA timestamp.'),
+                    $this->suite->timeStepSeconds ?? throw new RuntimeException('Missing OCRA time step.'),
+                ) + $match['offset'],
+                driftOffset: $match['offset'],
+            );
+        }
+
         return VerificationResult::success(
-            $match['offset'] === 0 ? VerificationReason::Matched : VerificationReason::Drifted,
+            VerificationReason::Matched,
             matchedCounter: $counter,
             nextCounter: $counter !== null && $counter < PHP_INT_MAX ? $counter + 1 : null,
-            driftOffset: $match['offset'],
         );
     }
 }

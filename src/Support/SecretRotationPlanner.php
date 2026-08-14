@@ -6,6 +6,7 @@ namespace Infocyph\OTP\Support;
 
 use InvalidArgumentException;
 
+/** @internal */
 final class SecretRotationPlanner
 {
     /**

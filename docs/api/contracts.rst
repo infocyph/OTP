@@ -1,16 +1,92 @@
-Store contracts
+State contracts
 ===============
 
-``OtpStoreInterface``
-   Atomic issue/replace, verify-and-consume/decrement, and scoped delete for
-   Generic OTP.
+OTP state uses CacheLayer's public contracts directly:
 
-``ReplayStoreInterface``
-   Atomic consume-once and monotonic advance for TOTP, HOTP, and OCRA.
+.. code-block:: php
 
-``RecoveryCodeStoreInterface``
-   Atomic batch replacement and consumption that return committed state, plus
-   independent metadata lookup.
+   use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 
-Application implementations are public substitution boundaries. No contract
-permits a non-atomic fallback.
+``AuthenticationStateCacheInterface`` extends CacheLayer's normal cache contract
+with the effective fail-open, payload-integrity, authoritative-read, and
+cache-owned lock capabilities. Generic OTP, HOTP, TOTP, and OCRA do not expose
+an OTP-specific cache, lock wrapper, or replay adapter.
+
+For authentication calls, configure ``failOpen: false``, an ``integrityKey``, a
+single authoritative direct backend, and CacheLayer's corresponding lock. OTP
+validates these capabilities before touching state. A cache and factor ID are
+required together on optional replay-aware methods. See
+:doc:`../guides/storage` for backend examples and failure semantics.
+
+RecoveryCodeStoreInterface
+--------------------------
+
+.. code-block:: php
+
+   namespace Infocyph\OTP\Contracts;
+
+   use DateTimeImmutable;
+
+   interface RecoveryCodeStoreInterface
+   {
+       public function consume(
+           string $binding,
+           string $hashedCode,
+           DateTimeImmutable $usedAt,
+       ): array;
+
+       public function metadata(string $binding): array;
+
+       public function replace(
+           string $binding,
+           array $hashedCodes,
+           DateTimeImmutable $issuedAt,
+       ): array;
+   }
+
+``consume()`` returns:
+
+.. code-block:: php
+
+   [
+       'consumed' => true,
+       'total' => 10,
+       'remaining' => 9,
+       'lastUsedAt' => $usedAt,
+   ]
+
+The values must describe the state committed by the same mutation.
+``metadata()`` returns ``total``, ``remaining``, and ``lastUsedAt``, using
+zero/zero/null when no active batch exists. ``replace()`` atomically replaces the
+complete batch and returns committed metadata.
+
+All ``hashedCodes`` are unique lowercase HMAC-SHA-256 hex values. An
+implementation must reject or safely handle duplicates rather than silently
+reducing the batch. Plaintext codes and the HMAC key never cross the contract.
+
+Bundled implementation
+----------------------
+
+.. code-block:: php
+
+   use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
+
+``InMemoryRecoveryCodeStore`` is deterministic and process-local. Use it for unit
+tests or one-process development only. Production implementations must provide
+durable atomic replacement and consumption.
+
+Production requirements
+-----------------------
+
+A conforming recovery-code store documents:
+
+* transaction primitive and isolation level;
+* lock/conflict and deadlock-retry behavior;
+* authoritative writer/replica behavior;
+* unknown-commit handling;
+* identifier and digest collation;
+* retention, backup, deletion, and capacity policy; and
+* real multi-process concurrency test coverage.
+
+See :doc:`../guides/custom-stores` for a relational outline and complete test
+matrix.

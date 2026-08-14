@@ -9,6 +9,7 @@ use Infocyph\OTP\Contracts\RecoveryCodeStoreInterface;
 use Infocyph\OTP\Result\RecoveryCodeConsumptionResult;
 use Infocyph\OTP\Result\RecoveryCodeGenerationResult;
 use InvalidArgumentException;
+use RuntimeException;
 
 final readonly class RecoveryCodes
 {
@@ -48,11 +49,11 @@ final readonly class RecoveryCodes
             return $this->invalidResult($binding);
         }
 
-        $state = $this->store->consume(
+        $state = self::requireConsumptionState($this->store->consume(
             $binding,
             $this->digest($binding, $normalizedCode),
             new DateTimeImmutable(),
-        );
+        ));
 
         return new RecoveryCodeConsumptionResult(
             $state['consumed'],
@@ -103,7 +104,10 @@ final readonly class RecoveryCodes
             $hashedCodes[] = $this->digest($binding, $code);
         }
 
-        $state = $this->store->replace($binding, $hashedCodes, new DateTimeImmutable());
+        $state = self::requireMetadataState($this->store->replace($binding, $hashedCodes, new DateTimeImmutable()));
+        if ($state['total'] !== $count || $state['remaining'] !== $count || $state['lastUsedAt'] !== null) {
+            throw new RuntimeException('Recovery code store returned invalid replacement state.');
+        }
 
         return new RecoveryCodeGenerationResult(
             $plainCodes,
@@ -181,6 +185,43 @@ final readonly class RecoveryCodes
         return $code;
     }
 
+    /**
+     * @param array{consumed:mixed,total:mixed,remaining:mixed,lastUsedAt:mixed} $state
+     * @return array{consumed:bool,total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
+     */
+    private static function requireConsumptionState(array $state): array
+    {
+        $metadata = self::requireMetadataState($state);
+        if (!is_bool($state['consumed'] ?? null) || ($state['consumed'] && $metadata['lastUsedAt'] === null)) {
+            throw new RuntimeException('Recovery code store returned invalid consumption state.');
+        }
+
+        return ['consumed' => $state['consumed']] + $metadata;
+    }
+
+    /**
+     * @param array{total:mixed,remaining:mixed,lastUsedAt:mixed} $state
+     * @return array{total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
+     */
+    private static function requireMetadataState(array $state): array
+    {
+        $total = $state['total'] ?? null;
+        $remaining = $state['remaining'] ?? null;
+        $lastUsedAt = $state['lastUsedAt'] ?? null;
+        if (
+            !is_int($total)
+            || $total < 0
+            || !is_int($remaining)
+            || $remaining < 0
+            || $remaining > $total
+            || ($lastUsedAt !== null && !$lastUsedAt instanceof DateTimeImmutable)
+        ) {
+            throw new RuntimeException('Recovery code store returned invalid metadata state.');
+        }
+
+        return ['total' => $total, 'remaining' => $remaining, 'lastUsedAt' => $lastUsedAt];
+    }
+
     private function digest(string $binding, string $code): string
     {
         return hash_hmac('sha256', "recovery-code\0" . $binding . "\0" . $code, $this->key);
@@ -188,7 +229,7 @@ final readonly class RecoveryCodes
 
     private function invalidResult(string $binding): RecoveryCodeConsumptionResult
     {
-        $state = $this->store->metadata($binding);
+        $state = self::requireMetadataState($this->store->metadata($binding));
 
         return new RecoveryCodeConsumptionResult(
             false,
