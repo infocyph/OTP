@@ -16,5 +16,7 @@ final readonly class ParsedOtpAuthUri
         public ?int $period,
         public ?int $counter,
         public ?string $ocraSuite,
+        /** @var array<string, string> */
+        public array $additionalParameters = [],
     ) {}
 }

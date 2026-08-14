@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\Support;
 
+use Infocyph\OTP\ValueObjects\OcraSuite;
 use Infocyph\OTP\ValueObjects\ParsedOtpAuthUri;
 use InvalidArgumentException;
 
@@ -13,7 +14,7 @@ final class ProvisioningUriParser
 
     private const int MAX_URI_LENGTH = 4096;
 
-    public static function parse(string $uri): ParsedOtpAuthUri
+    public static function parse(#[\SensitiveParameter] string $uri): ParsedOtpAuthUri
     {
         if ($uri === '' || strlen($uri) > self::MAX_URI_LENGTH) {
             throw new InvalidArgumentException('Invalid otpauth URI length.');
@@ -36,14 +37,28 @@ final class ProvisioningUriParser
         $algorithm = $algorithmValue !== null ? AlgorithmValidator::normalize($algorithmValue) : 'sha1';
         $digitsValue = self::optionalNonNegativeIntQueryValue($query, 'digits');
         $digits = $digitsValue ?? 6;
-        if (($type === 'hotp' || $type === 'totp') && ($digits < 4 || $digits > 10)) {
-            throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 4 and 10.');
+        if (($type === 'hotp' || $type === 'totp') && ($digits < 6 || $digits > 9)) {
+            throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 6 and 9.');
         }
 
         $period = self::optionalPositiveIntQueryValue($query, 'period');
         $counter = self::optionalNonNegativeIntQueryValue($query, 'counter');
         $ocraSuite = self::optionalStringQueryValue($query, 'ocraSuite');
-        $digits = self::assertTypeParameters($type, $digits, $digitsValue !== null, $period, $counter, $ocraSuite);
+        [$algorithm, $digits] = self::assertTypeParameters(
+            $type,
+            $algorithm,
+            $algorithmValue !== null,
+            $digits,
+            $digitsValue !== null,
+            $period,
+            $counter,
+            $ocraSuite,
+        );
+        $period = $type === 'totp' ? ($period ?? 30) : null;
+        $additionalParameters = array_diff_key(
+            $query,
+            array_fill_keys(['secret', 'issuer', 'algorithm', 'digits', 'period', 'counter', 'ocraSuite'], true),
+        );
 
         return new ParsedOtpAuthUri(
             $type,
@@ -55,6 +70,7 @@ final class ProvisioningUriParser
             $period,
             $counter,
             $ocraSuite,
+            $additionalParameters,
         );
     }
 
@@ -77,13 +93,25 @@ final class ProvisioningUriParser
         return $digits;
     }
 
+    /**
+     * @param string $algorithm Effective normalized algorithm.
+     * @param bool $algorithmProvided Whether the URI explicitly supplied the algorithm.
+     * @param int $digits Effective output width.
+     * @param bool $digitsProvided Whether the URI explicitly supplied the width.
+     * @param ?int $period Parsed period, which OCRA forbids.
+     * @param ?int $counter Parsed counter, which OCRA forbids.
+     * @param ?string $ocraSuite Required OCRA suite.
+     * @return array{string,int}
+     */
     private static function assertOcraParameters(
+        string $algorithm,
+        bool $algorithmProvided,
         int $digits,
         bool $digitsProvided,
         ?int $period,
         ?int $counter,
         ?string $ocraSuite,
-    ): int {
+    ): array {
         if ($counter !== null) {
             throw new InvalidArgumentException('Only HOTP provisioning URIs may contain a counter.');
         }
@@ -94,16 +122,15 @@ final class ProvisioningUriParser
             throw new InvalidArgumentException('OCRA provisioning URIs require an OCRA suite.');
         }
 
-        if (!OcraSuiteValidator::isValid($ocraSuite)) {
-            throw new InvalidArgumentException('Invalid OCRA suite in provisioning URI.');
-        }
-
-        $suiteDigits = OcraSuiteValidator::digitCount($ocraSuite);
-        if ($digitsProvided && $digits !== $suiteDigits) {
+        $suite = OcraSuite::parse($ocraSuite);
+        if ($digitsProvided && $digits !== $suite->digits) {
             throw new InvalidArgumentException('OCRA digit count must match the provisioning suite.');
         }
+        if ($algorithmProvided && $algorithm !== $suite->algorithm) {
+            throw new InvalidArgumentException('OCRA algorithm must match the provisioning suite.');
+        }
 
-        return $suiteDigits;
+        return [$suite->algorithm, $suite->digits];
     }
 
     private static function assertTotpParameters(int $digits, ?int $counter, ?string $ocraSuite): int
@@ -118,18 +145,39 @@ final class ProvisioningUriParser
         return $digits;
     }
 
+    /**
+     * @param string $type Parsed otpauth factor type.
+     * @param string $algorithm Effective normalized algorithm.
+     * @param bool $algorithmProvided Whether the URI explicitly supplied the algorithm.
+     * @param int $digits Effective output width.
+     * @param bool $digitsProvided Whether the URI explicitly supplied the width.
+     * @param ?int $period Parsed TOTP period.
+     * @param ?int $counter Parsed HOTP counter.
+     * @param ?string $ocraSuite Parsed OCRA suite.
+     * @return array{string,int}
+     */
     private static function assertTypeParameters(
         string $type,
+        string $algorithm,
+        bool $algorithmProvided,
         int $digits,
         bool $digitsProvided,
         ?int $period,
         ?int $counter,
         ?string $ocraSuite,
-    ): int {
+    ): array {
         return match ($type) {
-            'hotp' => self::assertHotpParameters($digits, $period, $counter, $ocraSuite),
-            'totp' => self::assertTotpParameters($digits, $counter, $ocraSuite),
-            'ocra' => self::assertOcraParameters($digits, $digitsProvided, $period, $counter, $ocraSuite),
+            'hotp' => [$algorithm, self::assertHotpParameters($digits, $period, $counter, $ocraSuite)],
+            'totp' => [$algorithm, self::assertTotpParameters($digits, $counter, $ocraSuite)],
+            'ocra' => self::assertOcraParameters(
+                $algorithm,
+                $algorithmProvided,
+                $digits,
+                $digitsProvided,
+                $period,
+                $counter,
+                $ocraSuite,
+            ),
             default => throw new InvalidArgumentException('Unsupported otpauth type.'),
         };
     }
@@ -222,6 +270,20 @@ final class ProvisioningUriParser
             }
             if (isset($query[$key])) {
                 throw new InvalidArgumentException(sprintf('Duplicate otpauth query parameter "%s".', $key));
+            }
+
+            $canonicalReserved = [
+                'secret' => 'secret',
+                'issuer' => 'issuer',
+                'algorithm' => 'algorithm',
+                'digits' => 'digits',
+                'period' => 'period',
+                'counter' => 'counter',
+                'ocrasuite' => 'ocraSuite',
+            ];
+            $lowerKey = strtolower($key);
+            if (isset($canonicalReserved[$lowerKey]) && $key !== $canonicalReserved[$lowerKey]) {
+                throw new InvalidArgumentException(sprintf('Reserved otpauth query parameter "%s" has invalid casing.', $key));
             }
 
             $query[$key] = rawurldecode($encodedValue);

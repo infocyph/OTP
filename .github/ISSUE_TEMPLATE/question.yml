@@ -1,40 +1,56 @@
 name: Question
-description: Ask a usage or integration question
-title: "[Question]: "
+description: Ask about usage, behavior, integration or configuration
 labels:
   - question
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form for usage questions. For confirmed defects, use the bug report form.
+        Use this form for usage and integration questions. Use the bug form for reproducible incorrect behavior.
+
+        Do not report security vulnerabilities here. Follow `SECURITY.md` and use private vulnerability reporting.
+
   - type: textarea
-    id: context
+    id: goal
     attributes:
       label: What are you trying to do?
-      description: Describe your goal and expected outcome.
+      description: Describe the goal and expected outcome.
       placeholder: I want to...
     validations:
       required: true
+
   - type: textarea
     id: attempted
     attributes:
       label: What have you tried?
-      description: Include commands, config snippets, or links you already checked.
+      description: Include relevant code, commands, configuration, documentation or approaches already checked.
       placeholder: I tried...
     validations:
       required: true
+
+  - type: textarea
+    id: relevant_code
+    attributes:
+      label: Relevant code or configuration
+      description: Include a minimal sanitized example when applicable.
+      render: php
+
   - type: textarea
     id: output
     attributes:
-      label: Current output or behavior
-      description: Include relevant command output, logs, or errors.
+      label: Relevant output or errors
+      description: Include sanitized output only when it helps explain the question.
       render: shell
+
   - type: textarea
     id: environment
     attributes:
-      label: Environment details
-      description: PHP version, Composer version, OS, CI provider (if relevant).
-      placeholder: PHP 8.3, Composer 2.9, Ubuntu 24.04...
-    validations:
-      required: true
+      label: Environment
+      description: Include package, PHP, Composer, OS, extensions or CI details only when relevant.
+      placeholder: Package 2.4.1, PHP 8.4, Composer 2.9, Ubuntu 24.04...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add related links, screenshots or prior discussions.

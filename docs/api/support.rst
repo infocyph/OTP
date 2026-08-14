@@ -1,53 +1,12 @@
-Support Components
-==================
+Support API
+===========
 
-The support layer provides focused utilities instead of one large shared trait.
+``ProvisioningUriBuilder`` and ``ProvisioningUriParser`` implement bounded,
+strict URI construction and parsing. ``SecretUtility`` validates canonical
+Base32 syntax separately from protocol strength. ``SvgQrRenderer`` produces
+bounded SVG output. ``OcraSuite`` parses OCRA exactly once. ``VerificationWindow``
+represents bounded past/future drift.
 
-Available components
---------------------
-
-- ``Infocyph\OTP\Support\AlgorithmValidator``
-- ``Infocyph\OTP\Support\SecretUtility``
-- ``Infocyph\OTP\Support\LabelHelper``
-- ``Infocyph\OTP\Support\OtpMath``
-- ``Infocyph\OTP\Support\ProvisioningUriBuilder``
-- ``Infocyph\OTP\Support\ProvisioningUriParser``
-- ``Infocyph\OTP\Support\SvgQrRenderer``
-- ``Infocyph\OTP\Support\StepUp``
-
-Value objects
--------------
-
-- ``Infocyph\OTP\ValueObjects\VerificationWindow``
-- ``Infocyph\OTP\ValueObjects\ParsedOtpAuthUri``
-- ``Infocyph\OTP\ValueObjects\EnrollmentPayload``
-- ``Infocyph\OTP\ValueObjects\OcraSuite``
-- ``Infocyph\OTP\ValueObjects\DeviceEnrollment``
-- ``Infocyph\OTP\ValueObjects\SecretRotation``
-
-Notable helper responsibilities
--------------------------------
-
-``StepUp``
-~~~~~~~~~~
-
-Provides small policy helpers for “fresh OTP required” decisions:
-
-- ``requiresFreshOtp()``
-- ``verifiedWithin()``
-- ``ageInSeconds()``
-- ``assess()``
-
-``DeviceEnrollment``
-~~~~~~~~~~~~~~~~~~~~
-
-Provides a lightweight lifecycle model for factor enrollment records:
-
-- ``create()``
-- ``activate()``
-- ``revoke()``
-- ``rename()``
-- ``withSecretReference()``
-- ``isPendingActivation()``
-- ``isActive()``
-- ``isRevoked()``
+Algorithm validation, OTP math, label normalization, and rotation preparation
+are package support details and should not be treated as authentication workflow
+or persistence APIs.

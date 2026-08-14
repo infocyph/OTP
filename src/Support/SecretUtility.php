@@ -11,7 +11,7 @@ use Throwable;
 
 final class SecretUtility
 {
-    public static function decodeBase32(string $secret): string
+    public static function decodeBase32(#[\SensitiveParameter] string $secret): string
     {
         $normalized = self::normalizeBase32($secret);
 
@@ -32,16 +32,16 @@ final class SecretUtility
      * @param $bytes Secret byte length.
      * @throws Exception
      */
-    public static function generate(int $bytes = 64): string
+    public static function generate(int $bytes = 20): string
     {
-        if ($bytes < 10 || $bytes > 1024) {
-            throw new InvalidArgumentException('Secret byte length must be between 10 and 1024.');
+        if ($bytes < 16 || $bytes > 1024) {
+            throw new InvalidArgumentException('Secret byte length must be between 16 and 1024.');
         }
 
         return rtrim(Base32::encodeUpper(random_bytes($bytes)), '=');
     }
 
-    public static function isValidBase32(string $secret): bool
+    public static function isValidBase32(#[\SensitiveParameter] string $secret): bool
     {
         try {
             self::decodeBase32($secret);
@@ -52,7 +52,7 @@ final class SecretUtility
         }
     }
 
-    public static function normalizeBase32(string $secret): string
+    public static function normalizeBase32(#[\SensitiveParameter] string $secret): string
     {
         $secret = strtoupper(str_replace([' ', "\t", "\r", "\n", '-'], '', trim($secret)));
         $secret = rtrim($secret, '=');
@@ -67,5 +67,15 @@ final class SecretUtility
         }
 
         return $secret;
+    }
+
+    public static function requireStrongBase32(#[\SensitiveParameter] string $secret): string
+    {
+        $decoded = self::decodeBase32($secret);
+        if (strlen($decoded) < 16) {
+            throw new InvalidArgumentException('OTP factor secrets must contain at least 16 decoded bytes.');
+        }
+
+        return $decoded;
     }
 }

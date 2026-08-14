@@ -1,89 +1,18 @@
-Quick Start
-===========
+Quickstart
+==========
 
-TOTP
-----
-
-.. code-block:: php
-
-   <?php
-   use Infocyph\OTP\TOTP;
-
-   $secret = TOTP::generateSecret();
-
-   $totp = (new TOTP($secret))
-       ->setAlgorithm('sha256');
-
-   $otp = $totp->getOTP();
-   $isValid = $totp->verify($otp);
-
-Advanced TOTP verification:
+Start with the interoperable TOTP defaults:
 
 .. code-block:: php
 
-   <?php
-   use Infocyph\OTP\Stores\InMemoryReplayStore;
-   use Infocyph\OTP\ValueObjects\VerificationWindow;
+   $totp = new \Infocyph\OTP\TOTP(\Infocyph\OTP\TOTP::generateSecret());
+   $uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
+   $valid = $totp->verify($submittedCode);
 
-   $result = $totp->verifyWithWindow(
-       $otp,
-       timestamp: time(),
-       window: new VerificationWindow(past: 1, future: 1),
-       replayStore: new InMemoryReplayStore(),
-       binding: 'user-42',
-   );
-
-   $result->matched;
-   $result->matchedTimestep;
-   $result->driftOffset;
-   $result->replayDetected;
-
-HOTP
-----
+Use SHA-256 only when the target authenticator is known to support it:
 
 .. code-block:: php
 
-   <?php
-   use Infocyph\OTP\HOTP;
+   $totp = new \Infocyph\OTP\TOTP($secret, algorithm: 'sha256');
 
-   $secret = HOTP::generateSecret();
-   $hotp = (new HOTP($secret))
-       ->setCounter(3)
-       ->setAlgorithm('sha256');
-
-   $otp = $hotp->getOTP(346);
-   $isValid = $hotp->verify($otp, 346);
-
-Generic OTP
------------
-
-.. code-block:: php
-
-   <?php
-   use Infocyph\OTP\OTP;
-   use Psr\Cache\CacheItemPoolInterface;
-
-   /** @var CacheItemPoolInterface $cachePool */
-   $otp = new OTP(
-       digitCount: 6,
-       validUpto: 60,
-       retry: 3,
-       hashAlgorithm: 'sha256',
-       cacheAdapter: $cachePool,
-   );
-
-   $code = $otp->generate('signup:alice@example.com');
-   $otp->verify('signup:alice@example.com', $code);
-
-Recovery codes
---------------
-
-.. code-block:: php
-
-   <?php
-   use Infocyph\OTP\RecoveryCodes;
-   use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
-
-   $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore());
-   $generated = $codes->generate('user-42');
-   $consumed = $codes->consume('user-42', $generated->plainCodes[0]);
+Provisioning URIs and QR SVGs contain the factor secret. Never log them.

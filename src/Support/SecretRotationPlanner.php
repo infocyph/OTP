@@ -17,7 +17,9 @@ final class SecretRotationPlanner
      * @phpstan-return array{nextSecret:string,overlapUntil:?int}
      */
     public static function prepare(
+        #[\SensitiveParameter]
         string $currentSecret,
+        #[\SensitiveParameter]
         string $newSecret,
         ?int $gracePeriodInSeconds,
         ?int $now,
@@ -35,13 +37,14 @@ final class SecretRotationPlanner
         }
 
         $normalizedSecret = SecretUtility::normalizeBase32($newSecret);
+        SecretUtility::requireStrongBase32($normalizedSecret);
         if (hash_equals($currentSecret, $normalizedSecret)) {
             throw new InvalidArgumentException('Replacement secret must differ from the current secret.');
         }
 
         return [
             'nextSecret' => $normalizedSecret,
-            'overlapUntil' => $gracePeriodInSeconds !== null
+            'overlapUntil' => $gracePeriodInSeconds !== null && $gracePeriodInSeconds > 0
                 ? $rotationTimestamp + $gracePeriodInSeconds
                 : null,
         ];

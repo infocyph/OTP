@@ -15,17 +15,12 @@ root_doc = "index"
 extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.autosectionlabel",
-    "sphinx.ext.intersphinx",
     "sphinx_copybutton",
     "sphinx_design",
     "sphinxcontrib.phpdomain",
 ]
 autosectionlabel_prefix_document = True
 todo_include_todos = True
-
-intersphinx_mapping = {
-    "php": ("https://www.php.net/manual/en/", None),
-}
 
 html_theme = "sphinx_book_theme"
 html_theme_options = {

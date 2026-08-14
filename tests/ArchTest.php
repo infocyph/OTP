@@ -9,3 +9,7 @@ test('No debugging statements', function () {
 test('No echo statements', function () {
     expect(['echo', 'print'])->each->not()->toBeUsed();
 });
+
+test('No insecure randomness, serialization, or legacy digests', function () {
+    expect(['rand', 'mt_rand', 'uniqid', 'serialize', 'unserialize', 'md5'])->each->not()->toBeUsed();
+});

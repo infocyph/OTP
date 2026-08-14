@@ -6,11 +6,23 @@ namespace Infocyph\OTP\Contracts;
 
 interface ReplayStoreInterface
 {
-    public function getState(string $namespace, string $binding): int|string|null;
+    /**
+     * Atomically stores the value only when it is greater than the current value.
+     *
+     * @param string $namespace Package-owned replay-state namespace.
+     * @param string $factorId Factor and secret-generation identifier.
+     * @param int $value Monotonically increasing moving factor.
+     * @param ?int $ttl Optional state lifetime in seconds.
+     */
+    public function advance(string $namespace, string $factorId, int $value, ?int $ttl = null): bool;
 
-    public function hasConsumed(string $namespace, string $binding, string $token): bool;
-
-    public function markConsumed(string $namespace, string $binding, string $token, ?int $ttl = null): void;
-
-    public function setState(string $namespace, string $binding, int|string|null $value, ?int $ttl = null): void;
+    /**
+     * Atomically consumes a token exactly once.
+     *
+     * @param string $namespace Package-owned replay-state namespace.
+     * @param string $factorId Factor and secret-generation identifier.
+     * @param string $token Fixed-size replay token.
+     * @param ?int $ttl Optional token-retention lifetime in seconds.
+     */
+    public function consumeOnce(string $namespace, string $factorId, string $token, ?int $ttl = null): bool;
 }

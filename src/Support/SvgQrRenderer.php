@@ -12,7 +12,7 @@ use InvalidArgumentException;
 
 final class SvgQrRenderer
 {
-    public static function render(string $payload, int $imageSize = 200): string
+    public static function render(#[\SensitiveParameter] string $payload, int $imageSize = 200): string
     {
         if ($payload === '' || strlen($payload) > 4096) {
             throw new InvalidArgumentException('QR payload must contain between 1 and 4096 bytes.');
