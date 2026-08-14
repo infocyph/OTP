@@ -1,5 +1,13 @@
 # Infocyph OTP
 
+[![Security & Standards](https://github.com/infocyph/OTP/actions/workflows/security-standards.yml/badge.svg)](https://github.com/infocyph/OTP/actions/workflows/security-standards.yml)
+![Packagist Downloads](https://img.shields.io/packagist/dt/infocyph/OTP?color=green\&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2FOTP)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+![Packagist Version](https://img.shields.io/packagist/v/infocyph/OTP)
+![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/OTP/php)
+![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/OTP)
+[![Documentation](https://img.shields.io/badge/Documentation-OTP-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/OTP/)
+
 Framework-agnostic PHP 8.4 primitives for Generic OTP, HOTP (RFC 4226), TOTP
 (RFC 6238), OCRA (RFC 6287), recovery codes, provisioning URIs, SVG QR codes,
 secret rotation planning, and atomic replay boundaries.
