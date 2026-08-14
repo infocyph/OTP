@@ -4,267 +4,246 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP;
 
-use Exception;
 use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
+use Infocyph\OTP\Support\LabelHelper;
 use Infocyph\OTP\Support\OtpMath;
-use Infocyph\OTP\Support\ReplayProtection;
+use Infocyph\OTP\Support\ProvisioningUriBuilder;
 use Infocyph\OTP\Support\SecretRotationPlanner;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\Support\SvgQrRenderer;
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
 use Infocyph\OTP\ValueObjects\SecretRotation;
+use InvalidArgumentException;
 
-final class HOTP extends AbstractOtpAuthenticator
+final readonly class HOTP
 {
+    private const int MAX_FACTOR_ID_LENGTH = 190;
+
     private const int MAX_LOOK_AHEAD = 100;
 
-    private readonly string $binarySecret;
+    private const string REPLAY_NAMESPACE = 'hotp:last_counter';
 
-    private readonly string $secret;
+    private string $algorithm;
 
-    private string $algorithm = 'sha1';
+    private string $binarySecret;
 
-    private int $counter = 0;
+    private string $secret;
 
     public function __construct(
+        #[\SensitiveParameter]
         string $secret,
-        private readonly int $digitCount = 6,
+        private int $digits = 6,
+        string $algorithm = 'sha1',
     ) {
-        if ($digitCount < 4 || $digitCount > 10) {
-            throw new \InvalidArgumentException('Digit count must be between 4 and 10.');
+        if ($digits < 6 || $digits > 9) {
+            throw new InvalidArgumentException('HOTP digit count must be between 6 and 9.');
         }
 
         $this->secret = SecretUtility::normalizeBase32($secret);
-        $this->binarySecret = SecretUtility::decodeBase32($this->secret);
+        $this->binarySecret = SecretUtility::requireStrongBase32($this->secret);
+        $this->algorithm = AlgorithmValidator::normalize($algorithm);
     }
 
-    /**
-     * @param $bytes Secret byte length.
-     * @throws Exception
-     */
-    public static function generateSecret(int $bytes = 64): string
+    public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
     }
 
+    public function generate(int $counter): string
+    {
+        return OtpMath::hotpFromBinary($this->binarySecret, $counter, $this->digits, $this->algorithm);
+    }
+
     /**
-     * @param $label Account label.
-     * @param $issuer Issuer name.
-     * @param $include Optional provisioning flags.
-     * @param $additionalParameters Additional query parameters.
-     * @param $withQrSvg Whether to render QR SVG.
-     * @param $imageSize QR image size.
-     * @phpstan-param list<string> $include
-     * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @param string $label Account label without an issuer prefix.
+     * @param string $issuer Issuer name; colons are not allowed.
+     * @param int $initialCounter Initial non-negative HOTP counter.
+     * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @param bool $withQrSvg Whether to render the same URI as an SVG QR code.
+     * @param int $imageSize QR image width and height in pixels.
      */
     public function getEnrollmentPayload(
         string $label,
         string $issuer,
-        array $include = ['algorithm', 'digits', 'counter'],
+        int $initialCounter = 0,
         array $additionalParameters = [],
         bool $withQrSvg = false,
         int $imageSize = 200,
     ): EnrollmentPayload {
-        $uri = $this->getProvisioningUri($label, $issuer, $include, $additionalParameters);
+        $uri = $this->getProvisioningUri($label, $issuer, $initialCounter, $additionalParameters);
 
-        return $this->buildEnrollmentPayload(
-            'hotp',
+        return new EnrollmentPayload(
             $this->secret,
-            $label,
-            $issuer,
-            $include,
-            $additionalParameters,
-            $this->algorithm,
-            $this->digitCount,
-            null,
-            $this->counter,
-            $withQrSvg,
-            $imageSize,
             $uri,
+            LabelHelper::normalizeIssuer($issuer),
+            LabelHelper::normalizeAccountLabel($label),
+            $withQrSvg ? SvgQrRenderer::render($uri, $imageSize) : null,
         );
     }
 
-    public function getOTP(int $counter): string
-    {
-        return OtpMath::hotpFromBinary($this->binarySecret, $counter, $this->digitCount, $this->algorithm);
-    }
-
     /**
-     * @param $label Account label.
-     * @param $issuer Issuer name.
-     * @param $include Optional provisioning flags.
-     * @param $additionalParameters Additional query parameters.
-     * @phpstan-param list<string> $include
-     * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @param string $label Account label without an issuer prefix.
+     * @param string $issuer Issuer name; colons are not allowed.
+     * @param int $initialCounter Initial non-negative HOTP counter.
+     * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      */
     public function getProvisioningUri(
         string $label,
         string $issuer,
-        array $include = ['algorithm', 'digits', 'counter'],
+        int $initialCounter = 0,
         array $additionalParameters = [],
     ): string {
-        return $this->buildProvisioningUri(
+        return ProvisioningUriBuilder::build(
             'hotp',
             $this->secret,
             $label,
             $issuer,
-            $include,
+            [
+                'algorithm' => $this->algorithm !== 'sha1',
+                'digits' => $this->digits !== 6,
+                'counter' => true,
+            ],
             $additionalParameters,
             $this->algorithm,
-            $this->digitCount,
+            $this->digits,
             null,
-            $this->counter,
+            $initialCounter,
         );
     }
 
     /**
-     * @param $label Account label.
-     * @param $issuer Issuer name.
-     * @param $include Optional provisioning flags.
-     * @param $additionalParameters Additional query parameters.
-     * @param $imageSize QR image size.
-     * @phpstan-param list<string> $include
-     * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @param string $label Account label without an issuer prefix.
+     * @param string $issuer Issuer name; colons are not allowed.
+     * @param int $initialCounter Initial non-negative HOTP counter.
+     * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @param int $imageSize QR image width and height in pixels.
      */
     public function getProvisioningUriQR(
         string $label,
         string $issuer,
-        array $include = ['algorithm', 'digits', 'counter'],
+        int $initialCounter = 0,
         array $additionalParameters = [],
         int $imageSize = 200,
     ): string {
         return SvgQrRenderer::render(
-            $this->getProvisioningUri($label, $issuer, $include, $additionalParameters),
+            $this->getProvisioningUri($label, $issuer, $initialCounter, $additionalParameters),
             $imageSize,
         );
     }
 
     /**
-     * @param $newSecret Replacement Base32 secret.
-     * @param $label Account label.
-     * @param $issuer Issuer name.
-     * @param $gracePeriodInSeconds Optional overlap duration.
-     * @param $now Current timestamp override.
-     * @param $include Optional provisioning flags.
-     * @param $additionalParameters Additional query parameters.
-     * @param $withQrSvg Whether to render QR SVG.
-     * @param $imageSize QR image size.
-     * @phpstan-param list<string> $include
-     * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @param string $newSecret Canonical strong Base32 replacement secret.
+     * @param string $label Account label without an issuer prefix.
+     * @param string $issuer Issuer name; colons are not allowed.
+     * @param int $initialCounter Initial counter for the replacement secret.
+     * @param ?int $gracePeriodInSeconds Positive overlap duration; null or zero cuts over immediately.
+     * @param ?int $now Optional deterministic Unix timestamp.
+     * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
+     * @param int $imageSize QR image width and height in pixels.
      */
-    public function planSecretRotation(
+    public function planRotation(
+        #[\SensitiveParameter]
         string $newSecret,
         string $label,
         string $issuer,
+        int $initialCounter = 0,
         ?int $gracePeriodInSeconds = null,
         ?int $now = null,
-        array $include = ['algorithm', 'digits', 'counter'],
         array $additionalParameters = [],
         bool $withQrSvg = false,
         int $imageSize = 200,
     ): SecretRotation {
         $rotation = SecretRotationPlanner::prepare($this->secret, $newSecret, $gracePeriodInSeconds, $now);
-        $next = new self($rotation['nextSecret'], $this->digitCount);
-        $next->setAlgorithm($this->algorithm);
-        $next->setCounter($this->counter);
+        $next = new self($rotation['nextSecret'], $this->digits, $this->algorithm);
 
         return new SecretRotation(
             $this->secret,
             $rotation['nextSecret'],
             $rotation['overlapUntil'] !== null ? new \DateTimeImmutable()->setTimestamp($rotation['overlapUntil']) : null,
-            $next->getEnrollmentPayload($label, $issuer, $include, $additionalParameters, $withQrSvg, $imageSize),
+            $next->getEnrollmentPayload(
+                $label,
+                $issuer,
+                $initialCounter,
+                $additionalParameters,
+                $withQrSvg,
+                $imageSize,
+            ),
         );
     }
 
-    public function setAlgorithm(string $algorithm): static
-    {
-        $this->algorithm = AlgorithmValidator::normalize($algorithm);
-
-        return $this;
-    }
-
-    public function setCounter(int $counter): static
-    {
-        if ($counter < 0) {
-            throw new \InvalidArgumentException('Counter must be non-negative.');
-        }
-
-        $this->counter = $counter;
-
-        return $this;
-    }
-
-    public function verify(string $otp, int $counter, int $lookAhead = 0): bool
+    public function verify(#[\SensitiveParameter] string $otp, int $counter, int $lookAhead = 0): bool
     {
         return $this->verifyWithResult($otp, $counter, $lookAhead)->matched;
     }
 
     public function verifyWithResult(
+        #[\SensitiveParameter]
         string $otp,
         int $counter,
         int $lookAhead = 0,
         ?ReplayStoreInterface $replayStore = null,
-        ?string $binding = null,
+        ?string $factorId = null,
     ): VerificationResult {
-        if (!$this->isValidOtp($otp, $this->digitCount)) {
-            return new VerificationResult(false, 'malformed');
+        self::assertVerificationConfiguration($counter, $lookAhead, $replayStore, $factorId);
+        if (strlen($otp) !== $this->digits || !ctype_digit($otp)) {
+            return VerificationResult::malformed();
         }
-        self::assertVerificationRange($counter, $lookAhead);
-        $this->assertReplayBinding($replayStore, $binding);
 
         $matchedCounter = $this->findMatchingCounter($otp, $counter, $lookAhead);
         if ($matchedCounter === null) {
-            return new VerificationResult(false, 'mismatch');
+            return VerificationResult::mismatch();
         }
-
-        if (
-            $replayStore !== null
-            && $binding !== null
-            && $this->isReplay($replayStore, $binding, $matchedCounter)
-        ) {
-            return new VerificationResult(false, 'replay', matchedCounter: $matchedCounter, replayDetected: true);
+        if ($replayStore !== null && $factorId !== null && !$replayStore->advance(self::REPLAY_NAMESPACE, $factorId, $matchedCounter)) {
+            return VerificationResult::replay(matchedCounter: $matchedCounter);
         }
 
         $offset = $matchedCounter - $counter;
 
-        return new VerificationResult(
-            true,
-            $offset === 0 ? 'matched' : 'resynchronized',
+        return VerificationResult::success(
+            $offset === 0 ? VerificationReason::Matched : VerificationReason::Resynchronized,
             matchedCounter: $matchedCounter,
+            nextCounter: $matchedCounter < PHP_INT_MAX ? $matchedCounter + 1 : null,
             driftOffset: $offset,
-            verifiedAt: new \DateTimeImmutable(),
         );
     }
 
-    private static function assertVerificationRange(int $counter, int $lookAhead): void
+    private static function assertReplayConfiguration(?ReplayStoreInterface $store, ?string $factorId): void
     {
+        if (($store === null) !== ($factorId === null)) {
+            throw new InvalidArgumentException('Replay store and factor ID must be provided together.');
+        }
+        if ($factorId !== null && ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH)) {
+            throw new InvalidArgumentException('Factor IDs must contain between 1 and 190 bytes.');
+        }
+    }
+
+    private static function assertVerificationConfiguration(
+        int $counter,
+        int $lookAhead,
+        ?ReplayStoreInterface $replayStore,
+        ?string $factorId,
+    ): void {
         if ($counter < 0 || $lookAhead < 0 || $lookAhead > self::MAX_LOOK_AHEAD) {
-            throw new \InvalidArgumentException('Counter must be non-negative and look-ahead may not exceed 100.');
+            throw new InvalidArgumentException('Counter must be non-negative and look-ahead may not exceed 100.');
         }
         if ($lookAhead > PHP_INT_MAX - $counter) {
-            throw new \InvalidArgumentException('Counter and look-ahead window exceed the supported integer range.');
+            throw new InvalidArgumentException('Counter and look-ahead exceed the supported integer range.');
         }
+        self::assertReplayConfiguration($replayStore, $factorId);
     }
 
     private function findMatchingCounter(string $otp, int $counter, int $lookAhead): ?int
     {
         for ($offset = 0; $offset <= $lookAhead; $offset++) {
-            $matchedCounter = $counter + $offset;
-            if (hash_equals($this->getOTP($matchedCounter), $otp)) {
-                return $matchedCounter;
+            $candidate = $counter + $offset;
+            if (hash_equals($this->generate($candidate), $otp)) {
+                return $candidate;
             }
         }
 
         return null;
-    }
-
-    private function isReplay(
-        ReplayStoreInterface $replayStore,
-        string $binding,
-        int $matchedCounter,
-    ): bool {
-        return !ReplayProtection::advance($replayStore, 'hotp:last_counter', $binding, $matchedCounter);
     }
 }

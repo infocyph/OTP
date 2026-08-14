@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\Stores;
 
-use Infocyph\OTP\Contracts\AtomicReplayStoreInterface;
+use Infocyph\OTP\Contracts\ReplayStoreInterface;
 use InvalidArgumentException;
 
-final class InMemoryReplayStore implements AtomicReplayStoreInterface
+/** Process-local deterministic store for tests and local development only. */
+final class InMemoryReplayStore implements ReplayStoreInterface
 {
     /**
      * @var array<string, array<string, array<string, ?int>>>
@@ -15,80 +16,45 @@ final class InMemoryReplayStore implements AtomicReplayStoreInterface
     private array $consumed = [];
 
     /**
-     * @var array<string, array<string, array{value:int|string|null,expiresAt:?int}>>
+     * @var array<string, array<string, array{value:int,expiresAt:?int}>>
      */
     private array $state = [];
 
-    public function advance(string $namespace, string $binding, int $value, ?int $ttl = null): bool
+    public function advance(string $namespace, string $factorId, int $value, ?int $ttl = null): bool
     {
         self::assertTtl($ttl);
-        $current = $this->getState($namespace, $binding);
-        if (is_int($current) && $value <= $current) {
+        $now = time();
+        $entry = $this->state[$namespace][$factorId] ?? null;
+        if ($entry !== null && $entry['expiresAt'] !== null && $entry['expiresAt'] <= $now) {
+            unset($this->state[$namespace][$factorId]);
+            $entry = null;
+        }
+        if ($entry !== null && $value <= $entry['value']) {
             return false;
         }
 
-        $this->setState($namespace, $binding, $value, $ttl);
-
-        return true;
-    }
-
-    public function consumeOnce(string $namespace, string $binding, string $token, ?int $ttl = null): bool
-    {
-        self::assertTtl($ttl);
-        if ($this->hasConsumed($namespace, $binding, $token)) {
-            return false;
-        }
-
-        $this->markConsumed($namespace, $binding, $token, $ttl);
-
-        return true;
-    }
-
-    public function getState(string $namespace, string $binding): int|string|null
-    {
-        if (!isset($this->state[$namespace][$binding])) {
-            return null;
-        }
-
-        $entry = $this->state[$namespace][$binding];
-        if ($entry['expiresAt'] !== null && $entry['expiresAt'] <= time()) {
-            unset($this->state[$namespace][$binding]);
-
-            return null;
-        }
-
-        return $entry['value'];
-    }
-
-    public function hasConsumed(string $namespace, string $binding, string $token): bool
-    {
-        if (!isset($this->consumed[$namespace][$binding]) || !array_key_exists($token, $this->consumed[$namespace][$binding])) {
-            return false;
-        }
-
-        $expiresAt = $this->consumed[$namespace][$binding][$token];
-        if ($expiresAt !== null && $expiresAt <= time()) {
-            unset($this->consumed[$namespace][$binding][$token]);
-
-            return false;
-        }
-
-        return true;
-    }
-
-    public function markConsumed(string $namespace, string $binding, string $token, ?int $ttl = null): void
-    {
-        self::assertTtl($ttl);
-        $this->consumed[$namespace][$binding][$token] = $ttl !== null ? time() + $ttl : null;
-    }
-
-    public function setState(string $namespace, string $binding, int|string|null $value, ?int $ttl = null): void
-    {
-        self::assertTtl($ttl);
-        $this->state[$namespace][$binding] = [
+        $this->state[$namespace][$factorId] = [
             'value' => $value,
-            'expiresAt' => $ttl !== null ? time() + $ttl : null,
+            'expiresAt' => $ttl !== null ? $now + $ttl : null,
         ];
+
+        return true;
+    }
+
+    public function consumeOnce(string $namespace, string $factorId, string $token, ?int $ttl = null): bool
+    {
+        self::assertTtl($ttl);
+        $now = time();
+        if (isset($this->consumed[$namespace][$factorId]) && array_key_exists($token, $this->consumed[$namespace][$factorId])) {
+            $expiresAt = $this->consumed[$namespace][$factorId][$token];
+            if ($expiresAt === null || $expiresAt > $now) {
+                return false;
+            }
+        }
+
+        $this->consumed[$namespace][$factorId][$token] = $ttl !== null ? $now + $ttl : null;
+
+        return true;
     }
 
     private static function assertTtl(?int $ttl): void

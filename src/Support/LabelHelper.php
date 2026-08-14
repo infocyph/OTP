@@ -12,31 +12,37 @@ final class LabelHelper
 
     public static function formatLabel(string $label, ?string $issuer = null): string
     {
-        $label = trim($label);
-        self::assertText($label, 'Label');
+        $label = self::normalizeAccountLabel($label);
 
         if ($issuer === null || $issuer === '') {
             return $label;
         }
 
         $normalizedIssuer = self::normalizeIssuer($issuer);
-        $prefix = $normalizedIssuer . ':';
-        if (str_starts_with($label, $prefix)) {
-            return $label;
+        $formatted = $normalizedIssuer . ':' . $label;
+        self::assertText($formatted, 'Formatted provisioning label');
+
+        return $formatted;
+    }
+
+    public static function normalizeAccountLabel(string $label): string
+    {
+        $label = trim($label);
+        self::assertText($label, 'Label');
+        if (str_contains($label, ':')) {
+            throw new InvalidArgumentException('Account labels cannot contain a colon.');
         }
 
-        $parts = explode(':', $label, 2);
-        if (count($parts) === 2 && trim($parts[0]) === $normalizedIssuer) {
-            return $normalizedIssuer . ':' . $parts[1];
-        }
-
-        return $prefix . $label;
+        return $label;
     }
 
     public static function normalizeIssuer(string $issuer): string
     {
         $issuer = trim($issuer);
         self::assertText($issuer, 'Issuer');
+        if (str_contains($issuer, ':')) {
+            throw new InvalidArgumentException('Issuer names cannot contain a colon.');
+        }
 
         return preg_replace('/\s+/', ' ', $issuer) ?? $issuer;
     }

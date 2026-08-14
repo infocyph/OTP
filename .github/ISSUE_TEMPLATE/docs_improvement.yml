@@ -1,34 +1,58 @@
-name: Docs improvement
-description: Report missing, unclear, or incorrect documentation
-title: "[Docs]: "
+name: Documentation improvement
+description: Report missing, outdated, unclear or incorrect documentation
 labels:
   - documentation
 body:
-  - type: textarea
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: Documentation problem
+      options:
+        - Incorrect
+        - Outdated
+        - Missing
+        - Unclear
+        - Example needed
+        - Other
+    validations:
+      required: true
+
+  - type: input
     id: location
     attributes:
       label: Documentation location
-      description: File path or URL.
-      placeholder: README.md section "Quick Start"
+      description: Provide the file path, section, symbol or URL.
+      placeholder: README.md — Quick Start
     validations:
       required: true
+
   - type: textarea
-    id: issue
+    id: problem
     attributes:
-      label: What is unclear or incorrect?
-      placeholder: This section says...
+      label: Problem
+      description: Explain what is missing, unclear, outdated or incorrect.
+      placeholder: The current documentation says or omits...
     validations:
       required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected documentation
+      description: Describe what readers should be able to understand or accomplish.
+      placeholder: Readers should be able to...
+    validations:
+      required: true
+
   - type: textarea
     id: suggestion
     attributes:
       label: Suggested improvement
-      description: Propose revised wording, structure, or examples.
-      placeholder: It would be clearer if...
-    validations:
-      required: true
+      description: Optionally propose wording, structure, examples or references.
+      placeholder: It may be clearer to...
+
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Related links, screenshots, or prior discussions.
+      description: Add related links, screenshots, discussions or examples.

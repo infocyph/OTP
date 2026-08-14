@@ -2,48 +2,51 @@
 
 ## Supported Versions
 
-The project currently supports security updates for the latest release.
+Security updates are provided for the latest stable release.
+
+Reports affecting older versions are welcome, but fixes may be released only for the latest version. Users should upgrade before confirming whether an issue remains present.
 
 ## Reporting a Vulnerability
 
-Please report vulnerabilities privately.
+Please report suspected vulnerabilities privately.
 
-1. Use GitHub private vulnerability reporting for this repository (`Security` -> `Advisories` -> `Report a vulnerability`).
-2. If private reporting is unavailable, contact maintainers through a private channel.
-3. Do not open a public issue for security vulnerabilities.
+1. Go to `Security` → `Advisories` → `Report a vulnerability`.
+2. If private vulnerability reporting is unavailable, open a public issue requesting a private security contact.
+3. Do not include vulnerability details in that issue or disclose them through public issues, discussions, pull requests or other public channels.
 
-Please include:
+Include when available:
 
-- Affected package version(s)
-- PHP version and runtime environment
-- Reproduction steps or proof of concept
-- Impact assessment (confidentiality/integrity/availability)
-- Any known workaround
+* Affected package version and component
+* PHP version and runtime environment
+* Relevant extensions or dependencies
+* Reproduction steps or a minimal proof of concept
+* Exploitation requirements and potential impact
+* Known workarounds or suggested remediation
 
-## Response Process
+## Response and Disclosure
 
-- Initial acknowledgment: best effort, typically within a few days
-- Triage: best effort, based on maintainer availability
-- Fix and release timeline depends on severity and exploitability
+The maintainers will make a best-effort attempt to:
 
-If a report is accepted, a patched release will be prepared and published. Credit will be provided unless you request otherwise.
+* Acknowledge the report within five business days
+* Validate the report and assess its severity
+* Coordinate remediation and responsible disclosure
+* Publish a fix, mitigation or security advisory when appropriate
 
-## Protected by PHPForge
+Resolution timelines depend on severity, exploitability, complexity and maintainer availability. These targets are not a service-level agreement.
 
-This project is protected by [PHPForge](https://github.com/infocyph/PHPForge), an automated quality and security tooling layer for Infocyph PHP projects.
+Please coordinate public disclosure with the maintainers so affected users have a reasonable opportunity to update or apply mitigations.
 
-PHPForge helps keep the project reliable by running checks for:
+Confirmed reporters will receive credit unless they request anonymity.
 
-- Code style and standards
-- Tests and syntax validation
-- Static analysis and type safety
-- Security and taint analysis
-- Dependency vulnerability audit
-- Architecture boundary validation
-- Duplicate-code detection
-- API snapshot and comment-policy checks
-- Refactor safety checks
-- Benchmark and release-readiness checks
-- Git hooks and CI workflow protection
+## PHPForge Security Controls
 
-These automated gates strengthen code quality, reduce security risk and help prevent regressions before merge or release.
+This project uses [PHPForge](https://github.com/infocyph/PHPForge) to automate security and quality checks, including:
+
+* Test and syntax validation
+* Static and taint analysis
+* Dependency vulnerability auditing
+* Architecture validation
+* Release-readiness checks
+* Git hooks and CI enforcement
+
+These controls help reduce security risk and prevent regressions, but they do not guarantee the absence of vulnerabilities or replace manual review and responsible reporting.

@@ -1,48 +1,101 @@
 name: CI failure
-description: Report a reproducible CI or workflow failure
-title: "[CI]: "
+description: Report a reproducible PHPForge or workflow failure
 labels:
   - ci
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form when CI fails unexpectedly and can be reproduced.
+        Use this form when a CI workflow or PHPForge check fails unexpectedly.
+
+        Do not report security vulnerabilities here. Follow `SECURITY.md` and use private vulnerability reporting.
+
   - type: input
     id: workflow
     attributes:
-      label: Workflow/job name
-      placeholder: security-standards / phpforge
+      label: Workflow and job
+      placeholder: e.g. CI / PHP 8.4
     validations:
       required: true
+
   - type: input
     id: run_url
     attributes:
       label: Failing run URL
+      description: Provide a link when the run is accessible.
       placeholder: https://github.com/OWNER/REPOSITORY/actions/runs/...
-    validations:
-      required: true
+
   - type: textarea
-    id: command
+    id: failing_step
     attributes:
-      label: Failing command
-      description: Exact command or step that failed.
+      label: Failing step or command
+      description: Include the exact workflow step or command that failed.
       placeholder: composer ic:ci
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Error output
-      description: Paste the relevant error section.
       render: shell
     validations:
       required: true
+
   - type: textarea
-    id: local_check
+    id: logs
     attributes:
-      label: Local reproduction
-      description: Can you reproduce locally? If yes, include steps.
-      placeholder: Yes/No + details
+      label: Relevant error output
+      description: Paste the smallest useful, sanitized error section.
+      render: shell
     validations:
       required: true
+
+  - type: dropdown
+    id: local_result
+    attributes:
+      label: Local reproduction
+      description: Does the same failure occur when running the relevant command locally?
+      options:
+        - Yes
+        - No
+        - Not attempted
+    validations:
+      required: true
+
+  - type: textarea
+    id: local_details
+    attributes:
+      label: Local reproduction details
+      description: Include the command, result and any differences from CI.
+      placeholder: composer ic:ci fails locally with the same error...
+
+  - type: input
+    id: php_version
+    attributes:
+      label: PHP version
+      placeholder: e.g. 8.4.13
+    validations:
+      required: true
+
+  - type: input
+    id: composer_version
+    attributes:
+      label: Composer version
+      placeholder: e.g. 2.9.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Runner and dependency environment
+      description: Include the runner OS, dependency mode, relevant extensions, matrix values and PHPForge version when known.
+      placeholder: ubuntu-latest, prefer-lowest, PHPForge 1.x, ext-json enabled...
+    validations:
+      required: true
+
+  - type: textarea
+    id: recent_changes
+    attributes:
+      label: Relevant recent changes
+      description: Mention dependency, configuration, workflow or source changes that may be related.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add related issues, screenshots, logs or other useful context.

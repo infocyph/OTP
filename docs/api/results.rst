@@ -1,51 +1,13 @@
-Result Objects
-==============
+Results and values
+==================
 
-VerificationResult
-------------------
+``VerificationResult`` is created through invariant-preserving factories and
+contains ``VerificationReason``, matched timestep or counter, ``nextCounter``,
+drift, replay state, and successful verification time.
 
-Used by advanced verification flows in TOTP, HOTP, and OCRA.
+``RecoveryCodeGenerationResult`` contains the one-time plaintext batch and
+committed counts. ``RecoveryCodeConsumptionResult`` contains consumed status and
+the committed count/last-use state; it has no redundant string reason.
 
-Fields:
-
-- ``matched``
-- ``reason``
-- ``matchedTimestep``
-- ``matchedCounter``
-- ``driftOffset``
-- ``replayDetected``
-- ``verifiedAt``
-
-RecoveryCodeGenerationResult
-----------------------------
-
-Fields:
-
-- ``plainCodes``
-- ``totalGenerated``
-- ``remainingCount``
-- ``lastUsedAt``
-
-RecoveryCodeConsumptionResult
------------------------------
-
-Fields:
-
-- ``consumed``
-- ``reason``
-- ``remainingCount``
-- ``totalGenerated``
-- ``lastUsedAt``
-
-StepUpResult
-------------
-
-Returned by ``Infocyph\OTP\Support\StepUp::assess()``.
-
-Fields:
-
-- ``requiresFreshOtp``
-- ``verifiedAt``
-- ``ageInSeconds``
-- ``freshForSeconds``
-- ``expiresAt``
+``EnrollmentPayload`` contains secret, URI, issuer, account label, and optional
+SVG. Every secret, URI, and SVG value is sensitive.

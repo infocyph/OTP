@@ -1,50 +1,13 @@
 Installation
 ============
 
-Requirements
-------------
-
-- PHP 8.4 or newer for the current ``5.x`` line
-
-PHP and library version compatibility
--------------------------------------
-
-.. list-table::
-   :header-rows: 1
-
-   * - OTP library line
-     - PHP requirement
-   * - ``5.x``
-     - ``>=8.4``
-   * - ``4.x``
-     - ``>=8.2``
-   * - ``3.x``
-     - ``>=8.2``
-   * - ``2.x``
-     - ``>=8.0``
-   * - ``1.x``
-     - ``>=7.1``
-
-Install from Packagist:
+Requirements are PHP ``^8.4``, a 64-bit PHP build, ``ext-ctype``, and Composer.
 
 .. code-block:: bash
 
    composer require infocyph/otp
+   composer check-platform-reqs
 
-Included capabilities
----------------------
-
-- Base32 secret generation, normalization, and validation
-- TOTP verification with configurable drift windows
-- HOTP look-ahead verification and resynchronization helpers
-- OCRA generation and verification
-- Generic OTP with caller-provided PSR-6 cache storage
-- Recovery codes with hashed storage
-- Provisioning URI generation, parsing, and SVG QR rendering
-
-Testing locally
----------------
-
-.. code-block:: bash
-
-   php vendor/bin/pest
+The QR and constant-time Base32 dependencies are installed automatically.
+Generic OTP no longer uses PSR-6; authentication-critical transitions use the
+package's atomic store contracts.

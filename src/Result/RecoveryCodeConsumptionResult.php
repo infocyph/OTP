@@ -10,7 +10,6 @@ final readonly class RecoveryCodeConsumptionResult
 {
     public function __construct(
         public bool $consumed,
-        public string $reason,
         public int $remainingCount,
         public int $totalGenerated,
         public ?DateTimeImmutable $lastUsedAt,

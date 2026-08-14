@@ -1,21 +1,12 @@
-OTP Documentation
-=================
+Infocyph OTP
+============
 
-Standalone OTP and MFA primitives for PHP.
-
-The library includes:
-
-- TOTP (RFC6238)
-- HOTP (RFC4226)
-- OCRA (RFC6287)
-- Generic OTP backed by PSR-6 cache storage
-- Recovery / backup codes
-- Replay protection contracts and in-memory stores
-- ``otpauth://`` provisioning URI generation and parsing
+Small, explicit OTP and recovery-code primitives with strong atomic state
+boundaries.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting Started
+   :caption: Getting started
 
    getting-started/installation
    getting-started/quickstart
@@ -25,30 +16,23 @@ The library includes:
    :maxdepth: 2
    :caption: Guides
 
-   guides/totp
-   guides/hotp
+   guides/security
    guides/generic-otp
+   guides/hotp
+   guides/totp
    guides/ocra
-   guides/provisioning
-   guides/authenticator-apps
-   guides/secret-rotation
-   guides/device-enrollment
-   guides/replay-protection
    guides/recovery-codes
-   guides/step-up-auth
+   guides/provisioning
+   guides/replay-protection
    guides/storage
    guides/custom-stores
+   guides/secret-rotation
+   guides/authenticator-apps
 
 .. toctree::
    :maxdepth: 2
    :caption: API
 
+   api/contracts
    api/results
    api/support
-   api/contracts
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`

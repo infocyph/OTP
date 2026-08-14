@@ -1,44 +1,54 @@
 name: Feature request
-description: Suggest an improvement or new capability
-title: "[Feature]: "
+description: Suggest a new capability or improvement
 labels:
   - enhancement
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea. Please describe the use case first, then the proposed solution.
+        Describe the problem or use case before proposing an implementation.
+
+        For substantial public API, architectural or compatibility changes, discussion may be requested before implementation.
+
   - type: textarea
     id: problem
     attributes:
       label: Problem or use case
-      description: What limitation are you hitting?
-      placeholder: I need to...
+      description: Explain the limitation, repeated difficulty or capability you need.
+      placeholder: I need to... because...
     validations:
       required: true
+
   - type: textarea
-    id: proposal
+    id: proposed_behavior
     attributes:
-      label: Proposed solution
-      description: What should happen?
-      placeholder: Add a command/config/workflow option that...
+      label: Proposed behavior
+      description: Describe the expected user-facing behavior or outcome.
+      placeholder: The library should...
     validations:
       required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example usage
+      description: Optionally show the proposed API, configuration, command or workflow.
+      render: php
+
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives considered
-      description: Any workaround or alternative approach you evaluated.
+      label: Alternatives or workarounds
+      description: Describe existing approaches you considered or currently use.
+
   - type: textarea
-    id: impact
+    id: compatibility
     attributes:
-      label: Expected impact
-      description: Who benefits and what changes for users/CI?
-      placeholder: This would improve...
-    validations:
-      required: true
+      label: Compatibility considerations
+      description: Mention possible public API, behavior, PHP-version, extension, platform or dependency implications.
+
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Related issues, links, examples, or prior art.
+      description: Add related issues, prior art, links, benchmarks or other supporting information.

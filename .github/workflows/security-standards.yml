@@ -25,6 +25,12 @@ jobs:
       run_analysis: true
       run_svg_report: true
       fail_on_skipped_tests: false
+      run_clean_install: true
+      benchmark_composer_script: ""
+      benchmark_result_file: ""
+      benchmark_baseline_file: ""
+      benchmark_max_regression_percent: 2
+      benchmark_stable_environment: false
       enable_redis_service: false
       enable_valkey_service: false
       enable_memcached_service: false
@@ -37,4 +43,3 @@ jobs:
       service_db_user: "phpforge"
       service_db_password: "phpforge"
       artifact_retention_days: 61
-

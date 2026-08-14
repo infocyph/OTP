@@ -16,47 +16,56 @@ final readonly class RecoveryCodes
 
     private const int MAX_CODE_LENGTH = 128;
 
-    private string $hashAlgorithm;
+    private const int MAX_INPUT_LENGTH = 512;
 
-    private ?string $hashKey;
+    private const int MAX_KEY_LENGTH = 1024;
+
+    private const float MIN_ENTROPY_BITS = 40.0;
 
     public function __construct(
         private RecoveryCodeStoreInterface $store,
-        string $hashAlgorithm = 'sha256',
-        ?string $hashKey = null,
+        #[\SensitiveParameter]
+        private string $key,
     ) {
-        $this->hashAlgorithm = match (strtolower(trim($hashAlgorithm))) {
-            'sha256' => 'sha256',
-            'sha512' => 'sha512',
-            default => throw new InvalidArgumentException('Recovery code hashing requires SHA-256 or SHA-512.'),
-        };
-        if ($hashKey !== null && strlen($hashKey) < 16) {
-            throw new InvalidArgumentException('Recovery code HMAC keys must contain at least 16 bytes.');
+        if (strlen($key) < 16 || strlen($key) > self::MAX_KEY_LENGTH) {
+            throw new InvalidArgumentException('Recovery code HMAC keys must contain between 16 and 1024 bytes.');
         }
-        $this->hashKey = $hashKey;
     }
 
-    public function consume(string $binding, string $code): RecoveryCodeConsumptionResult
+    public function consume(string $binding, #[\SensitiveParameter] string $code): RecoveryCodeConsumptionResult
     {
         self::assertBinding($binding);
-        $usedAt = new DateTimeImmutable();
+        if ($code === '' || strlen($code) > self::MAX_INPUT_LENGTH) {
+            return $this->invalidResult($binding);
+        }
+
         $normalizedCode = strtoupper(str_replace([' ', '-'], '', trim($code)));
-        $consumed = $this->store->consume($binding, $this->hash($normalizedCode), $usedAt);
-        $metadata = $this->store->metadata($binding);
+        if (
+            strlen($normalizedCode) < 6
+            || strlen($normalizedCode) > self::MAX_CODE_LENGTH
+            || preg_match('/^[A-Z0-9]+$/', $normalizedCode) !== 1
+        ) {
+            return $this->invalidResult($binding);
+        }
+
+        $state = $this->store->consume(
+            $binding,
+            $this->digest($binding, $normalizedCode),
+            new DateTimeImmutable(),
+        );
 
         return new RecoveryCodeConsumptionResult(
-            $consumed,
-            $consumed ? 'consumed' : 'invalid',
-            $metadata['remaining'],
-            $metadata['total'],
-            $metadata['lastUsedAt'],
+            $state['consumed'],
+            $state['remaining'],
+            $state['total'],
+            $state['lastUsedAt'],
         );
     }
 
     public function generate(
         string $binding,
         int $count = 10,
-        int $length = 10,
+        int $length = 12,
         int $groupSize = 4,
         string $characterSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
     ): RecoveryCodeGenerationResult {
@@ -72,8 +81,11 @@ final readonly class RecoveryCodes
             throw new InvalidArgumentException('Invalid recovery code configuration.');
         }
 
-        $characters = $this->characterSet($characterSet);
-        if (!$this->canGenerateUniqueCodes($count, $length, count($characters))) {
+        $characters = self::characterSet($characterSet);
+        if ($length * log(count($characters), 2) < self::MIN_ENTROPY_BITS) {
+            throw new InvalidArgumentException('Recovery code configuration must provide at least 40 bits of entropy.');
+        }
+        if (!self::canGenerateUniqueCodes($count, $length, count($characters))) {
             throw new InvalidArgumentException('Recovery code configuration cannot produce the requested number of unique codes.');
         }
 
@@ -81,39 +93,38 @@ final readonly class RecoveryCodes
         $hashedCodes = [];
         $generatedCodes = [];
         while (count($plainCodes) < $count) {
-            $code = $this->randomCode($length, $characters);
+            $code = self::randomCode($length, $characters);
             if (isset($generatedCodes[$code])) {
                 continue;
             }
 
             $generatedCodes[$code] = true;
             $plainCodes[] = $groupSize > 0 ? trim(chunk_split($code, $groupSize, '-'), '-') : $code;
-            $hashedCodes[] = $this->hash($code);
+            $hashedCodes[] = $this->digest($binding, $code);
         }
 
-        $issuedAt = new DateTimeImmutable();
-        $this->store->replace($binding, $hashedCodes, $issuedAt);
-        $metadata = $this->store->metadata($binding);
+        $state = $this->store->replace($binding, $hashedCodes, new DateTimeImmutable());
 
-        return new RecoveryCodeGenerationResult($plainCodes, $metadata['total'], $metadata['remaining'], $metadata['lastUsedAt']);
+        return new RecoveryCodeGenerationResult(
+            $plainCodes,
+            $state['total'],
+            $state['remaining'],
+            $state['lastUsedAt'],
+        );
     }
 
     private static function assertBinding(string $binding): void
     {
-        if (trim($binding) === '' || strlen($binding) > 512) {
-            throw new InvalidArgumentException('Recovery code binding must contain between 1 and 512 bytes.');
+        if ($binding === '' || strlen($binding) > 190) {
+            throw new InvalidArgumentException('Recovery code bindings must contain between 1 and 190 bytes.');
         }
     }
 
-    private function canGenerateUniqueCodes(int $count, int $length, int $characterCount): bool
+    private static function canGenerateUniqueCodes(int $count, int $length, int $characterCount): bool
     {
-        if ($characterCount < 2) {
-            return false;
-        }
-
         $requiredCapacity = $count * 2;
         $capacity = 1;
-        for ($i = 0; $i < $length; $i++) {
+        for ($index = 0; $index < $length; $index++) {
             if ($capacity >= $requiredCapacity || $capacity > intdiv($requiredCapacity - 1, $characterCount)) {
                 return true;
             }
@@ -125,47 +136,65 @@ final readonly class RecoveryCodes
     }
 
     /**
-     * @param $characterSet Candidate recovery-code characters.
-     * @return array Unique recovery-code characters.
-     * @phpstan-return non-empty-list<string>
+     * @param string $characterSet Caller-supplied ASCII alphabet.
+     * @return non-empty-list<string>
      */
-    private function characterSet(string $characterSet): array
+    private static function characterSet(string $characterSet): array
     {
         $characterSet = strtoupper($characterSet);
         if ($characterSet === '' || preg_match('/^[A-Z0-9]+$/', $characterSet) !== 1) {
             throw new InvalidArgumentException('Recovery code character set must contain only ASCII letters and digits.');
         }
 
-        $characters = [];
-        foreach (str_split($characterSet) as $character) {
-            $characters[$character] = true;
+        $unique = [];
+        $length = strlen($characterSet);
+        for ($index = 0; $index < $length; $index++) {
+            $unique[$characterSet[$index]] = true;
+        }
+        if (count($unique) < 2) {
+            throw new InvalidArgumentException('Recovery code character set must contain at least two unique characters.');
         }
 
-        return array_keys($characters);
-    }
-
-    private function hash(string $code): string
-    {
-        if ($this->hashKey === null) {
-            return hash($this->hashAlgorithm, $code);
-        }
-
-        return hash_hmac($this->hashAlgorithm, $code, $this->hashKey);
+        return array_keys($unique);
     }
 
     /**
-     * @param $length Recovery-code length.
-     * @param $characterSet Unique recovery-code characters.
-     * @phpstan-param non-empty-list<string> $characterSet
+     * @param int $length Number of unformatted characters.
+     * @param non-empty-list<string> $characters Normalized unique alphabet.
      */
-    private function randomCode(int $length, array $characterSet): string
+    private static function randomCode(int $length, array $characters): string
     {
         $code = '';
-        $characterCount = count($characterSet);
-        for ($i = 0; $i < $length; $i++) {
-            $code .= $characterSet[random_int(0, $characterCount - 1)];
+        $characterCount = count($characters);
+        $limit = intdiv(256, $characterCount) * $characterCount;
+        while (strlen($code) < $length) {
+            $bytes = random_bytes(max(16, $length - strlen($code)));
+            $byteCount = strlen($bytes);
+            for ($index = 0; $index < $byteCount && strlen($code) < $length; $index++) {
+                $value = ord($bytes[$index]);
+                if ($value < $limit) {
+                    $code .= $characters[$value % $characterCount];
+                }
+            }
         }
 
         return $code;
+    }
+
+    private function digest(string $binding, string $code): string
+    {
+        return hash_hmac('sha256', "recovery-code\0" . $binding . "\0" . $code, $this->key);
+    }
+
+    private function invalidResult(string $binding): RecoveryCodeConsumptionResult
+    {
+        $state = $this->store->metadata($binding);
+
+        return new RecoveryCodeConsumptionResult(
+            false,
+            $state['remaining'],
+            $state['total'],
+            $state['lastUsedAt'],
+        );
     }
 }

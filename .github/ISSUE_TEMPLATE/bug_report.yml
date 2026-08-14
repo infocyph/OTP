@@ -1,70 +1,120 @@
 name: Bug report
-description: Report a reproducible problem
-title: "[Bug]: "
+description: Report reproducible incorrect or regressed behavior
 labels:
   - bug
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. Please include enough detail to reproduce it.
+        Thanks for reporting a problem.
+
+        Do not report security vulnerabilities here. Follow `SECURITY.md` and use private vulnerability reporting.
+
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: Problem type
+      description: Select the option that best describes the problem.
+      options:
+        - Bug
+        - Regression
+        - Not sure
+    validations:
+      required: true
+
   - type: textarea
     id: summary
     attributes:
       label: Summary
-      description: What is wrong?
-      placeholder: Clear and short description of the bug.
+      description: Describe the incorrect behavior and its impact.
+      placeholder: A clear and concise description of the problem.
     validations:
       required: true
+
+  - type: input
+    id: package_version
+    attributes:
+      label: Affected package version
+      placeholder: e.g. 2.4.1 or dev-main@abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: last_known_working
+    attributes:
+      label: Last known working version or commit
+      description: Complete this when reporting a regression, if known.
+      placeholder: e.g. 2.4.0 or abc1234
+
+  - type: input
+    id: first_known_broken
+    attributes:
+      label: First known broken version or commit
+      description: Complete this when known.
+      placeholder: e.g. 2.4.1 or def5678
+
   - type: textarea
     id: reproduce
     attributes:
-      label: Steps to reproduce
-      description: Share exact commands, config, and steps.
+      label: Minimal reproduction
+      description: Provide the smallest code sample, command, configuration or repository that reproduces the problem.
       placeholder: |
-        1. Run `composer ic:tests`
-        2. ...
+        1. Install or configure ...
+        2. Run ...
         3. Observe ...
     validations:
       required: true
+
   - type: textarea
     id: expected
     attributes:
       label: Expected behavior
-      placeholder: What did you expect to happen?
+      placeholder: Describe what should happen.
     validations:
       required: true
+
   - type: textarea
     id: actual
     attributes:
       label: Actual behavior
-      placeholder: What happened instead? Include full error output if possible.
+      placeholder: Describe what happens instead.
     validations:
       required: true
+
+  - type: textarea
+    id: error_output
+    attributes:
+      label: Relevant output or errors
+      description: Include only the relevant, sanitized output.
+      render: shell
+
   - type: input
     id: php_version
     attributes:
       label: PHP version
-      placeholder: "e.g. 8.3.8"
+      placeholder: e.g. 8.4.13
     validations:
       required: true
+
   - type: input
     id: composer_version
     attributes:
       label: Composer version
-      placeholder: "e.g. 2.9.2"
+      placeholder: e.g. 2.9.2
     validations:
       required: true
+
   - type: textarea
     id: environment
     attributes:
-      label: Environment details
-      description: OS, CI provider, shell, and anything else relevant.
-      placeholder: Ubuntu 24.04, GitHub Actions, bash...
+      label: Environment
+      description: Include the operating system, relevant extensions, dependency mode, runtime and CI provider when applicable.
+      placeholder: Ubuntu 24.04, locked dependencies, ext-json enabled, GitHub Actions...
     validations:
       required: true
+
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Links, screenshots, logs, or related issues.
+      description: Add related issues, screenshots, logs, workarounds or other useful context.

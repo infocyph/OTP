@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP\Support;
 
 use Infocyph\OTP\ValueObjects\EnrollmentPayload;
+use Infocyph\OTP\ValueObjects\OcraSuite;
 use InvalidArgumentException;
 
 final class ProvisioningUriBuilder
@@ -26,6 +27,7 @@ final class ProvisioningUriBuilder
      */
     public static function build(
         string $type,
+        #[\SensitiveParameter]
         string $secret,
         string $label,
         string $issuer,
@@ -43,7 +45,7 @@ final class ProvisioningUriBuilder
         self::assertDigits($type, $digits);
         $period = self::normalizePeriod($type, $period);
         self::assertCounter($type, $counter);
-        self::assertOcraSuite($type, $ocraSuite);
+        self::assertOcraSuite($type, $ocraSuite, $algorithm, $digits);
         $secret = SecretUtility::normalizeBase32($secret);
         SecretUtility::decodeBase32($secret);
 
@@ -53,7 +55,7 @@ final class ProvisioningUriBuilder
             'algorithm' => $include['algorithm'] ?? false ? strtoupper($algorithm) : null,
             'digits' => $include['digits'] ?? false ? $digits : null,
             'period' => $type === 'totp' && ($include['period'] ?? false) ? $period : null,
-            'counter' => $type === 'hotp' && ($include['counter'] ?? false) ? $counter : null,
+            'counter' => $type === 'hotp' ? $counter : null,
             'ocraSuite' => $type === 'ocra' ? $ocraSuite : null,
         ] + $additionalParameters;
 
@@ -90,6 +92,7 @@ final class ProvisioningUriBuilder
      */
     public static function enrollmentPayload(
         string $type,
+        #[\SensitiveParameter]
         string $secret,
         string $label,
         string $issuer,
@@ -104,7 +107,7 @@ final class ProvisioningUriBuilder
     ): EnrollmentPayload {
         $secret = SecretUtility::normalizeBase32($secret);
         SecretUtility::decodeBase32($secret);
-        $label = LabelHelper::formatLabel($label);
+        $label = LabelHelper::normalizeAccountLabel($label);
         $issuer = LabelHelper::normalizeIssuer($issuer);
         $uri = self::build(
             $type,
@@ -120,7 +123,7 @@ final class ProvisioningUriBuilder
             $ocraSuite,
         );
 
-        return new EnrollmentPayload($secret, $uri, $uri, $issuer, $label, $qrSvg);
+        return new EnrollmentPayload($secret, $uri, $issuer, $label, $qrSvg);
     }
 
     /**
@@ -134,7 +137,7 @@ final class ProvisioningUriBuilder
         }
 
         $reservedParameters = array_fill_keys(
-            ['secret', 'issuer', 'algorithm', 'digits', 'period', 'counter', 'ocraSuite'],
+            ['secret', 'issuer', 'algorithm', 'digits', 'period', 'counter', 'ocrasuite'],
             true,
         );
         foreach ($additionalParameters as $key => $value) {
@@ -145,7 +148,7 @@ final class ProvisioningUriBuilder
             ) {
                 throw new InvalidArgumentException('Provisioning query parameter names must contain between 1 and 64 printable bytes.');
             }
-            if (isset($reservedParameters[$key])) {
+            if (isset($reservedParameters[strtolower($key)])) {
                 throw new InvalidArgumentException(sprintf('Provisioning query parameter "%s" is reserved.', $key));
             }
             if (is_string($value) && strlen($value) > 1024) {
@@ -166,21 +169,28 @@ final class ProvisioningUriBuilder
 
     private static function assertDigits(string $type, int $digits): void
     {
-        if (($type === 'hotp' || $type === 'totp') && ($digits < 4 || $digits > 10)) {
-            throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 4 and 10.');
+        if (($type === 'hotp' || $type === 'totp') && ($digits < 6 || $digits > 9)) {
+            throw new InvalidArgumentException('HOTP and TOTP digit counts must be between 6 and 9.');
         }
-        if ($type === 'ocra' && $digits !== 0 && ($digits < 4 || $digits > 10)) {
-            throw new InvalidArgumentException('OCRA digit count must be zero or between 4 and 10.');
+        if ($type === 'ocra' && $digits !== 0 && ($digits < 4 || $digits > 9)) {
+            throw new InvalidArgumentException('OCRA digit count must be zero or between 4 and 9.');
         }
     }
 
-    private static function assertOcraSuite(string $type, ?string $ocraSuite): void
-    {
+    private static function assertOcraSuite(
+        string $type,
+        ?string $ocraSuite,
+        string $algorithm,
+        int $digits,
+    ): void {
         if ($type === 'ocra' && ($ocraSuite === null || $ocraSuite === '')) {
             throw new InvalidArgumentException('OCRA provisioning requires an OCRA suite.');
         }
-        if ($type === 'ocra' && !OcraSuiteValidator::isValid($ocraSuite)) {
-            throw new InvalidArgumentException('OCRA provisioning requires a valid OCRA suite.');
+        if ($type === 'ocra') {
+            $suite = OcraSuite::parse($ocraSuite);
+            if ($suite->algorithm !== $algorithm || $suite->digits !== $digits) {
+                throw new InvalidArgumentException('OCRA provisioning algorithm and digits must match the suite.');
+            }
         }
         if ($type !== 'ocra' && $ocraSuite !== null) {
             throw new InvalidArgumentException('Only OCRA provisioning may contain an OCRA suite.');
