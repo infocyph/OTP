@@ -29,15 +29,19 @@ Relying-party configuration
    $passkey = new Passkey(
        cache: $stateCache,
        rpId: 'example.com',
-       rpName: 'Example',
        allowedOrigins: ['https://example.com'],
    );
 
-Origins are exact by default. ``allowSubdomains: true`` delegates subdomain
-acceptance to webauthn-lib. Plain HTTP is rejected except for localhost loopback
-development origins. Ceremony state requires the same fail-closed,
-integrity-protected, authoritative, coordinated-lock CacheLayer policy as other
-multi-field authentication state.
+Origins are exact by default and must contain only scheme, host, and optional
+port; do not include a trailing slash or any path. ``allowSubdomains: true``
+delegates subdomain acceptance to webauthn-lib. Plain HTTP is rejected except
+for localhost loopback development origins. Ceremony state requires the same
+fail-closed, integrity-protected, authoritative, coordinated-lock CacheLayer
+policy as other multi-field authentication state.
+
+WebAuthn-lib 5.3 deprecates setting the RP ``name`` field. OTP therefore leaves
+it empty and lets the upstream serializer use the RP ID as the serialized RP
+name, matching the library's forward-compatible behavior.
 
 Registration
 ------------
@@ -99,7 +103,7 @@ handle:
 
    $ceremony = $passkey->beginAuthentication('login-flow-9af3');
 
-   // After the browser responds, resolve the durable record by credential ID.
+   // This is lookup routing only; verification still happens below.
    $credentialId = $passkey->extractCredentialId($browserCredentialJson);
    $storedRecord = loadCredentialRecord($credentialId);
 
@@ -109,6 +113,10 @@ handle:
        credentialRecordJson: $storedRecord,
        credentialJson: $browserCredentialJson,
    );
+
+Never treat ``extractCredentialId()`` as authentication. It only parses a
+bounded browser payload so the application can locate the durable record that
+must subsequently pass full WebAuthn verification.
 
 On success, persist ``$result->credentialRecordJson`` over the old record. The
 WebAuthn credential counter and backup/UV state may have changed during
@@ -124,8 +132,11 @@ the original expiry so a concurrent or repeated response returns
 ``VerificationReason::Replay``.
 
 Malformed or cryptographically invalid WebAuthn responses do not consume the
-ceremony. Storage failures propagate and authentication fails closed. Apply
-application rate limits even though passkey proofs are not short guessable OTPs.
+ceremony. OTP type-checks every serializer result before using it so malformed
+browser JSON is returned as ``Malformed`` rather than escaping as a PHP type
+error. Corrupt stored ceremony options or durable credential records remain
+operational failures and fail closed. Apply application rate limits even though
+passkey proofs are not short guessable OTPs.
 
 Security boundary
 -----------------
