@@ -19,7 +19,16 @@ final readonly class AotpResponse
         self::assertEncodedLength($signature, SODIUM_CRYPTO_SIGN_BYTES, 'AOTP signature');
     }
 
-    /** @param array<string,mixed> $data */
+    /** @return array{challengeId:string,signature:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'challengeId' => $this->challengeId,
+            'signature' => '[redacted]',
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
         if (
@@ -41,15 +50,6 @@ final readonly class AotpResponse
             'v' => self::VERSION,
             'challengeId' => $this->challengeId,
             'signature' => $this->signature,
-        ];
-    }
-
-    /** @return array{challengeId:string,signature:string} */
-    public function __debugInfo(): array
-    {
-        return [
-            'challengeId' => $this->challengeId,
-            'signature' => '[redacted]',
         ];
     }
 
