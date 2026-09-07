@@ -55,7 +55,8 @@ exists.
    }
 
 A cryptographic match rejected by replay state is not a successful result.
-Fail closed when the shared CacheLayer backend or lock provider is unavailable.
+Fail closed when the shared CacheLayer backend or the selected coordination
+capability (native atomics or lock fallback) is unavailable.
 
 Email or SMS challenge
 ----------------------
