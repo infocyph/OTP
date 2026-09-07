@@ -154,21 +154,49 @@ use Infocyph\OTP\AOTP;
 
 $keys = AOTP::generateKeyPair();
 $aotp = new AOTP($keys->publicKey, 'login.example.com');
-$challenge = $aotp->issue($stateCache, 'user-42:aotp:key-v1', 'login');
-$response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com');
+
+$flowId = bin2hex(random_bytes(16));
+$context = 'login:web:' . $flowId;
+
+$challenge = $aotp->issue(
+    cache: $stateCache,
+    factorId: 'user-42:aotp:key-v1',
+    context: $context,
+);
+
+// Client side: these expected values come from trusted local state/configuration,
+// never by copying fields from the received challenge.
+$response = AOTP::respond(
+    privateKey: $keys->privateKey,
+    challenge: $challenge,
+    expectedAudience: 'login.example.com',
+    expectedContext: 'login:web:' . $locallyKnownFlowId,
+);
+
 $result = $aotp->verifyWithResult(
-    $stateCache,
-    'user-42:aotp:key-v1',
-    $challenge,
-    $response,
+    cache: $stateCache,
+    factorId: 'user-42:aotp:key-v1',
+    challenge: $challenge,
+    response: $response,
 );
 ```
 
-The signed payload binds challenge ID, nonce, audience, context, issuance, and
-expiration. Successful verification atomically consumes the issued reservation;
-a concurrent duplicate is replay. The client must independently enforce the
-expected audience. AOTP requires `ext-sodium`. See [AOTP](docs/guides/aotp.rst)
-for the complete client/server flow.
+The signed payload binds challenge ID, nonce, audience, mandatory context,
+issuance, and expiration. `respond()` refuses a wrong audience/context and
+refuses stale or not-yet-valid challenges before signing. Successful verification
+atomically consumes the issued reservation; a concurrent duplicate from a valid
+signer is replay.
+
+**AOTP provides asymmetric proof-of-possession and replay-resistant challenge
+authentication. Phishing resistance is an end-to-end property of the consuming
+client and verifier.** The client must independently authenticate the intended
+verifier and derive expected context from trusted local session/transaction
+state rather than blindly signing received challenge fields. Audience/context
+fields alone do not stop a real-time relay. Prefer Passkey/WebAuthn when
+browser-origin-bound phishing resistance is the goal.
+
+AOTP requires `ext-sodium`. See [AOTP](docs/guides/aotp.rst) for the complete
+client/server flow, relay threat model, and deployment rules.
 
 ## GridOTP
 
@@ -219,7 +247,7 @@ $result = $mobile->verifyWithWindow(
 
 The default window is zero; legacy tolerance can be configured up to 18
 10-second steps per direction. MD5 is used only because it is part of the legacy
-wire algorithm. Prefer TOTP or Passkey for new deployments. See
+wire algorithm. Prefer TOTP, AOTP, or Passkey for new deployments. See
 [MobileOTP](docs/guides/mobile-otp.rst).
 
 ## Passkey / WebAuthn
