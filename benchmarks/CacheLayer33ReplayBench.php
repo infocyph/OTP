@@ -16,25 +16,25 @@ final class CacheLayer33ReplayBench
 {
     private Cache $atomicCache;
 
-    private AtomicCacheInterface $atomicOperations;
+    private string $atomicCasKey;
+
+    private int $atomicCasValue = 0;
 
     private int $atomicCounter = 0;
 
-    private int $atomicCasValue = 0;
+    private string $atomicLockKey;
+
+    private AtomicCacheInterface $atomicOperations;
+
+    private string $atomicStateKey;
 
     private Cache $lockCache;
 
     private int $lockCounter = 0;
 
-    private string $atomicStateKey;
-
-    private string $atomicCasKey;
-
-    private string $atomicLockKey;
+    private string $lockLockKey;
 
     private string $lockStateKey;
-
-    private string $lockLockKey;
 
     public function setUp(): void
     {
@@ -69,12 +69,6 @@ final class CacheLayer33ReplayBench
         }
     }
 
-    public function benchAtomicSetIfAbsent(): void
-    {
-        $stateKey = hash('sha256', 'otp-bench:atomic-direct-claim:' . $this->atomicCounter++);
-        $this->atomicOperations->setIfAbsent($stateKey, 1, 300);
-    }
-
     public function benchAtomicCompareAndSet(): void
     {
         $next = $this->atomicCasValue + 1;
@@ -102,6 +96,24 @@ final class CacheLayer33ReplayBench
         );
     }
 
+    public function benchAtomicOneTimeClaim(): void
+    {
+        $stateKey = hash('sha256', 'otp-bench:atomic-claim:' . $this->atomicCounter++);
+        CacheLock::consumeOnce(
+            $this->atomicCache,
+            $stateKey,
+            $this->atomicLockKey,
+            300,
+            'benchmark claim',
+        );
+    }
+
+    public function benchAtomicSetIfAbsent(): void
+    {
+        $stateKey = hash('sha256', 'otp-bench:atomic-direct-claim:' . $this->atomicCounter++);
+        $this->atomicOperations->setIfAbsent($stateKey, 1, 300);
+    }
+
     public function benchLockFallbackMonotonicAdvance(): void
     {
         $this->lockCounter++;
@@ -112,18 +124,6 @@ final class CacheLayer33ReplayBench
             $this->lockCounter,
             300,
             'benchmark replay',
-        );
-    }
-
-    public function benchAtomicOneTimeClaim(): void
-    {
-        $stateKey = hash('sha256', 'otp-bench:atomic-claim:' . $this->atomicCounter++);
-        CacheLock::consumeOnce(
-            $this->atomicCache,
-            $stateKey,
-            $this->atomicLockKey,
-            300,
-            'benchmark claim',
         );
     }
 
