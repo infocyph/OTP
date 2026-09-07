@@ -1,9 +1,11 @@
 Custom durable stores
 =====================
 
-The package no longer defines custom store contracts for Generic OTP or replay
-state. Select a CacheLayer authentication-state adapter with its configured lock for those paths;
-see :doc:`storage`. The only application persistence contract is
+The package does not define custom store contracts for Generic OTP or protocol
+replay state. Select a CacheLayer 3.3 authentication-state adapter for those
+paths; HOTP/TOTP/OCRA use its native atomics when available or its coordinated
+lock fallback, while ``GenericOtp`` requires the coordinated lock. See
+:doc:`storage`. The only application persistence contract is
 ``RecoveryCodeStoreInterface`` because recovery-code batches require durable,
 auditable lifecycle state.
 
@@ -108,7 +110,9 @@ Atomic replacement
 Replacement invalidates the old batch completely. Validate that input digests
 are unique, then replace metadata and digest rows in one transaction. A reader
 must observe either the complete old batch or complete new batch, never an empty
-or partial intermediate set.
+or partial intermediate set. Replacement racing consumption must have one
+serializable outcome: the old code is either consumed before replacement or is
+invalid after the complete replacement commits.
 
 The in-package ``InMemoryRecoveryCodeStore`` is readable reference behavior for
 unit tests and one-process development. It is not durable and does not
