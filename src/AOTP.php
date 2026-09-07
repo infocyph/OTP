@@ -41,15 +41,6 @@ final readonly class AOTP
         self::assertAudience($audience);
     }
 
-    public static function isAvailable(): bool
-    {
-        return function_exists('sodium_crypto_sign_keypair')
-            && function_exists('sodium_crypto_sign_publickey')
-            && function_exists('sodium_crypto_sign_secretkey')
-            && function_exists('sodium_crypto_sign_detached')
-            && function_exists('sodium_crypto_sign_verify_detached');
-    }
-
     public static function generateKeyPair(): AotpKeyPair
     {
         self::requireSodium();
@@ -59,6 +50,15 @@ final readonly class AOTP
             self::encode(sodium_crypto_sign_publickey($pair)),
             self::encode(sodium_crypto_sign_secretkey($pair)),
         );
+    }
+
+    public static function isAvailable(): bool
+    {
+        return function_exists('sodium_crypto_sign_keypair')
+            && function_exists('sodium_crypto_sign_publickey')
+            && function_exists('sodium_crypto_sign_secretkey')
+            && function_exists('sodium_crypto_sign_detached')
+            && function_exists('sodium_crypto_sign_verify_detached');
     }
 
     public static function respond(
