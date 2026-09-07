@@ -16,4 +16,16 @@ final readonly class EnrollmentPayload
         #[\SensitiveParameter]
         public ?string $qrSvg = null,
     ) {}
+
+    /** @return array{secret:string,uri:string,issuer:string,label:string,qrSvg:string|null} */
+    public function __debugInfo(): array
+    {
+        return [
+            'secret' => '[redacted]',
+            'uri' => '[redacted]',
+            'issuer' => $this->issuer,
+            'label' => $this->label,
+            'qrSvg' => $this->qrSvg === null ? null : '[redacted]',
+        ];
+    }
 }
