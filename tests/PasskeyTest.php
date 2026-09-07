@@ -15,7 +15,6 @@ test('passkey registration creates discoverable user-verified options', function
     $service = new Passkey(
         CacheLayerState::memory(),
         'example.com',
-        'Example',
         ['https://example.com'],
     );
     $ceremony = $service->beginRegistration(
@@ -30,7 +29,7 @@ test('passkey registration creates discoverable user-verified options', function
     expect($ceremony->type)->toBe(PasskeyCeremony::TYPE_REGISTRATION)
         ->and($ceremony->expiresAt)->toBe(1_700_000_300)
         ->and($options['rp']['id'] ?? null)->toBe('example.com')
-        ->and($options['rp']['name'] ?? null)->toBe('Example')
+        ->and($options['rp']['name'] ?? null)->toBe('example.com')
         ->and($options['user']['name'] ?? null)->toBe('alice@example.com')
         ->and($options['authenticatorSelection']['residentKey'] ?? null)->toBe('required')
         ->and($options['authenticatorSelection']['userVerification'] ?? null)->toBe('required')
@@ -41,7 +40,6 @@ test('passkey authentication supports discoverable credentials', function () {
     $service = new Passkey(
         CacheLayerState::memory(),
         'example.com',
-        'Example',
         ['https://example.com'],
     );
     $ceremony = $service->beginAuthentication(
@@ -60,7 +58,6 @@ test('malformed passkey responses do not consume a ceremony', function () {
     $service = new Passkey(
         CacheLayerState::memory(),
         'example.com',
-        'Example',
         ['https://example.com'],
         ttlSeconds: 60,
     );
@@ -76,12 +73,14 @@ test('malformed passkey responses do not consume a ceremony', function () {
     $second = $service->finishRegistration('binding', $ceremony->id, '{}', 102);
 
     expect($first->reason)->toBe(VerificationReason::Malformed)
-        ->and($second->reason)->toBe(VerificationReason::Malformed);
+        ->and($second->reason)->toBe(VerificationReason::Malformed)
+        ->and(fn () => $service->extractCredentialId('{}'))
+        ->toThrow(InvalidArgumentException::class);
 });
 
 test('consumed passkey ceremony state reports replay before parsing another response', function () {
     $cache = CacheLayerState::memory();
-    $service = new Passkey($cache, 'example.com', 'Example', ['https://example.com'], ttlSeconds: 60);
+    $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 60);
     $ceremony = $service->beginRegistration('binding', 'user-handle', 'alice', 'Alice', now: 100);
     $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0binding\0" . $ceremony->id);
     $state = $cache->get($stateKey);
@@ -98,7 +97,7 @@ test('consumed passkey ceremony state reports replay before parsing another resp
 
 test('expired passkey ceremony is rejected and deleted', function () {
     $cache = CacheLayerState::memory();
-    $service = new Passkey($cache, 'example.com', 'Example', ['https://example.com'], ttlSeconds: 10);
+    $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 10);
     $ceremony = $service->beginRegistration('binding', 'user-handle', 'alice', 'Alice', now: 100);
     $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0binding\0" . $ceremony->id);
 
@@ -111,10 +110,12 @@ test('expired passkey ceremony is rejected and deleted', function () {
 test('passkey configuration rejects unsafe relying party input', function () {
     $cache = CacheLayerState::memory();
 
-    expect(fn () => new Passkey($cache, 'https://example.com', 'Example', ['https://example.com']))
+    expect(fn () => new Passkey($cache, 'https://example.com', ['https://example.com']))
         ->toThrow(InvalidArgumentException::class)
-        ->and(fn () => new Passkey($cache, 'example.com', 'Example', ['http://example.com']))
+        ->and(fn () => new Passkey($cache, 'example.com', ['http://example.com']))
         ->toThrow(InvalidArgumentException::class)
-        ->and(fn () => new Passkey($cache, 'example.com', '', ['https://example.com']))
+        ->and(fn () => new Passkey($cache, 'example.com', ['https://example.com/']))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => new Passkey($cache, 'example.com', []))
         ->toThrow(InvalidArgumentException::class);
 });
