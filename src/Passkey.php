@@ -25,7 +25,6 @@ use Webauthn\CeremonyStep\CeremonyStepManagerFactory;
 use Webauthn\CredentialRecord;
 use Webauthn\Denormalizer\WebauthnSerializerFactory;
 use Webauthn\Exception\AuthenticatorResponseVerificationException;
-use Webauthn\Exception\InvalidDataException;
 use Webauthn\PublicKeyCredential;
 use Webauthn\PublicKeyCredentialCreationOptions;
 use Webauthn\PublicKeyCredentialParameters;
@@ -51,9 +50,7 @@ final readonly class Passkey
 
     private SerializerInterface $serializer;
 
-    /**
-     * @param list<string> $allowedOrigins Exact WebAuthn origins, including scheme and optional port.
-     */
+    /** @param list<string> $allowedOrigins Exact WebAuthn origins, including scheme and optional port. */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
         private string $rpId,
@@ -74,7 +71,7 @@ final readonly class Passkey
         $factory->setAllowedOrigins($allowedOrigins, $allowSubdomains);
         $this->assertionValidator = new AuthenticatorAssertionResponseValidator($factory->requestCeremony());
         $this->attestationValidator = new AuthenticatorAttestationResponseValidator($factory->creationCeremony());
-        $this->serializer = (new WebauthnSerializerFactory(AttestationStatementSupportManager::create()))->create();
+        $this->serializer = new WebauthnSerializerFactory(AttestationStatementSupportManager::create())->create();
     }
 
     public static function isAvailable(): bool
@@ -83,9 +80,7 @@ final readonly class Passkey
             && class_exists(WebauthnSerializerFactory::class);
     }
 
-    /**
-     * @param list<string> $credentialRecordsJson Serialized WebAuthn CredentialRecord values used as allowCredentials.
-     */
+    /** @param list<string> $credentialRecordsJson Serialized WebAuthn CredentialRecord values used as allowCredentials. */
     public function beginAuthentication(
         string $binding,
         array $credentialRecordsJson = [],
@@ -97,13 +92,12 @@ final readonly class Passkey
         if ($userHandle !== null) {
             self::assertUserHandle($userHandle);
         }
-        $descriptors = $this->credentialDescriptors($credentialRecordsJson);
         $options = PublicKeyCredentialRequestOptions::create(
             challenge: random_bytes(32),
             rpId: $this->rpId,
-            allowCredentials: $descriptors,
+            allowCredentials: $this->credentialDescriptors($credentialRecordsJson),
             userVerification: PublicKeyCredentialRequestOptions::USER_VERIFICATION_REQUIREMENT_REQUIRED,
-            timeout: $this->ttlSeconds * 1000,
+            timeout: $this->timeoutMilliseconds(),
         );
 
         return $this->issueCeremony(
@@ -115,9 +109,7 @@ final readonly class Passkey
         );
     }
 
-    /**
-     * @param list<string> $existingCredentialRecordsJson Serialized WebAuthn CredentialRecord values used as excludeCredentials.
-     */
+    /** @param list<string> $existingCredentialRecordsJson Serialized WebAuthn CredentialRecord values used as excludeCredentials. */
     public function beginRegistration(
         string $binding,
         #[\SensitiveParameter]
@@ -131,7 +123,6 @@ final readonly class Passkey
         self::assertUserHandle($userHandle);
         self::assertUserName($username, 'Passkey username');
         self::assertUserName($displayName, 'Passkey display name');
-        $exclude = $this->credentialDescriptors($existingCredentialRecordsJson);
         $options = PublicKeyCredentialCreationOptions::create(
             rp: PublicKeyCredentialRpEntity::create($this->rpName, $this->rpId),
             user: PublicKeyCredentialUserEntity::create($username, $userHandle, $displayName),
@@ -145,8 +136,8 @@ final readonly class Passkey
                 residentKey: AuthenticatorSelectionCriteria::RESIDENT_KEY_REQUIREMENT_REQUIRED,
             ),
             attestation: PublicKeyCredentialCreationOptions::ATTESTATION_CONVEYANCE_PREFERENCE_NONE,
-            excludeCredentials: $exclude,
-            timeout: $this->ttlSeconds * 1000,
+            excludeCredentials: $this->credentialDescriptors($existingCredentialRecordsJson),
+            timeout: $this->timeoutMilliseconds(),
         );
 
         return $this->issueCeremony(
@@ -256,6 +247,36 @@ final readonly class Passkey
         }
     }
 
+    private static function assertOrigin(string $origin): void
+    {
+        if ($origin === '' || strlen($origin) > 2048) {
+            throw new InvalidArgumentException('Passkey origins must contain between 1 and 2048 bytes.');
+        }
+
+        $scheme = parse_url($origin, PHP_URL_SCHEME);
+        $host = parse_url($origin, PHP_URL_HOST);
+        $path = parse_url($origin, PHP_URL_PATH);
+        $user = parse_url($origin, PHP_URL_USER);
+        $pass = parse_url($origin, PHP_URL_PASS);
+        $query = parse_url($origin, PHP_URL_QUERY);
+        $fragment = parse_url($origin, PHP_URL_FRAGMENT);
+        if (
+            !is_string($scheme)
+            || !is_string($host)
+            || !in_array($scheme, ['http', 'https'], true)
+            || $user !== null
+            || $pass !== null
+            || $query !== null
+            || $fragment !== null
+            || ($path !== null && $path !== '' && $path !== '/')
+        ) {
+            throw new InvalidArgumentException('Passkey origins must be absolute HTTP(S) origins without paths, credentials, queries, or fragments.');
+        }
+        if ($scheme === 'http' && !in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            throw new InvalidArgumentException('Passkey HTTP origins are allowed only for local development hosts.');
+        }
+    }
+
     /** @param list<string> $origins */
     private static function assertOrigins(array $origins): void
     {
@@ -264,26 +285,6 @@ final readonly class Passkey
         }
         foreach ($origins as $origin) {
             self::assertOrigin($origin);
-        }
-    }
-
-    private static function assertOrigin(string $origin): void
-    {
-        if ($origin === '' || strlen($origin) > 2048) {
-            throw new InvalidArgumentException('Passkey origins must contain between 1 and 2048 bytes.');
-        }
-        $parts = parse_url($origin);
-        if (
-            $parts === false
-            || !isset($parts['scheme'], $parts['host'])
-            || !in_array($parts['scheme'], ['http', 'https'], true)
-            || isset($parts['user'], $parts['pass'], $parts['query'], $parts['fragment'])
-            || (isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/')
-        ) {
-            throw new InvalidArgumentException('Passkey origins must be absolute HTTP(S) origins without paths, credentials, queries, or fragments.');
-        }
-        if ($parts['scheme'] === 'http' && !in_array($parts['host'], ['localhost', '127.0.0.1', '::1'], true)) {
-            throw new InvalidArgumentException('Passkey HTTP origins are allowed only for local development hosts.');
         }
     }
 
@@ -340,6 +341,24 @@ final readonly class Passkey
         return hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremonyId);
     }
 
+    private function consumeState(
+        string $stateKey,
+        array $state,
+        int $now,
+        LockProviderInterface $locks,
+        LockHandle $handle,
+    ): void {
+        $ttl = $state['expiresAt'] - $now;
+        if ($ttl < 1) {
+            throw new RuntimeException('Passkey ceremony expired before state consumption.');
+        }
+        $state['consumed'] = true;
+        CacheLock::ensureOwned($locks, $handle);
+        if (!$this->cache->set($stateKey, $state, $ttl)) {
+            throw new RuntimeException('Unable to consume passkey ceremony state.');
+        }
+    }
+
     /**
      * @param list<string> $recordsJson
      * @return list<\Webauthn\PublicKeyCredentialDescriptor>
@@ -369,55 +388,38 @@ final readonly class Passkey
     private function deserializeCreationOptions(string $json): PublicKeyCredentialCreationOptions
     {
         try {
-            $options = $this->serializer->deserialize($json, PublicKeyCredentialCreationOptions::class, 'json');
-        } catch (SerializerException|InvalidDataException $failure) {
+            return $this->serializer->deserialize($json, PublicKeyCredentialCreationOptions::class, 'json');
+        } catch (SerializerException $failure) {
             throw new RuntimeException('Invalid stored passkey registration options.', previous: $failure);
         }
-        if (!$options instanceof PublicKeyCredentialCreationOptions) {
-            throw new RuntimeException('Invalid stored passkey registration options.');
-        }
-
-        return $options;
     }
 
     private function deserializeCredential(string $json): ?PublicKeyCredential
     {
         try {
-            $credential = $this->serializer->deserialize($json, PublicKeyCredential::class, 'json');
-        } catch (SerializerException|InvalidDataException) {
+            return $this->serializer->deserialize($json, PublicKeyCredential::class, 'json');
+        } catch (SerializerException) {
             return null;
         }
-
-        return $credential instanceof PublicKeyCredential ? $credential : null;
     }
 
     private function deserializeRecord(string $json): CredentialRecord
     {
         self::assertCredentialJsonLength($json);
         try {
-            $record = $this->serializer->deserialize($json, CredentialRecord::class, 'json');
-        } catch (SerializerException|InvalidDataException $failure) {
+            return $this->serializer->deserialize($json, CredentialRecord::class, 'json');
+        } catch (SerializerException $failure) {
             throw new RuntimeException('Invalid persisted passkey credential record.', previous: $failure);
         }
-        if (!$record instanceof CredentialRecord) {
-            throw new RuntimeException('Invalid persisted passkey credential record.');
-        }
-
-        return $record;
     }
 
     private function deserializeRequestOptions(string $json): PublicKeyCredentialRequestOptions
     {
         try {
-            $options = $this->serializer->deserialize($json, PublicKeyCredentialRequestOptions::class, 'json');
-        } catch (SerializerException|InvalidDataException $failure) {
+            return $this->serializer->deserialize($json, PublicKeyCredentialRequestOptions::class, 'json');
+        } catch (SerializerException $failure) {
             throw new RuntimeException('Invalid stored passkey authentication options.', previous: $failure);
         }
-        if (!$options instanceof PublicKeyCredentialRequestOptions) {
-            throw new RuntimeException('Invalid stored passkey authentication options.');
-        }
-
-        return $options;
     }
 
     private function finishAuthenticationLocked(
@@ -436,17 +438,17 @@ final readonly class Passkey
         }
 
         $credential = $this->deserializeCredential($credentialJson);
-        if ($credential === null || !$credential->response instanceof AuthenticatorAssertionResponse) {
+        if ($credential === null || !($credential->response instanceof AuthenticatorAssertionResponse)) {
             return PasskeyResult::malformed();
         }
         $record = $this->deserializeRecord($credentialRecordJson);
         if (!hash_equals($record->publicKeyCredentialId, $credential->rawId)) {
             return PasskeyResult::mismatch();
         }
-        $expectedUserHandle = $state['userHandle'] ?? $record->userHandle;
         if ($state['userHandle'] !== null && !hash_equals($state['userHandle'], $record->userHandle)) {
             return PasskeyResult::mismatch();
         }
+        $expectedUserHandle = $state['userHandle'] ?? $record->userHandle;
 
         try {
             $updated = $this->assertionValidator->check(
@@ -484,7 +486,7 @@ final readonly class Passkey
         }
 
         $credential = $this->deserializeCredential($credentialJson);
-        if ($credential === null || !$credential->response instanceof AuthenticatorAttestationResponse) {
+        if ($credential === null || !($credential->response instanceof AuthenticatorAttestationResponse)) {
             return PasskeyResult::malformed();
         }
 
@@ -563,9 +565,7 @@ final readonly class Passkey
         throw new RuntimeException('Unable to reserve a unique passkey ceremony.');
     }
 
-    /**
-     * @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}|PasskeyResult
-     */
+    /** @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}|PasskeyResult */
     private function loadActiveState(
         string $stateKey,
         string $expectedType,
@@ -593,10 +593,7 @@ final readonly class Passkey
         return $state;
     }
 
-    /**
-     * @param mixed $state
-     * @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}
-     */
+    /** @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} */
     private function requireState(mixed $state): array
     {
         if (!is_array($state) || count($state) !== 6) {
@@ -644,22 +641,14 @@ final readonly class Passkey
         return $json;
     }
 
-    /** @param array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} $state */
-    private function consumeState(
-        string $stateKey,
-        array $state,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): void {
-        $ttl = $state['expiresAt'] - $now;
-        if ($ttl < 1) {
-            throw new RuntimeException('Passkey ceremony expired before state consumption.');
+    /** @return positive-int */
+    private function timeoutMilliseconds(): int
+    {
+        $timeout = $this->ttlSeconds * 1000;
+        if ($timeout < 1) {
+            throw new RuntimeException('Invalid passkey timeout configuration.');
         }
-        $state['consumed'] = true;
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->set($stateKey, $state, $ttl)) {
-            throw new RuntimeException('Unable to consume passkey ceremony state.');
-        }
+
+        return $timeout;
     }
 }
