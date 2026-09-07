@@ -9,6 +9,7 @@ The package requires:
 * PHP ``^8.4``;
 * a 64-bit PHP build;
 * the ``ctype`` extension;
+* the ``sodium`` extension;
 * CacheLayer ``^3.3``; and
 * Composer.
 
@@ -21,7 +22,8 @@ Install the current release:
 
 Composer installs CacheLayer, constant-time Base32, and QR dependencies
 automatically. OTP depends on CacheLayer directly and does not ask applications
-to implement a second OTP-specific cache abstraction.
+to implement a second OTP-specific cache abstraction. ``ext-sodium`` supplies
+AOTP's Ed25519 operations.
 
 Autoloading
 -----------
@@ -56,8 +58,8 @@ Check the production image, not only the development machine:
    php -m
    composer check-platform-reqs --no-dev
 
-The second command must print ``true``. Counters and timestamps depend on 64-bit
-integer behavior.
+The second command must print ``true``. ``php -m`` must include ``ctype`` and
+``sodium``. Counters and timestamps depend on 64-bit integer behavior.
 
 Production installation
 -----------------------
@@ -81,17 +83,24 @@ Generate secrets with the protocol class rather than inventing a Base32 value:
 
 .. code-block:: php
 
+   use Infocyph\OTP\AOTP;
+   use Infocyph\OTP\GridOTP;
    use Infocyph\OTP\HOTP;
    use Infocyph\OTP\OCRA;
    use Infocyph\OTP\TOTP;
 
-   $totpSecret = TOTP::generateSecret();   // 20 random bytes
+   $totpSecret = TOTP::generateSecret();
    $hotpSecret = HOTP::generateSecret(32);
    $ocraSecret = OCRA::generateSecret(32);
+   $aotpKeys = AOTP::generateKeyPair();
+   $gridSecret = GridOTP::generateSecret();
 
 HOTP, TOTP, and ``OCRA::fromBase32()`` require 16–1024 decoded bytes. Store
 factor secrets encrypted and never put them in source code,
 environment-variable dumps, logs, exception messages, metrics, or analytics.
+Protect the AOTP private key on the client; only its public key belongs at the
+verifier. GridOTP secrets must be encrypted at rest because verification needs
+the enrolled secret.
 
 Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
 
@@ -101,22 +110,11 @@ Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
    $recoveryCodeKey = random_bytes(32);
 
 Use different keys for these two purposes. Both APIs accept 16–1024 key bytes.
-Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA calls require a configured
-fail-closed, payload-integrity protected, authoritative CacheLayer
-authentication-state cache. TOTP, HOTP, and OCRA use CacheLayer 3.3 native
-atomics when available and otherwise require the cache's coordinated lock.
-``GenericOtp`` always requires that coordinated lock in OTP 6.1. Start with
-:doc:`../guides/storage` before wiring an authentication endpoint.
-
-Upgrading from OTP 6.0
-----------------------
-
-OTP 6.1 preserves the existing v1 replay keys and values, but an atomic-capable
-6.1 worker does not coordinate replay mutation through the same lock used by a
-6.0 worker. Do not run shared stateful 6.0 and atomic-path 6.1 workers through a
-long rolling window. Drain or replace the 6.0 stateful workers before activating
-6.1 workers against the same authentication-state backend. See
-:doc:`../guides/replay-protection` for the complete rule.
+Stateful authentication requires a fail-closed, payload-integrity protected,
+authoritative CacheLayer authentication-state cache. TOTP, HOTP, OCRA, and AOTP
+can use CacheLayer 3.3 native atomics where suitable. ``GenericOtp`` and
+``GridOTP`` require the coordinated lock because their complete transition is
+multi-field.
 
 Development checks
 ------------------
@@ -130,9 +128,7 @@ Contributors can run the repository's complete PHPForge gate:
    composer ic:tests
    composer benchmark
 
-CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices. The
-lower-bound matrix therefore exercises the CacheLayer 3.3 floor declared by the
-package.
+CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices.
 
 Next steps
 ----------

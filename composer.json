@@ -7,6 +7,8 @@
         "otp",
         "hotp",
         "totp",
+        "aotp",
+        "grid-otp",
         "hmac",
         "sha",
         "ocra",
@@ -26,6 +28,7 @@
         "php": "^8.4",
         "php-64bit": "^8.4",
         "ext-ctype": "*",
+        "ext-sodium": "*",
         "bacon/bacon-qr-code": "^3.1.1",
         "infocyph/cachelayer": "^3.3",
         "paragonie/constant_time_encoding": "^3.1.3"
