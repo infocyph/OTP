@@ -22,11 +22,30 @@ backend. Their absolute timings therefore attribute complete valid paths; they
 must not be presented as a pure lock-vs-CAS micro-operation ratio. Direct
 `setIfAbsent` and CAS subjects provide the lower-level atomic cost attribution.
 
-No synthetic 6.1 improvement percentage is recorded in this file. Release
-numbers must come from an actual successful benchmark run, with PHP version and
-environment recorded alongside the result. Stateful TOTP/HOTP/OCRA subjects in
-`OtpBench.php` now naturally exercise CacheLayer 3.3 atomics when their selected
-backend exposes them, while `GenericOtp` remains the lock-path control.
+### 6.1 CI attribution snapshot
+
+Recorded on 2026-09-07 from successful GitHub Actions runs on Ubuntu 24.04 with
+Xdebug disabled, PHPBench 1.7.0, CacheLayer 3.3, and the repository's one-run
+representative CI benchmark configuration. Values below are PHPBench reported
+mode times in microseconds. GitHub-hosted runners are not a stable performance
+environment, so these numbers document path attribution only and are not a
+regression baseline.
+
+| Subject | PHP 8.4.25 | PHP 8.5.10 |
+| --- | ---: | ---: |
+| Atomic `setIfAbsent` | 16 µs | 18 µs |
+| Atomic CAS | 61 µs | 75 µs |
+| OTP atomic monotonic advance | 210 µs | 233 µs |
+| OTP lock-fallback monotonic advance | 465 µs | 548 µs |
+| OTP atomic one-time claim | 200 µs | 250 µs |
+| OTP lock-fallback one-time claim | 432 µs | 461 µs |
+
+The atomic path is materially lighter in this representative run, but no
+percentage claim is published because the valid atomic and lock-fallback
+subjects use different concrete backends and the CI runners are not stable.
+Stateful TOTP/HOTP/OCRA subjects in `OtpBench.php` naturally exercise CacheLayer
+3.3 atomics when their selected backend exposes them, while `GenericOtp` remains
+the lock-path control.
 
 ## CacheLayer migration benchmark — OTP 6.0 baseline
 
