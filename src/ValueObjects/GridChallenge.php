@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\ValueObjects;
 
+use Infocyph\OTP\Support\Base64Url;
 use InvalidArgumentException;
 
 final readonly class GridChallenge
@@ -117,12 +118,7 @@ final readonly class GridChallenge
 
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
-        try {
-            $decoded = sodium_base642bin($value, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-        } catch (\SodiumException) {
-            throw new InvalidArgumentException($name . ' must be valid URL-safe Base64 without padding.');
-        }
-        if (strlen($decoded) !== $bytes) {
+        if (strlen(Base64Url::decode($value, $name)) !== $bytes) {
             throw new InvalidArgumentException($name . ' has an invalid length.');
         }
     }
