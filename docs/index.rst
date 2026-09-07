@@ -103,6 +103,8 @@ examples. Production deployments should always review :doc:`guides/security`,
    :caption: API reference
 
    api/protocols
+   api/aotp
+   api/grid-otp
    api/contracts
    api/results
    api/support
