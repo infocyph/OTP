@@ -31,6 +31,26 @@ final class AotpGridBench
 
     private string $privateKey;
 
+    public function setUp(): void
+    {
+        $this->cache = Cache::memory(
+            'otp-aotp-grid-bench',
+            new CacheOptions(
+                integrityKey: str_repeat('i', 32),
+                allowClosures: false,
+                allowObjects: false,
+                failOpen: false,
+            ),
+        );
+        $keys = AOTP::generateKeyPair();
+        $this->privateKey = $keys->privateKey;
+        $this->aotp = new AOTP($keys->publicKey, 'bench.example.com');
+        $this->aotpChallenge = $this->aotp->issue($this->cache, 'bench:aotp');
+        $this->gridSecret = GridOTP::generateSecret();
+        $this->gridOtp = new GridOTP($this->cache, $this->gridSecret);
+        $this->gridChallenge = $this->gridOtp->issue('bench:grid');
+    }
+
     #[Revs(1)]
     public function benchAotpRoundTrip(): void
     {
@@ -55,25 +75,5 @@ final class AotpGridBench
         $challenge = $this->gridOtp->issue('bench:grid:roundtrip');
         $response = GridOTP::respond($challenge, $this->gridSecret);
         $this->gridOtp->verify('bench:grid:roundtrip', $challenge, $response);
-    }
-
-    public function setUp(): void
-    {
-        $this->cache = Cache::memory(
-            'otp-aotp-grid-bench',
-            new CacheOptions(
-                integrityKey: str_repeat('i', 32),
-                allowClosures: false,
-                allowObjects: false,
-                failOpen: false,
-            ),
-        );
-        $keys = AOTP::generateKeyPair();
-        $this->privateKey = $keys->privateKey;
-        $this->aotp = new AOTP($keys->publicKey, 'bench.example.com');
-        $this->aotpChallenge = $this->aotp->issue($this->cache, 'bench:aotp');
-        $this->gridSecret = GridOTP::generateSecret();
-        $this->gridOtp = new GridOTP($this->cache, $this->gridSecret);
-        $this->gridChallenge = $this->gridOtp->issue('bench:grid');
     }
 }
