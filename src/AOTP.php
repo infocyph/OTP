@@ -45,11 +45,13 @@ final readonly class AOTP
     {
         self::requireSodium();
         $pair = sodium_crypto_sign_keypair();
+        $binaryPrivateKey = sodium_crypto_sign_secretkey($pair);
+        $encodedPublicKey = self::encode(sodium_crypto_sign_publickey($pair));
+        $encodedPrivateKey = self::encode($binaryPrivateKey);
+        sodium_memzero($binaryPrivateKey);
+        sodium_memzero($pair);
 
-        return new AotpKeyPair(
-            self::encode(sodium_crypto_sign_publickey($pair)),
-            self::encode(sodium_crypto_sign_secretkey($pair)),
-        );
+        return new AotpKeyPair($encodedPublicKey, $encodedPrivateKey);
     }
 
     public static function isAvailable(): bool
@@ -58,7 +60,8 @@ final readonly class AOTP
             && function_exists('sodium_crypto_sign_publickey')
             && function_exists('sodium_crypto_sign_secretkey')
             && function_exists('sodium_crypto_sign_detached')
-            && function_exists('sodium_crypto_sign_verify_detached');
+            && function_exists('sodium_crypto_sign_verify_detached')
+            && function_exists('sodium_memzero');
     }
 
     public static function respond(
@@ -66,18 +69,37 @@ final readonly class AOTP
         string $privateKey,
         AotpChallenge $challenge,
         string $expectedAudience,
+        string $expectedContext,
+        ?int $now = null,
     ): AotpResponse {
         self::requireSodium();
         self::assertAudience($expectedAudience);
+        self::assertContext($expectedContext);
         if (!hash_equals($expectedAudience, $challenge->audience)) {
             throw new InvalidArgumentException('AOTP challenge audience does not match the expected verifier.');
         }
+        if (!hash_equals($expectedContext, $challenge->context)) {
+            throw new InvalidArgumentException('AOTP challenge context does not match the expected operation.');
+        }
+
+        $now ??= time();
+        if ($now < 0) {
+            throw new InvalidArgumentException('AOTP signing timestamp must be non-negative.');
+        }
+        if ($challenge->issuedAt > $now || $challenge->expiresAt <= $now) {
+            throw new InvalidArgumentException('AOTP challenge is not currently valid for signing.');
+        }
+
         $binaryPrivateKey = self::decodeKey(
             $privateKey,
             self::PRIVATE_KEY_BYTES,
             'AOTP private key',
         );
-        $signature = sodium_crypto_sign_detached($challenge->signingPayload(), $binaryPrivateKey);
+        try {
+            $signature = sodium_crypto_sign_detached($challenge->signingPayload(), $binaryPrivateKey);
+        } finally {
+            sodium_memzero($binaryPrivateKey);
+        }
 
         return new AotpResponse($challenge->id, self::encode($signature));
     }
@@ -85,7 +107,7 @@ final readonly class AOTP
     public function issue(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
-        string $context = '',
+        string $context,
         int $ttlSeconds = 120,
         ?int $now = null,
     ): AotpChallenge {
@@ -163,13 +185,13 @@ final readonly class AOTP
         if (!is_int($state) || ($state !== 0 && $state !== 1)) {
             throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.');
         }
-        if ($state === 1) {
-            return VerificationResult::replay();
-        }
 
         $signature = self::decodeSignature($response->signature);
         if (!sodium_crypto_sign_verify_detached($signature, $challenge->signingPayload(), $this->binaryPublicKey)) {
             return VerificationResult::mismatch();
+        }
+        if ($state === 1) {
+            return VerificationResult::replay();
         }
 
         $ttl = max(1, $challenge->expiresAt - $now);
@@ -188,15 +210,29 @@ final readonly class AOTP
 
     private static function assertAudience(string $audience): void
     {
-        if ($audience === '' || strlen($audience) > 255 || preg_match('//u', $audience) !== 1) {
-            throw new InvalidArgumentException('AOTP audience must be valid UTF-8 between 1 and 255 bytes.');
+        if (
+            $audience === ''
+            || strlen($audience) > 255
+            || preg_match('//u', $audience) !== 1
+            || preg_match('/[\s\p{Cc}]/u', $audience) === 1
+        ) {
+            throw new InvalidArgumentException(
+                'AOTP audience must be valid UTF-8, contain no whitespace/control characters, and be between 1 and 255 bytes.',
+            );
         }
     }
 
     private static function assertContext(string $context): void
     {
-        if (strlen($context) > 4096 || preg_match('//u', $context) !== 1) {
-            throw new InvalidArgumentException('AOTP context must be valid UTF-8 and no longer than 4096 bytes.');
+        if (
+            $context === ''
+            || strlen($context) > 4096
+            || preg_match('//u', $context) !== 1
+            || preg_match('/\p{Cc}/u', $context) === 1
+        ) {
+            throw new InvalidArgumentException(
+                'AOTP context must be valid UTF-8, contain no control characters, and be between 1 and 4096 bytes.',
+            );
         }
     }
 
