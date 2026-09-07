@@ -175,7 +175,17 @@ A production login request should:
 Other primitives
 ----------------
 
+Every main authentication primitive has a dedicated guide with a complete usage
+scenario:
+
+* Use :doc:`../guides/generic-otp` for delivered email/SMS/one-time challenges.
 * Use :doc:`../guides/hotp` for explicit counters and resynchronization.
-* Use :doc:`../guides/generic-otp` for delivered one-time challenges.
-* Use :doc:`../guides/ocra` for challenge-response.
+* Use :doc:`../guides/totp` for authenticator-app time-based codes.
+* Use :doc:`../guides/ocra` for RFC 6287 challenge-response and transaction
+  signing inputs.
+* Use :doc:`../guides/aotp` for optional Ed25519 asymmetric challenge-response.
+* Use :doc:`../guides/grid-otp` for the dynamic human grid knowledge factor.
+* Use :doc:`../guides/mobile-otp` for legacy Mobile-OTP/mOTP interoperability.
+* Use :doc:`../guides/passkey` for optional WebAuthn registration and
+  authentication, including browser code.
 * Use :doc:`../guides/recovery-codes` for account recovery.
