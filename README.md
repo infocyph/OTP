@@ -23,7 +23,6 @@ four uses `otpauth://` provisioning.
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
-- `ext-sodium`
 - CacheLayer `^3.3`
 - Composer
 
@@ -31,16 +30,22 @@ four uses `otpauth://` provisioning.
 composer require infocyph/otp
 ```
 
-Passkey support is optional. Install its upstream WebAuthn implementation only
-when needed:
+### Optional integrations
+
+AOTP requires `ext-sodium` for Ed25519. OTP keeps sodium under Composer
+`require-dev` + `suggest`, so applications that do not use AOTP do not need it.
+Use `AOTP::isAvailable()` before exposing AOTP when the production PHP image may
+not include sodium.
+
+Passkey/WebAuthn requires the upstream WebAuthn implementation:
 
 ```bash
 composer require web-auth/webauthn-lib:^5.3
 ```
 
-OTP lists that package under Composer `suggest` and installs it in `require-dev`
-for its own tests/static analysis, so HOTP/TOTP-only consumers do not inherit the
-WebAuthn/CBOR/PKI/Symfony dependency graph.
+OTP keeps `web-auth/webauthn-lib` under `require-dev` + `suggest` as well.
+`Passkey::isAvailable()` reports whether it is loaded. OTP's Passkey integration
+does **not** require `ext-sodium`.
 
 ## TOTP quickstart
 
@@ -90,7 +95,7 @@ $persist = $result->nextCounter;    // 11
 Persist `nextCounter`, not `matchedCounter`. Supported counters are
 `0..PHP_INT_MAX`; HOTP/TOTP use 6..9 digits and require at least 128-bit
 decoded secrets. Replay-aware HOTP stores the greatest accepted counter in the
-configured CacheLayer backend with no TTL.
+configured CacheLayer backend with no TTL. See [HOTP](docs/guides/hotp.rst).
 
 ## Generic OTP
 
@@ -111,14 +116,8 @@ $valid = $otp->verify('login-challenge-123', $submittedCode);
 
 Generic OTP deliberately remains lock-based because issue/replace, consumption,
 failed-attempt decrement, expiry, and deletion form one multi-field state
-machine. The CacheLayer backend must therefore expose a coordinated lock even if
-it also supports native atomics.
-
-Issuing again for the same binding atomically replaces the previous code. A
-successful verification consumes it. A mismatch decrements attempts without
-changing the absolute expiration. HMAC-SHA-256 storage is mandatory and bound
-to the challenge. Applications remain responsible for transport, resend
-cooldowns, endpoint/account throttling, and anti-enumeration behavior.
+machine. A successful verification consumes the challenge; a mismatch decrements
+attempts without extending expiry. See [Generic OTP](docs/guides/generic-otp.rst).
 
 ## OCRA
 
@@ -140,22 +139,15 @@ $code = $ocra->generate(
 );
 ```
 
-Use `fromBase32()` for enrolled Base32 secrets. `generateMutual()` models
-client/server challenge composition explicitly. Session input is actual UTF-8;
-`sessionHex()` is an explicit integration helper. Time suites accept a bounded
-`VerificationWindow`. Suites with `t=0` return uppercase hexadecimal; truncated
-suites allow 4..9 digits.
-
-Counter OCRA replay state is monotonic and has no TTL. When CacheLayer replay
-protection is enabled for a non-counter suite, a positive `replayTtl` is
-mandatory; for time suites it must cover the complete accepted time window.
-`otpauth://ocra` is a library/client convention, not an RFC-standardized
-provisioning format, so the consuming client must explicitly support it.
+Use `fromBase32()` for enrolled Base32 secrets. Counter OCRA replay state is
+monotonic; non-counter replay protection requires an explicit replay TTL.
+`otpauth://ocra` is a library/client convention rather than an RFC-standardized
+provisioning format. See [OCRA](docs/guides/ocra.rst).
 
 ## AOTP
 
-AOTP uses Ed25519 challenge signatures so the verifier can authenticate a client
-without holding a shared signing secret.
+AOTP is an optional Ed25519 challenge-response primitive. The verifier keeps the
+public key while the client/device keeps the private key.
 
 ```php
 use Infocyph\OTP\AOTP;
@@ -172,50 +164,42 @@ $result = $aotp->verifyWithResult(
 );
 ```
 
-The signed payload binds challenge ID, 256-bit nonce, audience, context,
-issuance, and expiration. Cache state is keyed by the complete canonical
-challenge, so changing context or expiry cannot reuse an issued reservation.
-Successful verification atomically transitions the reservation from unconsumed
-to consumed; a concurrent duplicate is reported as replay.
-
-AOTP uses CacheLayer native atomics when available and the coordinated lock
-fallback otherwise. The client must independently enforce the expected audience
-before signing. Generic AOTP integration should not be advertised as phishing
-resistant unless the application also enforces verifier/context binding end to
-end. See [AOTP](docs/guides/aotp.rst).
+The signed payload binds challenge ID, nonce, audience, context, issuance, and
+expiration. Successful verification atomically consumes the issued reservation;
+a concurrent duplicate is replay. The client must independently enforce the
+expected audience. AOTP requires `ext-sodium`. See [AOTP](docs/guides/aotp.rst)
+for the complete client/server flow.
 
 ## GridOTP
 
-GridOTP is a human-computable dynamic-grid challenge. The enrolled secret uses a
-32-symbol alphabet and the challenge asks for 6..10 secret positions. Every
-challenge regenerates a balanced many-to-one mapping from secret symbols to
-response digits.
+GridOTP is a human-computable dynamic-grid knowledge factor. Every challenge
+regenerates a balanced mapping and requests 6..10 positions from the enrolled
+secret.
 
 ```php
 use Infocyph\OTP\GridOTP;
 
 $secret = GridOTP::generateSecret();
 $gridOtp = new GridOTP($stateCache, $secret);
-$challenge = $gridOtp->issue('user-42:grid:v1');
+$challenge = $gridOtp->issue('user-42:grid:secret-v1');
 $response = GridOTP::respond($challenge, $secret);
-$result = $gridOtp->verifyWithResult('user-42:grid:v1', $challenge, $response);
+$result = $gridOtp->verifyWithResult(
+    'user-42:grid:secret-v1',
+    $challenge,
+    $response,
+);
 ```
 
-The user never submits the enrolled secret directly. A captured response cannot
-be replayed against a new grid. The many-to-one mapping also prevents one full
-visual observation from uniquely revealing every challenged secret symbol, but
-repeated observations can intersect candidate sets and recover the secret.
-GridOTP therefore reduces direct password/keylogger exposure; it is **not**
-shoulder-surfing proof and remains one knowledge factor rather than MFA.
-
-GridOTP is lock-based because attempts, expiry, challenge-integrity state, and
-consumption are one multi-field transition. See [GridOTP](docs/guides/grid-otp.rst).
+The enrolled secret is not submitted during authentication and a captured
+response cannot be replayed against a new grid. Repeated full observations can
+still recover secret symbols, so GridOTP is not shoulder-surfing proof and is
+one knowledge factor rather than MFA. See [GridOTP](docs/guides/grid-otp.rst).
 
 ## MobileOTP
 
-`MobileOTP` is strict compatibility for the established Mobile-OTP/mOTP protocol:
-a 10-second timestep, a 16-hex-character Init-Secret, a four-digit PIN, and the
-first six lowercase hexadecimal characters of the legacy MD5 calculation.
+`MobileOTP` provides strict compatibility with legacy Mobile-OTP/mOTP: a
+10-second timestep, 16-hex-character Init-Secret, four-digit PIN, and first six
+lowercase hexadecimal characters of the protocol's MD5 calculation.
 
 ```php
 use Infocyph\OTP\MobileOTP;
@@ -229,25 +213,20 @@ $otp = $mobile->generate();
 $result = $mobile->verifyWithWindow(
     otp: $submittedOtp,
     cache: $stateCache,
-    factorId: 'user-42:mobile:v1',
+    factorId: 'user-42:mobile:secret-v1',
 );
 ```
 
-The default verification window is zero. Compatibility windows may be widened
-explicitly up to the historical ±3-minute ceiling (18 ten-second steps per
-direction). Replay-aware verification advances the greatest accepted timestep
-through CacheLayer atomics/lock fallback just like TOTP.
-
-MD5 is used **only because it is part of the legacy Mobile-OTP wire algorithm**.
-Do not choose MobileOTP for a new authentication design; prefer TOTP, AOTP, or
-Passkey. See [MobileOTP](docs/guides/mobile-otp.rst).
+The default window is zero; legacy tolerance can be configured up to 18
+10-second steps per direction. MD5 is used only because it is part of the legacy
+wire algorithm. Prefer TOTP or Passkey for new deployments. See
+[MobileOTP](docs/guides/mobile-otp.rst).
 
 ## Passkey / WebAuthn
 
-Passkey support is a ceremony/state wrapper around `web-auth/webauthn-lib`, not a
-custom WebAuthn implementation. The authenticator keeps the private key; the
-application persists the upstream `CredentialRecord` returned by successful
-registration/authentication.
+Passkey is an optional ceremony/state wrapper around `web-auth/webauthn-lib`.
+The authenticator owns the private key and the application persists the upstream
+`CredentialRecord`.
 
 ```php
 use Infocyph\OTP\Passkey;
@@ -255,7 +234,6 @@ use Infocyph\OTP\Passkey;
 $passkey = new Passkey(
     cache: $stateCache,
     rpId: 'example.com',
-    rpName: 'Example',
     allowedOrigins: ['https://example.com'],
 );
 
@@ -273,17 +251,12 @@ $result = $passkey->finishRegistration(
 );
 ```
 
-Registration requires a discoverable credential and user verification, with
-attestation conveyance `none`. Authentication supports both account-bound
-`allowCredentials` and discoverable/usernameless flows. On every successful
-authentication, persist the **updated** `credentialRecordJson`; WebAuthn counter,
-backup, and UV state may have changed.
-
-Full creation/request options are stored server-side under a random 128-bit
-ceremony ID. A successful ceremony remains marked consumed until its original
-expiry, so concurrent duplicates are reported as replay. Durable credential
-records are application-owned database state, never CacheLayer state. See
-[Passkey](docs/guides/passkey.rst).
+There is no `rpName` constructor argument; OTP uses the RP ID as the serialized
+RP display name. Registration requests discoverable credentials and user
+verification. Authentication supports account-bound and discoverable flows.
+Persist the updated `credentialRecordJson` after every successful assertion.
+Passkey does not require `ext-sodium` from OTP. See
+[Passkey/WebAuthn](docs/guides/passkey.rst) for complete browser and server code.
 
 ## Recovery codes
 
@@ -299,20 +272,19 @@ $batch = $recovery->generate('user-42');
 $result = $recovery->consume('user-42', $submittedCode);
 ```
 
-The active batch is replaced on regeneration. Consumption and its returned
-counts are one atomic mutation. Custom configurations must provide at least 40
-bits of entropy. Submitted input is bounded before normalization. Production
-applications should implement `RecoveryCodeStoreInterface` with authoritative,
-durable, atomic replacement and consumption.
+Regeneration replaces the entire active batch and consumption is atomic and
+single-use. Production applications should implement
+`RecoveryCodeStoreInterface` with authoritative durable atomic persistence. See
+[Recovery codes](docs/guides/recovery-codes.rst).
 
 ## Security boundary
 
 Correct OTP math is not a complete authentication workflow. Store
 HOTP/TOTP/OCRA, GridOTP, and MobileOTP secrets encrypted; protect AOTP private
-keys on the client; persist passkey CredentialRecords in an authoritative durable
-store; keep Generic OTP and recovery HMAC keys separate; use TLS; apply rate
-limits; protect provisioning material; and rotate factor IDs when secrets, keys,
-or moving-factor generations rotate.
+keys on the client; persist passkey `CredentialRecord` data in an authoritative
+durable store; keep Generic OTP and recovery HMAC keys separate; use TLS; apply
+rate limits; protect provisioning material; and rotate factor IDs when secrets,
+keys, or moving-factor generations rotate.
 
 For Generic OTP, GridOTP, AOTP, Passkey ceremonies, MobileOTP replay, and
 replay-aware HOTP/TOTP/OCRA, configure one shared, fail-closed,
