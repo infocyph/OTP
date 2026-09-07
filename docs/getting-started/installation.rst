@@ -89,7 +89,7 @@ Generate secrets with the protocol class rather than inventing a Base32 value:
    use Infocyph\OTP\OCRA;
    use Infocyph\OTP\TOTP;
 
-   $totpSecret = TOTP::generateSecret();
+   $totpSecret = TOTP::generateSecret();   // 20 random bytes
    $hotpSecret = HOTP::generateSecret(32);
    $ocraSecret = OCRA::generateSecret(32);
    $aotpKeys = AOTP::generateKeyPair();
@@ -110,11 +110,28 @@ Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
    $recoveryCodeKey = random_bytes(32);
 
 Use different keys for these two purposes. Both APIs accept 16–1024 key bytes.
-Stateful authentication requires a fail-closed, payload-integrity protected,
-authoritative CacheLayer authentication-state cache. TOTP, HOTP, OCRA, and AOTP
-can use CacheLayer 3.3 native atomics where suitable. ``GenericOtp`` and
-``GridOTP`` require the coordinated lock because their complete transition is
-multi-field.
+Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA/AOTP calls require a
+configured fail-closed, payload-integrity protected, authoritative CacheLayer
+authentication-state cache. TOTP, HOTP, OCRA, and AOTP use CacheLayer 3.3 native
+atomics when suitable and otherwise require the cache's coordinated lock.
+``GenericOtp`` and ``GridOTP`` always require that coordinated lock because
+their complete transitions are multi-field. Start with :doc:`../guides/storage`
+before wiring an authentication endpoint.
+
+Upgrading from OTP 6.0
+----------------------
+
+OTP 6.1 preserves the existing v1 replay keys and values, but an atomic-capable
+6.1 worker does not coordinate replay mutation through the same lock used by a
+6.0 worker. Do not run shared stateful 6.0 and atomic-path 6.1 workers through a
+long rolling window. Drain or replace the 6.0 stateful workers before activating
+6.1 workers against the same authentication-state backend. See
+:doc:`../guides/replay-protection` for the complete rule.
+
+AOTP and GridOTP introduce new, independently namespaced v1 state and therefore
+do not collide with the HOTP/TOTP/OCRA/GenericOtp state carried forward from
+6.1. Applications should nevertheless rotate factor IDs whenever an enrolled
+AOTP key or GridOTP secret changes.
 
 Development checks
 ------------------
@@ -128,7 +145,9 @@ Contributors can run the repository's complete PHPForge gate:
    composer ic:tests
    composer benchmark
 
-CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices.
+CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices. The
+lower-bound matrix therefore exercises the CacheLayer 3.3 floor declared by the
+package and verifies the required ``sodium`` platform extension.
 
 Next steps
 ----------
