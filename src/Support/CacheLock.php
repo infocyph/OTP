@@ -30,8 +30,7 @@ final class CacheLock
         ?int $ttl,
         string $stateName,
     ): bool {
-        self::assertSafe($cache);
-        $atomic = self::atomic($cache);
+        $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
             return self::advanceAtomically($cache, $atomic, $stateKey, $value, $ttl, $stateName);
         }
@@ -47,14 +46,17 @@ final class CacheLock
         }
     }
 
-    public static function assertSafe(AuthenticationStateCacheInterface $cache): void
+    public static function assertSafe(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         self::assertAuthenticationStateSafe($cache);
-        if (self::atomic($cache) === null && $cache->authenticationStateLock() === null) {
+        $atomic = self::atomic($cache);
+        if ($atomic === null && $cache->authenticationStateLock() === null) {
             throw new InvalidArgumentException(
                 'Authentication state caches must provide an atomic or coordinated lock capability.',
             );
         }
+
+        return $atomic;
     }
 
     public static function consumeOnce(
@@ -64,8 +66,7 @@ final class CacheLock
         int $ttl,
         string $stateName,
     ): bool {
-        self::assertSafe($cache);
-        $atomic = self::atomic($cache);
+        $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
             return self::consumeOnceAtomically($cache, $atomic, $stateKey, $ttl, $stateName);
         }
