@@ -22,7 +22,7 @@ Plan for:
 * counter rollback;
 * key/secret reuse across purposes;
 * stale replicas and non-atomic stores;
-* AOTP verifier/challenge relay or context confusion;
+* AOTP verifier/challenge relay, context confusion, and blind-signing clients;
 * repeated GridOTP visual observations;
 * WebAuthn origin/RP misconfiguration and stale credential records;
 * compromise of legacy MobileOTP Init-Secrets/PINs;
@@ -40,7 +40,9 @@ verification needs those values.
 AOTP is asymmetric: the verifier stores only the enrolled public key. Protect
 the private key on the client/device and prefer hardware-backed storage when the
 application controls the client. A server that only verifies AOTP should never
-receive the private key.
+receive the private key. OTP clears temporary decoded private-key copies created
+inside ``AOTP::respond()`` with ``sodium_memzero()``, but the caller still owns
+and must protect the original encoded key string and any copies made outside OTP.
 
 Passkeys are WebAuthn credentials. The authenticator owns the private key; the
 application persistently stores the serialized ``CredentialRecord`` returned by
@@ -52,7 +54,7 @@ CacheLayer is only the short-lived passkey ceremony store.
 Do not log:
 
 * Base32/raw factor, GridOTP, or MobileOTP secrets/PINs;
-* AOTP private keys or signatures;
+* AOTP private keys, challenge context/nonces, or signatures;
 * Passkey ceremony options, browser credential JSON, CredentialRecord JSON, or
   raw user handles;
 * Generic OTP or recovery HMAC keys;
@@ -124,9 +126,12 @@ ceremony type/options/user binding/expiry/consumed marker must transition as one
 unit.
 
 AOTP first reserves an issued challenge and then atomically consumes that exact
-reservation after signature verification. Passkey successful ceremonies retain
-a consumed marker through the original TTL so duplicate assertions can be
-reported as replay instead of indistinguishable misses.
+reservation after signature verification. Signature validity is checked before a
+consumed reservation is exposed as replay, so an invalid signer receives
+``Mismatch`` rather than learning whether a valid signer already used the
+challenge. Passkey successful ceremonies retain a consumed marker through the
+original TTL so duplicate assertions can be reported as replay instead of
+indistinguishable misses.
 
 Factor IDs must include secret/key and moving-factor generation. Rotating a
 secret without changing its factor ID can let new state conflict with old state;
@@ -149,13 +154,17 @@ rejected. Only enable subdomain-origin acceptance when the relying party owns
 and secures those subdomains. Do not derive allowed origins from untrusted Host,
 Origin, proxy, or request parameters.
 
-TOTP and MobileOTP time
------------------------
+TOTP, AOTP, and MobileOTP time
+-----------------------------
 
-Use monitored NTP synchronization on every verifier. Keep acceptance windows
-small and explicit. Do not silently widen windows in response to failures.
-Clock rollback can interact with replay TTL; monotonic replay state must remain
-authoritative.
+Use monitored NTP synchronization on every verifier. AOTP signing clients also
+need a trustworthy local clock because ``AOTP::respond()`` refuses challenges
+before ``issuedAt`` and at/after ``expiresAt``. Do not disable or bypass that
+check to compensate for clock problems.
+
+Keep TOTP/MobileOTP acceptance windows small and explicit. Do not silently widen
+windows in response to failures. Clock rollback can interact with replay TTL;
+monotonic replay state must remain authoritative.
 
 MobileOTP's established protocol uses a ten-second step, a 16-hex-character
 Init-Secret, a four-digit PIN, MD5, and a six-hex-character output. OTP preserves
@@ -188,19 +197,55 @@ them atomically. Canonically encode transaction fields. Never let displayed
 transaction data differ from the bytes used to create the response. Time and
 counter components do not eliminate the need for application authorization.
 
-AOTP challenges
----------------
+AOTP challenges and phishing resistance
+---------------------------------------
 
-AOTP signs a canonical challenge containing ID, nonce, audience, context,
-issuance, and expiry. The server reservation is keyed from the complete signed
-challenge, not only the challenge ID. The client API separately requires an
-``expectedAudience`` value; that value must come from trusted client
-configuration, not be copied blindly from the received challenge.
+AOTP signs a canonical challenge containing ID, nonce, audience, mandatory
+context, issuance, and expiry. The server reservation is keyed from the complete
+signed challenge, not only the challenge ID. Challenge context cannot be empty.
+Audience values reject whitespace/control characters and context rejects control
+characters to reduce ambiguous identifiers and display/log injection.
 
-A generic network AOTP flow is not automatically phishing-resistant. A real-time
-relay can proxy a live challenge unless the client independently recognizes and
-enforces the intended verifier/context. Do not claim stronger phishing
-resistance without an end-to-end client/verifier design that provides it.
+``AOTP::respond()`` requires both ``expectedAudience`` and ``expectedContext``.
+It compares them exactly with the received challenge and refuses stale/future
+challenges before signing. These checks make accidental blind signing harder,
+but their security depends on where the expected values come from.
+
+**AOTP provides asymmetric proof-of-possession and replay-resistant challenge
+authentication. Phishing resistance is an end-to-end property of the consuming
+client and verifier.** A generic AOTP transport cannot independently determine
+which website/app initiated the request or whether a live challenge was relayed
+through a phishing intermediary.
+
+A real-time relay can obtain a genuine challenge from the real verifier, forward
+it to the victim, and forward the resulting valid signature back. The audience
+and context in that relayed challenge can themselves be genuine. Therefore the
+client must not derive its expectations by copying those fields from the
+received challenge.
+
+Required client/verifier rules for stronger resistance:
+
+* pin or otherwise independently authenticate the verifier identity used as
+  ``expectedAudience``;
+* derive ``expectedContext`` from trusted local operation state, not from the
+  challenge payload;
+* bind context to a fresh locally known login/session/transaction identifier,
+  not only a constant such as ``login``;
+* when authorizing business data, canonicalize the same transaction details on
+  both sides and display/verify them before signing;
+* consume the corresponding application flow/transaction together with the
+  successful AOTP result so a proof cannot be detached from its intended action;
+* never call ``AOTP::respond(..., $challenge->audience, $challenge->context)`` as
+  a shortcut;
+* use short challenge TTLs and trustworthy client/verifier clocks; and
+* describe the integration as proof-of-possession/replay-resistant unless the
+  surrounding client/verifier protocol has been independently reviewed for
+  phishing/relay resistance.
+
+When browser-origin-bound phishing resistance is the requirement, prefer
+Passkey/WebAuthn. Browsers/authenticators participate in enforcing RP-ID/origin
+relationships that a generic AOTP library cannot reproduce solely from a signed
+challenge.
 
 GridOTP observation model
 -------------------------
@@ -287,6 +332,11 @@ Before launch, verify:
 
 #. secrets and HMAC keys are purpose-separated and protected;
 #. AOTP private keys never reach verifier storage;
+#. AOTP expected audience comes from pinned/trusted client configuration and
+   expected context comes from trusted local operation state rather than received
+   challenge fields;
+#. AOTP contexts contain fresh flow/transaction binding and the application
+   consumes that flow when authentication succeeds;
 #. passkey origins/RP ID are fixed trusted configuration and CredentialRecords
    are persisted after successful assertions;
 #. MobileOTP is used only where legacy compatibility is actually required;
