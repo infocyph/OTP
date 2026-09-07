@@ -45,9 +45,6 @@
             "Infocyph\\OTP\\Tests\\": "tests/"
         }
     },
-    "scripts": {
-        "benchmark": "@php vendor/bin/phpbench run --config=vendor/infocyph/phpforge/resources/phpbench.json --report=aggregate --output=json --progress=none"
-    },
     "config": {
         "allow-plugins": {
             "ergebnis/composer-normalize": true,
@@ -56,5 +53,8 @@
         },
         "optimize-autoloader": true,
         "sort-packages": true
+    },
+    "scripts": {
+        "benchmark": "@php vendor/bin/phpbench run --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none"
     }
 }
