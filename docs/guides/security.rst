@@ -43,8 +43,10 @@ Do not log:
 * unredacted storage/replay identifiers.
 
 ``SensitiveParameter`` attributes reduce accidental PHP stack-trace disclosure
-for annotated inputs. They do not sanitize application logs, telemetry,
-exceptions, or database traces.
+for annotated inputs. Secret-bearing result/value objects also provide redacted
+debug representations. Neither mechanism sanitizes application logs, telemetry,
+custom serialization, exceptions assembled by application code, or database
+traces.
 
 Purpose-separated HMAC keys
 ---------------------------
@@ -82,12 +84,28 @@ Atomicity and replay
 --------------------
 
 Authentication-critical transitions must be atomic. A valid code accepted by
-two concurrent requests is a replay vulnerability. Use a shared, fail-closed
-CacheLayer backend for Generic OTP, TOTP, HOTP, and OCRA. CacheLayer must own a
-lock provider in the same coordination domain; OTP obtains it from the cache and
-rejects fail-open, unsigned, tiered/non-authoritative, or lock-incapable state
-configuration. Recovery codes continue to use an application-provided atomic
-persistence contract.
+two concurrent requests is a replay vulnerability. Use a shared, fail-closed,
+payload-integrity protected, authoritative CacheLayer backend for Generic OTP,
+TOTP, HOTP, and OCRA. Tiered/non-authoritative or fail-open authentication state
+is rejected.
+
+For TOTP, HOTP, and OCRA, OTP prefers CacheLayer 3.3 native atomic state when
+``AtomicCacheProviderInterface::atomic()`` exposes it. Monotonic moving-factor
+state uses conditional insertion/CAS; one-time OCRA replay uses conditional
+insertion. If a backend does not expose atomics, OTP requires the cache's
+coordinated lock and runs the complete transition under that lock. A cache with
+neither capability is rejected.
+
+``GenericOtp`` remains lock-based because its issuance, replacement, attempt
+count, expiry, consumption, and deletion form one multi-field state machine. An
+atomic-capable cache must therefore still provide a coordinated lock when used
+for Generic OTP.
+
+Atomic capability selection is not failover. If native atomic mutation is
+selected and the backend throws, the failure propagates; OTP never retries the
+unknown outcome through a lock mutation. Atomic contention is bounded and
+exhaustion fails closed. Recovery codes continue to use an application-provided
+atomic persistence contract.
 
 Factor IDs must include secret and moving-factor generation. Rotating a secret
 without changing its factor ID can let new state conflict with old state;
