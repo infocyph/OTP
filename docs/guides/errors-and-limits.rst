@@ -134,9 +134,9 @@ AOTP bounds
    * - Factor ID
      - 1–190 bytes
    * - Audience
-     - Valid UTF-8, 1–255 bytes
+     - Valid UTF-8, 1–255 bytes, without whitespace/control characters
    * - Context
-     - Valid UTF-8, 0–4096 bytes
+     - Valid UTF-8, 1–4096 bytes, without control characters
    * - Challenge TTL
      - 1–600 seconds
    * - Challenge ID
@@ -153,6 +153,12 @@ AOTP bounds
 ``AotpChallenge::fromArray()`` and ``AotpResponse::fromArray()`` require exact,
 versioned transport shapes. Unknown/missing fields or invalid encoded lengths are
 rejected with ``InvalidArgumentException``.
+
+``AOTP::respond()`` additionally requires independently supplied
+``expectedAudience`` and ``expectedContext`` values. A mismatch in either throws
+``InvalidArgumentException`` before signing. The client also rejects a challenge
+before its ``issuedAt`` timestamp or at/after ``expiresAt``. The optional
+``now`` parameter exists for deterministic tests/integration clocks.
 
 GridOTP bounds
 --------------
