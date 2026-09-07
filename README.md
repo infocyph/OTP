@@ -10,12 +10,13 @@
 
 Framework-agnostic PHP 8.4 primitives for Generic OTP, HOTP (RFC 4226), TOTP
 (RFC 6238), OCRA (RFC 6287), recovery codes, provisioning URIs, SVG QR codes,
-secret rotation planning, and atomic replay boundaries.
+secret rotation planning, and CacheLayer-backed replay boundaries.
 
 ## Requirements
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
+- CacheLayer `^3.3`
 - Composer
 
 ```bash
@@ -35,22 +36,24 @@ $uri = $totp->getProvisioningUri('alice@example.com', 'Example App');
 $valid = $totp->verify($submittedCode);
 ```
 
-For replay protection, a factor ID and an atomic store are both required:
+The boolean path is stateless. For single-use acceptance, pass a configured
+CacheLayer authentication-state cache and a generation-specific factor ID:
 
 ```php
-use Infocyph\OTP\Stores\InMemoryReplayStore;
-
 $result = $totp->verifyWithWindow(
-    $submittedCode,
-    replayStore: new InMemoryReplayStore(), // examples/tests only
-    factorId: 'totp-enrollment-v1',
+    otp: $submittedCode,
+    cache: $stateCache,
+    factorId: 'user-42:totp:secret-v1',
 );
 ```
 
-`factorId` must identify one factor and secret generation, not merely a user.
-Production stores must implement atomic conditional updates in shared durable
-storage. The in-memory stores are process-local and are not production replay
-protection.
+`$stateCache` must be fail-closed, payload-integrity protected, and authoritative.
+CacheLayer 3.3 native atomics are preferred when the backend exposes them;
+otherwise TOTP/HOTP/OCRA use the cache's coordinated lock fallback. A selected
+atomic backend failure propagates and is never retried through locks. `factorId`
+must identify one factor and secret/moving-factor generation, not merely a user.
+See [storage](docs/guides/storage.rst) and
+[replay protection](docs/guides/replay-protection.rst) before production use.
 
 ## HOTP
 
@@ -67,16 +70,16 @@ $persist = $result->nextCounter;    // 11
 
 Persist `nextCounter`, not `matchedCounter`. Supported counters are
 `0..PHP_INT_MAX`; HOTP/TOTP use 6..9 digits and require at least 128-bit
-decoded secrets.
+decoded secrets. Replay-aware HOTP stores the greatest accepted counter in the
+configured CacheLayer backend with no TTL.
 
 ## Generic OTP
 
 ```php
 use Infocyph\OTP\GenericOtp;
-use Infocyph\OTP\Stores\InMemoryOtpStore;
 
 $otp = new GenericOtp(
-    store: new InMemoryOtpStore(), // examples/tests only
+    cache: $stateCache,
     key: $purposeSpecificApplicationKey,
     digits: 6,
     ttlSeconds: 300,
@@ -86,6 +89,11 @@ $otp = new GenericOtp(
 $code = $otp->generate('login-challenge-123');
 $valid = $otp->verify('login-challenge-123', $submittedCode);
 ```
+
+Generic OTP deliberately remains lock-based in 6.1 because issue/replace,
+consumption, failed-attempt decrement, expiry, and deletion form one multi-field
+state machine. The CacheLayer backend must therefore expose a coordinated lock
+even if it also supports native atomics.
 
 Issuing again for the same binding atomically replaces the previous code. A
 successful verification consumes it. A mismatch decrements attempts without
@@ -117,12 +125,13 @@ Use `fromBase32()` for enrolled Base32 secrets. `generateMutual()` models
 client/server challenge composition explicitly. Session input is actual UTF-8;
 `sessionHex()` is an explicit integration helper. Time suites accept a bounded
 `VerificationWindow`. Suites with `t=0` return uppercase hexadecimal; truncated
-suites allow 4..9 digits. Challenge replay tokens are SHA-256 digests, and a
-challenge replay TTL is optional; high-volume systems should choose a retention
-policy that covers the complete acceptance window.
+suites allow 4..9 digits.
 
+Counter OCRA replay state is monotonic and has no TTL. When CacheLayer replay
+protection is enabled for a non-counter suite, a positive `replayTtl` is
+mandatory; for time suites it must cover the complete accepted time window.
 `otpauth://ocra` is a library/client convention, not an RFC-standardized
-provisioning format. The consuming client must explicitly support it.
+provisioning format, so the consuming client must explicitly support it.
 
 ## Recovery codes
 
@@ -131,7 +140,7 @@ use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 
 $recovery = new RecoveryCodes(
-    new InMemoryRecoveryCodeStore(), // examples/tests only
+    new InMemoryRecoveryCodeStore(), // tests/one-process development only
     $separateRecoveryHmacKey,
 );
 $batch = $recovery->generate('user-42'); // XXXX-XXXX-XXXX, about 60 bits
@@ -140,16 +149,23 @@ $result = $recovery->consume('user-42', $submittedCode);
 
 The active batch is replaced on regeneration. Consumption and its returned
 counts are one atomic mutation. Custom configurations must provide at least 40
-bits of entropy. Submitted input is bounded before normalization.
+bits of entropy. Submitted input is bounded before normalization. Production
+applications should implement `RecoveryCodeStoreInterface` with authoritative,
+durable, atomic replacement and consumption.
 
 ## Security boundary
 
 Correct OTP math is not a complete authentication workflow. Store factor
 secrets encrypted, keep Generic OTP and recovery HMAC keys separate, use TLS,
-apply rate limits, protect provisioning URIs/QR SVGs as secrets, rotate factor
-IDs when secrets rotate, and implement atomic stores in Redis or a database.
-See the security and storage guides for the required atomic semantics.
+apply rate limits, protect provisioning URIs/QR SVGs as secrets, and rotate
+factor IDs when secrets or moving-factor generations rotate.
 
+For Generic OTP and replay-aware HOTP/TOTP/OCRA, configure one shared,
+fail-closed, payload-integrity protected, authoritative CacheLayer backend.
+Recovery-code persistence remains application-owned. Backend/configuration
+failures are operational exceptions and are never converted into credential
+mismatch or replay results. See the [security](docs/guides/security.rst) and
+[storage](docs/guides/storage.rst) guides for the complete boundary.
 
 ## Security
 
