@@ -8,6 +8,7 @@ use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\Result\PasskeyResult;
+use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\ValueObjects\PasskeyCeremony;
 use InvalidArgumentException;
@@ -230,12 +231,7 @@ final readonly class Passkey
 
     private static function assertCeremonyId(string $ceremonyId): void
     {
-        try {
-            $decoded = sodium_base642bin($ceremonyId, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-        } catch (\SodiumException) {
-            throw new InvalidArgumentException('Passkey ceremony ID must be valid URL-safe Base64 without padding.');
-        }
-        if (strlen($decoded) !== 16) {
+        if (strlen(Base64Url::decode($ceremonyId, 'Passkey ceremony ID')) !== 16) {
             throw new InvalidArgumentException('Passkey ceremony ID must encode exactly 16 bytes.');
         }
     }
@@ -322,7 +318,7 @@ final readonly class Passkey
 
     private static function encode(string $value): string
     {
-        return sodium_bin2base64($value, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+        return Base64Url::encode($value);
     }
 
     private static function lockKey(string $binding, string $ceremonyId): string
