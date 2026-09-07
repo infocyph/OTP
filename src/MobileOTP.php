@@ -47,7 +47,7 @@ final readonly class MobileOTP
     {
         $step = $this->getTimeStepFromTimestamp($timestamp ?? time(), $offsetSteps);
 
-        return substr(hash('md5', (string) $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
     }
 
     public function getTimeStepFromTimestamp(int $timestamp, int $offsetSteps = 0): int
@@ -125,7 +125,7 @@ final readonly class MobileOTP
 
     private static function assertOffset(int $offsetSteps): void
     {
-        if (abs($offsetSteps) > self::MAX_OFFSET_STEPS) {
+        if ($offsetSteps < -self::MAX_OFFSET_STEPS || $offsetSteps > self::MAX_OFFSET_STEPS) {
             throw new InvalidArgumentException('MobileOTP offset may not exceed 24 hours in either direction.');
         }
     }
@@ -178,9 +178,7 @@ final readonly class MobileOTP
         return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'MobileOTP replay');
     }
 
-    /**
-     * @return array{step:int,offset:int}|null
-     */
+    /** @return array{step:int,offset:int}|null */
     private function findMatch(string $otp, int $currentStep, VerificationWindow $window): ?array
     {
         if ($this->matches($otp, $currentStep)) {
@@ -203,7 +201,7 @@ final readonly class MobileOTP
 
     private function matches(string $otp, int $step): bool
     {
-        $candidate = substr(hash('md5', (string) $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+        $candidate = substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
 
         return hash_equals($candidate, $otp);
     }
