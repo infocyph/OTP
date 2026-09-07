@@ -4,19 +4,24 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\ValueObjects;
 
+use Infocyph\OTP\Support\Base64Url;
 use InvalidArgumentException;
 
 final readonly class AotpResponse
 {
     public const int VERSION = 1;
 
+    private const int CHALLENGE_ID_BYTES = 16;
+
+    private const int SIGNATURE_BYTES = 64;
+
     public function __construct(
         public string $challengeId,
         #[\SensitiveParameter]
         public string $signature,
     ) {
-        self::assertEncodedLength($challengeId, 16, 'AOTP challenge ID');
-        self::assertEncodedLength($signature, SODIUM_CRYPTO_SIGN_BYTES, 'AOTP signature');
+        self::assertEncodedLength($challengeId, self::CHALLENGE_ID_BYTES, 'AOTP challenge ID');
+        self::assertEncodedLength($signature, self::SIGNATURE_BYTES, 'AOTP signature');
     }
 
     /** @return array{challengeId:string,signature:string} */
@@ -55,12 +60,7 @@ final readonly class AotpResponse
 
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
-        try {
-            $decoded = sodium_base642bin($value, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-        } catch (\SodiumException) {
-            throw new InvalidArgumentException($name . ' must be valid URL-safe Base64 without padding.');
-        }
-        if (strlen($decoded) !== $bytes) {
+        if (strlen(Base64Url::decode($value, $name)) !== $bytes) {
             throw new InvalidArgumentException($name . ' has an invalid length.');
         }
     }
