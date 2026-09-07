@@ -124,7 +124,7 @@ final readonly class Passkey
         self::assertUserName($username, 'Passkey username');
         self::assertUserName($displayName, 'Passkey display name');
         $options = PublicKeyCredentialCreationOptions::create(
-            rp: PublicKeyCredentialRpEntity::create('', $this->rpId),
+            rp: PublicKeyCredentialRpEntity::create($this->rpId, $this->rpId),
             user: PublicKeyCredentialUserEntity::create($username, $userHandle, $displayName),
             challenge: random_bytes(32),
             pubKeyCredParams: [
@@ -273,7 +273,7 @@ final readonly class Passkey
         }
     }
 
-    /** @param list<string> $origins */
+    /** @param array<array-key, mixed> $origins */
     private static function assertOrigins(array $origins): void
     {
         if (!array_is_list($origins) || $origins === [] || count($origins) > 16) {
@@ -340,6 +340,7 @@ final readonly class Passkey
         return hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremonyId);
     }
 
+    /** @param array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} $state */
     private function consumeState(
         string $stateKey,
         array $state,
@@ -359,7 +360,7 @@ final readonly class Passkey
     }
 
     /**
-     * @param list<string> $recordsJson
+     * @param array<array-key, mixed> $recordsJson
      * @return list<\Webauthn\PublicKeyCredentialDescriptor>
      */
     private function credentialDescriptors(array $recordsJson): array
