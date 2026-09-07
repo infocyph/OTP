@@ -10,11 +10,14 @@
 
 Framework-agnostic PHP 8.4 primitives for Generic OTP, HOTP (RFC 4226), TOTP
 (RFC 6238), OCRA (RFC 6287), AOTP asymmetric challenge-response, GridOTP dynamic
-grid authentication, recovery codes, provisioning URIs, SVG QR codes, secret
-rotation planning, and CacheLayer-backed replay boundaries.
+grid authentication, legacy Mobile-OTP/mOTP, optional WebAuthn passkeys,
+recovery codes, provisioning URIs, SVG QR codes, secret rotation planning, and
+CacheLayer-backed replay boundaries.
 
-AOTP and GridOTP are Infocyph-defined protocol primitives. They are not RFC
-algorithms and are not `otpauth://` authenticator formats.
+AOTP and GridOTP are Infocyph-defined protocol primitives. MobileOTP implements
+the established legacy mOTP wire calculation. Passkey delegates WebAuthn
+cryptography and ceremony validation to `web-auth/webauthn-lib`. None of these
+four uses `otpauth://` provisioning.
 
 ## Requirements
 
@@ -27,6 +30,17 @@ algorithms and are not `otpauth://` authenticator formats.
 ```bash
 composer require infocyph/otp
 ```
+
+Passkey support is optional. Install its upstream WebAuthn implementation only
+when needed:
+
+```bash
+composer require web-auth/webauthn-lib:^5.3
+```
+
+OTP lists that package under Composer `suggest` and installs it in `require-dev`
+for its own tests/static analysis, so HOTP/TOTP-only consumers do not inherit the
+WebAuthn/CBOR/PKI/Symfony dependency graph.
 
 ## TOTP quickstart
 
@@ -95,10 +109,10 @@ $code = $otp->generate('login-challenge-123');
 $valid = $otp->verify('login-challenge-123', $submittedCode);
 ```
 
-Generic OTP deliberately remains lock-based in 6.1 because issue/replace,
-consumption, failed-attempt decrement, expiry, and deletion form one multi-field
-state machine. The CacheLayer backend must therefore expose a coordinated lock
-even if it also supports native atomics.
+Generic OTP deliberately remains lock-based because issue/replace, consumption,
+failed-attempt decrement, expiry, and deletion form one multi-field state
+machine. The CacheLayer backend must therefore expose a coordinated lock even if
+it also supports native atomics.
 
 Issuing again for the same binding atomically replaces the previous code. A
 successful verification consumes it. A mismatch decrements attempts without
@@ -116,7 +130,7 @@ use Infocyph\OTP\OCRA;
 
 $ocra = new OCRA(
     'OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1',
-    '12345678901234567890123456789012', // raw key for RFC integrations
+    '12345678901234567890123456789012',
 );
 
 $code = $ocra->generate(
@@ -148,24 +162,13 @@ use Infocyph\OTP\AOTP;
 
 $keys = AOTP::generateKeyPair();
 $aotp = new AOTP($keys->publicKey, 'login.example.com');
-
-$challenge = $aotp->issue(
-    cache: $stateCache,
-    factorId: 'user-42:aotp:key-v1',
-    context: 'login',
-);
-
-$response = AOTP::respond(
-    privateKey: $keys->privateKey,
-    challenge: $challenge,
-    expectedAudience: 'login.example.com',
-);
-
+$challenge = $aotp->issue($stateCache, 'user-42:aotp:key-v1', 'login');
+$response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com');
 $result = $aotp->verifyWithResult(
-    cache: $stateCache,
-    factorId: 'user-42:aotp:key-v1',
-    challenge: $challenge,
-    response: $response,
+    $stateCache,
+    'user-42:aotp:key-v1',
+    $challenge,
+    $response,
 );
 ```
 
@@ -192,16 +195,9 @@ response digits.
 use Infocyph\OTP\GridOTP;
 
 $secret = GridOTP::generateSecret();
-$gridOtp = new GridOTP(
-    cache: $stateCache,
-    secret: $secret,
-    challengeSize: 6,
-    ttlSeconds: 120,
-    maxAttempts: 3,
-);
-
+$gridOtp = new GridOTP($stateCache, $secret);
 $challenge = $gridOtp->issue('user-42:grid:v1');
-$response = GridOTP::respond($challenge, $secret); // native client/helper path
+$response = GridOTP::respond($challenge, $secret);
 $result = $gridOtp->verifyWithResult('user-42:grid:v1', $challenge, $response);
 ```
 
@@ -215,6 +211,80 @@ shoulder-surfing proof and remains one knowledge factor rather than MFA.
 GridOTP is lock-based because attempts, expiry, challenge-integrity state, and
 consumption are one multi-field transition. See [GridOTP](docs/guides/grid-otp.rst).
 
+## MobileOTP
+
+`MobileOTP` is strict compatibility for the established Mobile-OTP/mOTP protocol:
+a 10-second timestep, a 16-hex-character Init-Secret, a four-digit PIN, and the
+first six lowercase hexadecimal characters of the legacy MD5 calculation.
+
+```php
+use Infocyph\OTP\MobileOTP;
+
+$mobile = new MobileOTP(
+    secret: MobileOTP::generateSecret(),
+    pin: '5555',
+);
+
+$otp = $mobile->generate();
+$result = $mobile->verifyWithWindow(
+    otp: $submittedOtp,
+    cache: $stateCache,
+    factorId: 'user-42:mobile:v1',
+);
+```
+
+The default verification window is zero. Compatibility windows may be widened
+explicitly up to the historical ±3-minute ceiling (18 ten-second steps per
+direction). Replay-aware verification advances the greatest accepted timestep
+through CacheLayer atomics/lock fallback just like TOTP.
+
+MD5 is used **only because it is part of the legacy Mobile-OTP wire algorithm**.
+Do not choose MobileOTP for a new authentication design; prefer TOTP, AOTP, or
+Passkey. See [MobileOTP](docs/guides/mobile-otp.rst).
+
+## Passkey / WebAuthn
+
+Passkey support is a ceremony/state wrapper around `web-auth/webauthn-lib`, not a
+custom WebAuthn implementation. The authenticator keeps the private key; the
+application persists the upstream `CredentialRecord` returned by successful
+registration/authentication.
+
+```php
+use Infocyph\OTP\Passkey;
+
+$passkey = new Passkey(
+    cache: $stateCache,
+    rpId: 'example.com',
+    rpName: 'Example',
+    allowedOrigins: ['https://example.com'],
+);
+
+$ceremony = $passkey->beginRegistration(
+    binding: 'user-42:passkey:registration',
+    userHandle: $opaqueStableUserHandle,
+    username: 'alice@example.com',
+    displayName: 'Alice',
+);
+
+$result = $passkey->finishRegistration(
+    binding: 'user-42:passkey:registration',
+    ceremonyId: $submittedCeremonyId,
+    credentialJson: $browserCredentialJson,
+);
+```
+
+Registration requires a discoverable credential and user verification, with
+attestation conveyance `none`. Authentication supports both account-bound
+`allowCredentials` and discoverable/usernameless flows. On every successful
+authentication, persist the **updated** `credentialRecordJson`; WebAuthn counter,
+backup, and UV state may have changed.
+
+Full creation/request options are stored server-side under a random 128-bit
+ceremony ID. A successful ceremony remains marked consumed until its original
+expiry, so concurrent duplicates are reported as replay. Durable credential
+records are application-owned database state, never CacheLayer state. See
+[Passkey](docs/guides/passkey.rst).
+
 ## Recovery codes
 
 ```php
@@ -222,10 +292,10 @@ use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 
 $recovery = new RecoveryCodes(
-    new InMemoryRecoveryCodeStore(), // tests/one-process development only
+    new InMemoryRecoveryCodeStore(),
     $separateRecoveryHmacKey,
 );
-$batch = $recovery->generate('user-42'); // XXXX-XXXX-XXXX, about 60 bits
+$batch = $recovery->generate('user-42');
 $result = $recovery->consume('user-42', $submittedCode);
 ```
 
@@ -237,19 +307,21 @@ durable, atomic replacement and consumption.
 
 ## Security boundary
 
-Correct OTP math is not a complete authentication workflow. Store HOTP/TOTP/OCRA
-and GridOTP secrets encrypted, hardware-protect or encrypt AOTP private keys,
-keep Generic OTP and recovery HMAC keys separate, use TLS, apply rate limits,
-protect provisioning URIs/QR SVGs as secrets, and rotate factor IDs when
-secrets, keys, or moving-factor generations rotate.
+Correct OTP math is not a complete authentication workflow. Store
+HOTP/TOTP/OCRA, GridOTP, and MobileOTP secrets encrypted; protect AOTP private
+keys on the client; persist passkey CredentialRecords in an authoritative durable
+store; keep Generic OTP and recovery HMAC keys separate; use TLS; apply rate
+limits; protect provisioning material; and rotate factor IDs when secrets, keys,
+or moving-factor generations rotate.
 
-For Generic OTP, GridOTP, AOTP, and replay-aware HOTP/TOTP/OCRA, configure one
-shared, fail-closed, payload-integrity protected, authoritative CacheLayer
-backend. Generic OTP and GridOTP additionally require a coordinated lock.
-Recovery-code persistence remains application-owned. Backend/configuration
-failures are operational exceptions and are never converted into credential
-mismatch or replay results. See the [security](docs/guides/security.rst) and
-[storage](docs/guides/storage.rst) guides for the complete boundary.
+For Generic OTP, GridOTP, AOTP, Passkey ceremonies, MobileOTP replay, and
+replay-aware HOTP/TOTP/OCRA, configure one shared, fail-closed,
+payload-integrity protected, authoritative CacheLayer backend. Generic OTP,
+GridOTP, and Passkey ceremonies additionally require a coordinated lock because
+their state transitions are multi-field. Recovery-code and passkey credential
+persistence remain application-owned. Backend/configuration failures propagate
+and fail closed. See [security](docs/guides/security.rst) and
+[storage](docs/guides/storage.rst).
 
 ## Security
 
