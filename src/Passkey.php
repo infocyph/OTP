@@ -180,7 +180,7 @@ final readonly class Passkey
         return CacheLock::synchronized(
             $this->cache,
             self::lockKey($binding, $ceremonyId),
-            fn (LockProviderInterface $locks, LockHandle $handle): PasskeyResult => $this->finishAuthenticationLocked(
+            fn(LockProviderInterface $locks, LockHandle $handle): PasskeyResult => $this->finishAuthenticationLocked(
                 $binding,
                 $ceremonyId,
                 $credentialRecordJson,
@@ -210,7 +210,7 @@ final readonly class Passkey
         return CacheLock::synchronized(
             $this->cache,
             self::lockKey($binding, $ceremonyId),
-            fn (LockProviderInterface $locks, LockHandle $handle): PasskeyResult => $this->finishRegistrationLocked(
+            fn(LockProviderInterface $locks, LockHandle $handle): PasskeyResult => $this->finishRegistrationLocked(
                 $binding,
                 $ceremonyId,
                 $credentialJson,
@@ -406,6 +406,7 @@ final readonly class Passkey
     private function deserializeRecord(string $json): CredentialRecord
     {
         self::assertCredentialJsonLength($json);
+
         try {
             return $this->serializer->deserialize($json, CredentialRecord::class, 'json');
         } catch (SerializerException $failure) {

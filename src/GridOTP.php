@@ -155,7 +155,7 @@ final readonly class GridOTP
         return CacheLock::synchronized(
             $this->cache,
             self::lockKey($factorId, $challenge->id),
-            fn (LockProviderInterface $locks, LockHandle $handle): VerificationResult => $this->verifyLocked(
+            fn(LockProviderInterface $locks, LockHandle $handle): VerificationResult => $this->verifyLocked(
                 $factorId,
                 $challenge,
                 $response,
