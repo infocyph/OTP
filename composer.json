@@ -46,7 +46,7 @@
         }
     },
     "scripts": {
-        "benchmark": "@php vendor/bin/phpbench run benchmarks --report=aggregate --output=json --progress=none --bootstrap=vendor/autoload.php"
+        "benchmark": "@php vendor/bin/phpbench run --config=vendor/infocyph/phpforge/resources/phpbench.json --report=aggregate --output=json --progress=none"
     },
     "config": {
         "allow-plugins": {
