@@ -9,13 +9,18 @@
 [![Documentation](https://img.shields.io/badge/Documentation-OTP-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/OTP/)
 
 Framework-agnostic PHP 8.4 primitives for Generic OTP, HOTP (RFC 4226), TOTP
-(RFC 6238), OCRA (RFC 6287), recovery codes, provisioning URIs, SVG QR codes,
-secret rotation planning, and CacheLayer-backed replay boundaries.
+(RFC 6238), OCRA (RFC 6287), AOTP asymmetric challenge-response, GridOTP dynamic
+grid authentication, recovery codes, provisioning URIs, SVG QR codes, secret
+rotation planning, and CacheLayer-backed replay boundaries.
+
+AOTP and GridOTP are Infocyph-defined protocol primitives. They are not RFC
+algorithms and are not `otpauth://` authenticator formats.
 
 ## Requirements
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
+- `ext-sodium`
 - CacheLayer `^3.3`
 - Composer
 
@@ -133,6 +138,83 @@ mandatory; for time suites it must cover the complete accepted time window.
 `otpauth://ocra` is a library/client convention, not an RFC-standardized
 provisioning format, so the consuming client must explicitly support it.
 
+## AOTP
+
+AOTP uses Ed25519 challenge signatures so the verifier can authenticate a client
+without holding a shared signing secret.
+
+```php
+use Infocyph\OTP\AOTP;
+
+$keys = AOTP::generateKeyPair();
+$aotp = new AOTP($keys->publicKey, 'login.example.com');
+
+$challenge = $aotp->issue(
+    cache: $stateCache,
+    factorId: 'user-42:aotp:key-v1',
+    context: 'login',
+);
+
+$response = AOTP::respond(
+    privateKey: $keys->privateKey,
+    challenge: $challenge,
+    expectedAudience: 'login.example.com',
+);
+
+$result = $aotp->verifyWithResult(
+    cache: $stateCache,
+    factorId: 'user-42:aotp:key-v1',
+    challenge: $challenge,
+    response: $response,
+);
+```
+
+The signed payload binds challenge ID, 256-bit nonce, audience, context,
+issuance, and expiration. Cache state is keyed by the complete canonical
+challenge, so changing context or expiry cannot reuse an issued reservation.
+Successful verification atomically transitions the reservation from unconsumed
+to consumed; a concurrent duplicate is reported as replay.
+
+AOTP uses CacheLayer native atomics when available and the coordinated lock
+fallback otherwise. The client must independently enforce the expected audience
+before signing. Generic AOTP integration should not be advertised as phishing
+resistant unless the application also enforces verifier/context binding end to
+end. See [AOTP](docs/guides/aotp.rst).
+
+## GridOTP
+
+GridOTP is a human-computable dynamic-grid challenge. The enrolled secret uses a
+32-symbol alphabet and the challenge asks for 6..10 secret positions. Every
+challenge regenerates a balanced many-to-one mapping from secret symbols to
+response digits.
+
+```php
+use Infocyph\OTP\GridOTP;
+
+$secret = GridOTP::generateSecret();
+$gridOtp = new GridOTP(
+    cache: $stateCache,
+    secret: $secret,
+    challengeSize: 6,
+    ttlSeconds: 120,
+    maxAttempts: 3,
+);
+
+$challenge = $gridOtp->issue('user-42:grid:v1');
+$response = GridOTP::respond($challenge, $secret); // native client/helper path
+$result = $gridOtp->verifyWithResult('user-42:grid:v1', $challenge, $response);
+```
+
+The user never submits the enrolled secret directly. A captured response cannot
+be replayed against a new grid. The many-to-one mapping also prevents one full
+visual observation from uniquely revealing every challenged secret symbol, but
+repeated observations can intersect candidate sets and recover the secret.
+GridOTP therefore reduces direct password/keylogger exposure; it is **not**
+shoulder-surfing proof and remains one knowledge factor rather than MFA.
+
+GridOTP is lock-based because attempts, expiry, challenge-integrity state, and
+consumption are one multi-field transition. See [GridOTP](docs/guides/grid-otp.rst).
+
 ## Recovery codes
 
 ```php
@@ -155,13 +237,15 @@ durable, atomic replacement and consumption.
 
 ## Security boundary
 
-Correct OTP math is not a complete authentication workflow. Store factor
-secrets encrypted, keep Generic OTP and recovery HMAC keys separate, use TLS,
-apply rate limits, protect provisioning URIs/QR SVGs as secrets, and rotate
-factor IDs when secrets or moving-factor generations rotate.
+Correct OTP math is not a complete authentication workflow. Store HOTP/TOTP/OCRA
+and GridOTP secrets encrypted, hardware-protect or encrypt AOTP private keys,
+keep Generic OTP and recovery HMAC keys separate, use TLS, apply rate limits,
+protect provisioning URIs/QR SVGs as secrets, and rotate factor IDs when
+secrets, keys, or moving-factor generations rotate.
 
-For Generic OTP and replay-aware HOTP/TOTP/OCRA, configure one shared,
-fail-closed, payload-integrity protected, authoritative CacheLayer backend.
+For Generic OTP, GridOTP, AOTP, and replay-aware HOTP/TOTP/OCRA, configure one
+shared, fail-closed, payload-integrity protected, authoritative CacheLayer
+backend. Generic OTP and GridOTP additionally require a coordinated lock.
 Recovery-code persistence remains application-owned. Backend/configuration
 failures are operational exceptions and are never converted into credential
 mismatch or replay results. See the [security](docs/guides/security.rst) and
