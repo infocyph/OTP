@@ -162,23 +162,35 @@ factor ID.
    // Client keeps $keys->privateKey.
    persistAotpPublicKey('user-42:aotp:key-v1', $keys->publicKey);
 
-For login, the verifier issues a short-lived challenge and the client signs it
-only after checking the independently configured expected audience:
+For login, the verifier creates a fresh application flow ID and binds it into the
+mandatory AOTP context:
 
 .. code-block:: php
 
    $aotp = new AOTP($storedPublicKey, 'login.example.com');
+   $flowId = bin2hex(random_bytes(16));
+   $context = 'login:web:' . $flowId;
+
+   persistPendingLoginFlow($flowId, 'user-42:aotp:key-v1');
+
    $challenge = $aotp->issue(
        $stateCache,
        'user-42:aotp:key-v1',
-       context: 'login:web',
+       context: $context,
    );
 
-   // Client side:
+The client signs only when both verifier and operation match independently
+trusted local state. Never populate expected values by copying fields from the
+received challenge:
+
+.. code-block:: php
+
+   // Client side: trusted configuration/local operation state.
    $response = AOTP::respond(
        $clientPrivateKey,
        $challenge,
        expectedAudience: 'login.example.com',
+       expectedContext: 'login:web:' . $locallyKnownFlowId,
    );
 
    // Verifier side:
@@ -189,10 +201,18 @@ only after checking the independently configured expected audience:
        $response,
    );
 
-The issued challenge is server-reserved and consumed exactly once. Do not claim
-generic AOTP is phishing resistant unless the client/verifier design enforces
-verifier and transaction context end to end. See :doc:`aotp` for the complete
-transport scenario.
+   if ($result->matched) {
+       consumePendingLoginFlow($flowId);
+       // Complete the intended session transition.
+   }
+
+The issued challenge is server-reserved and consumed exactly once.
+``AOTP::respond()`` refuses a wrong audience/context and refuses future/expired
+challenges before signing. AOTP provides asymmetric proof-of-possession and
+replay-resistant challenge authentication, but phishing resistance requires the
+surrounding client/verifier design to independently authenticate the verifier and
+derive expected context from trusted local session/transaction state. See
+:doc:`aotp` for the full relay-threat model and transport scenario.
 
 GridOTP enrollment and login
 ----------------------------
