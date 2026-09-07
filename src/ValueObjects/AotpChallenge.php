@@ -24,9 +24,9 @@ final readonly class AotpChallenge
         public int $expiresAt,
     ) {
         self::assertEncodedLength($id, 16, 'AOTP challenge ID');
+        self::assertAudience($audience);
+        self::assertContext($context);
         self::assertEncodedLength($nonce, 32, 'AOTP challenge nonce');
-        self::assertUtf8($audience, 1, self::MAX_AUDIENCE_LENGTH, 'AOTP audience');
-        self::assertUtf8($context, 0, self::MAX_CONTEXT_LENGTH, 'AOTP context');
         if ($issuedAt < 0 || $expiresAt <= $issuedAt) {
             throw new InvalidArgumentException('AOTP challenge timestamps are invalid.');
         }
@@ -39,7 +39,7 @@ final readonly class AotpChallenge
             'id' => $this->id,
             'nonce' => '[redacted]',
             'audience' => $this->audience,
-            'context' => $this->context === '' ? '' : '[redacted]',
+            'context' => '[redacted]',
             'issuedAt' => $this->issuedAt,
             'expiresAt' => $this->expiresAt,
         ];
@@ -96,18 +96,38 @@ final readonly class AotpChallenge
         ];
     }
 
+    private static function assertAudience(string $audience): void
+    {
+        if (
+            $audience === ''
+            || strlen($audience) > self::MAX_AUDIENCE_LENGTH
+            || preg_match('//u', $audience) !== 1
+            || preg_match('/[\s\p{Cc}]/u', $audience) === 1
+        ) {
+            throw new InvalidArgumentException(
+                'AOTP audience must be valid UTF-8, contain no whitespace/control characters, and be between 1 and 255 bytes.',
+            );
+        }
+    }
+
+    private static function assertContext(string $context): void
+    {
+        if (
+            $context === ''
+            || strlen($context) > self::MAX_CONTEXT_LENGTH
+            || preg_match('//u', $context) !== 1
+            || preg_match('/\p{Cc}/u', $context) === 1
+        ) {
+            throw new InvalidArgumentException(
+                'AOTP context must be valid UTF-8, contain no control characters, and be between 1 and 4096 bytes.',
+            );
+        }
+    }
+
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
         if (strlen(Base64Url::decode($value, $name)) !== $bytes) {
             throw new InvalidArgumentException($name . ' has an invalid length.');
-        }
-    }
-
-    private static function assertUtf8(string $value, int $minimum, int $maximum, string $name): void
-    {
-        $length = strlen($value);
-        if ($length < $minimum || $length > $maximum || preg_match('//u', $value) !== 1) {
-            throw new InvalidArgumentException($name . ' must be valid UTF-8 within the allowed byte length.');
         }
     }
 
