@@ -70,3 +70,82 @@ test('Redis serializes TOTP HOTP and OCRA replay races', function (string $primi
 
     expect($results)->toBe([0, 1]);
 })->with(['TOTP', 'HOTP', 'OCRA'])->group('redis');
+
+test('Redis atomics never regress monotonic state in higher-lower races', function (string $primitive) {
+    $namespace = 'otp-redis-order-' . strtolower($primitive) . '-' . getmypid();
+    RedisState::cache($namespace)->clear();
+    $totpSecret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+    $ocraKey = '12345678901234567890123456789012';
+    $ocraSuite = 'OCRA-1:HOTP-SHA256-8:C-QN08';
+
+    $results = Concurrency::run(static function (int $worker) use (
+        $namespace,
+        $primitive,
+        $totpSecret,
+        $ocraKey,
+        $ocraSuite,
+    ): int {
+        $cache = RedisState::cache($namespace);
+        $matched = match ($primitive) {
+            'TOTP' => (function () use ($worker, $cache, $totpSecret): bool {
+                $time = $worker === 0 ? 3_000 : 3_030;
+                $totp = new TOTP($totpSecret);
+
+                return $totp->verifyWithWindow(
+                    $totp->generate($time),
+                    $time,
+                    cache: $cache,
+                    factorId: 'redis-ordered-totp',
+                )->matched;
+            })(),
+            'HOTP' => (function () use ($worker, $cache, $totpSecret): bool {
+                $counter = $worker === 0 ? 4 : 5;
+                $hotp = new HOTP($totpSecret);
+
+                return $hotp->verifyWithResult(
+                    $hotp->generate($counter),
+                    $counter,
+                    cache: $cache,
+                    factorId: 'redis-ordered-hotp',
+                )->matched;
+            })(),
+            'OCRA' => (function () use ($worker, $cache, $ocraKey, $ocraSuite): bool {
+                $counter = $worker === 0 ? 4 : 5;
+                $ocra = new OCRA($ocraSuite, $ocraKey);
+
+                return $ocra->verifyWithResult(
+                    $ocra->generate('12345678', $counter),
+                    '12345678',
+                    $counter,
+                    cache: $cache,
+                    factorId: 'redis-ordered-ocra',
+                )->matched;
+            })(),
+            default => false,
+        };
+
+        return $matched ? $worker + 1 : 0;
+    });
+
+    expect($results)->toContain(2);
+    $cache = RedisState::cache($namespace);
+    if ($primitive === 'TOTP') {
+        $totp = new TOTP($totpSecret);
+        expect($totp->verifyWithWindow($totp->generate(3_000), 3_000, cache: $cache, factorId: 'redis-ordered-totp')->replayDetected)
+            ->toBeTrue()
+            ->and($totp->verifyWithWindow($totp->generate(3_030), 3_030, cache: $cache, factorId: 'redis-ordered-totp')->replayDetected)
+            ->toBeTrue();
+    } elseif ($primitive === 'HOTP') {
+        $hotp = new HOTP($totpSecret);
+        expect($hotp->verifyWithResult($hotp->generate(4), 4, cache: $cache, factorId: 'redis-ordered-hotp')->replayDetected)
+            ->toBeTrue()
+            ->and($hotp->verifyWithResult($hotp->generate(5), 5, cache: $cache, factorId: 'redis-ordered-hotp')->replayDetected)
+            ->toBeTrue();
+    } else {
+        $ocra = new OCRA($ocraSuite, $ocraKey);
+        expect($ocra->verifyWithResult($ocra->generate('12345678', 4), '12345678', 4, cache: $cache, factorId: 'redis-ordered-ocra')->replayDetected)
+            ->toBeTrue()
+            ->and($ocra->verifyWithResult($ocra->generate('12345678', 5), '12345678', 5, cache: $cache, factorId: 'redis-ordered-ocra')->replayDetected)
+            ->toBeTrue();
+    }
+})->with(['TOTP', 'HOTP', 'OCRA'])->group('redis');
