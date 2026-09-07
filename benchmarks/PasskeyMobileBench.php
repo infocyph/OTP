@@ -39,7 +39,6 @@ final class PasskeyMobileBench
         $this->passkey = new Passkey(
             $this->cache,
             'example.com',
-            'Example',
             ['https://example.com'],
         );
     }
