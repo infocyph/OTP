@@ -1,6 +1,10 @@
 AOTP API
 ========
 
+``AOTP`` is available only when PHP's ``sodium`` extension is loaded. OTP lists
+``ext-sodium`` under Composer ``suggest`` and ``require-dev`` rather than as a
+mandatory runtime requirement.
+
 Service
 -------
 
@@ -12,6 +16,7 @@ Service
    );
 
    public static function generateKeyPair(): AotpKeyPair;
+   public static function isAvailable(): bool;
 
    public static function respond(
        #[\SensitiveParameter] string $privateKey,
@@ -43,6 +48,11 @@ Service
        ?int $now = null,
    ): VerificationResult;
 
+``generateKeyPair()`` and ``respond()`` throw ``LogicException`` when sodium is
+not available. The constructor also fails immediately when AOTP cannot be used.
+The verifier constructor accepts only the public key; the private key belongs on
+the client/device.
+
 Value objects
 -------------
 
@@ -66,8 +76,18 @@ Configuration bounds
 * challenge TTL: 1..600 seconds;
 * challenge ID: 128 random bits;
 * challenge nonce: 256 random bits;
-* keys/signatures: fixed Ed25519 sizes encoded as URL-safe Base64 without padding.
+* Ed25519 public key: 32 bytes before URL-safe Base64 encoding;
+* Ed25519 private key: 64 bytes before URL-safe Base64 encoding; and
+* Ed25519 signature: 64 bytes before URL-safe Base64 encoding.
+
+State behavior
+--------------
+
+``issue()`` reserves the complete canonical challenge before returning it.
+Successful verification atomically consumes that exact reservation. A duplicate
+valid submission is reported as replay. Native CacheLayer atomics are used when
+available; otherwise the coordinated lock fallback is used.
 
 AOTP requires a fail-closed, payload-integrity protected, authoritative
-CacheLayer authentication-state cache with either native atomics or a
-coordinated lock. See :doc:`../guides/aotp`.
+CacheLayer authentication-state cache. See :doc:`../guides/aotp` for the
+complete enrollment, transport, signing, and verification flow.
