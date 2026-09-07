@@ -14,14 +14,14 @@ final readonly class GridChallenge
 
     public const int VERSION = 1;
 
-    /** @var array<string, string> */
+    /** @var array<array-key, string> */
     public array $grid;
 
     /** @var list<int> */
     public array $positions;
 
     /**
-     * @param array<string, string> $grid
+     * @param array<array-key, string> $grid
      * @param list<int> $positions One-based secret positions in response order.
      */
     public function __construct(
@@ -70,7 +70,7 @@ final readonly class GridChallenge
             throw new InvalidArgumentException('Malformed GridOTP challenge payload.');
         }
 
-        /** @var array<string, string> $grid */
+        /** @var array<array-key, string> $grid */
         $grid = $data['grid'];
         /** @var list<int> $positions */
         $positions = $data['positions'];
@@ -101,19 +101,14 @@ final readonly class GridChallenge
             . self::packInteger($this->expiresAt);
     }
 
-    /** @return array{v:int,id:string,grid:array<string,string>,positions:list<int>,secretLength:int,issuedAt:int,expiresAt:int} */
+    /** @return array{v:int,id:string,grid:array<array-key,string>,positions:list<int>,secretLength:int,issuedAt:int,expiresAt:int} */
     public function toArray(): array
     {
-        /** @var array<string, string> $grid */
-        $grid = $this->grid;
-        /** @var list<int> $positions */
-        $positions = $this->positions;
-
         return [
             'v' => self::VERSION,
             'id' => $this->id,
-            'grid' => $grid,
-            'positions' => $positions,
+            'grid' => $this->grid,
+            'positions' => $this->positions,
             'secretLength' => $this->secretLength,
             'issuedAt' => $this->issuedAt,
             'expiresAt' => $this->expiresAt,
@@ -163,8 +158,8 @@ final readonly class GridChallenge
     }
 
     /**
-     * @param array<string, string> $grid
-     * @return array<string, string>
+     * @param array<array-key, string> $grid
+     * @return array<array-key, string>
      */
     private static function canonicalizeGrid(array $grid): array
     {
@@ -172,9 +167,7 @@ final readonly class GridChallenge
             throw new InvalidArgumentException('GridOTP challenge grid must contain the complete secret alphabet exactly once.');
         }
 
-        /** @var array<string, int> $counts */
         $counts = array_fill_keys(str_split(self::RESPONSE_ALPHABET), 0);
-        /** @var array<string, string> $canonical */
         $canonical = [];
         foreach (str_split(self::SECRET_ALPHABET) as $symbol) {
             $value = $grid[$symbol] ?? null;
