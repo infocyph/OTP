@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\ValueObjects;
 
+use Infocyph\OTP\Support\Base64Url;
 use InvalidArgumentException;
 
 final readonly class PasskeyCeremony
@@ -44,12 +45,7 @@ final readonly class PasskeyCeremony
 
     private static function assertId(string $id): void
     {
-        try {
-            $decoded = sodium_base642bin($id, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-        } catch (\SodiumException) {
-            throw new InvalidArgumentException('Passkey ceremony ID must be valid URL-safe Base64 without padding.');
-        }
-        if (strlen($decoded) !== 16) {
+        if (strlen(Base64Url::decode($id, 'Passkey ceremony ID')) !== 16) {
             throw new InvalidArgumentException('Passkey ceremony ID must encode exactly 16 bytes.');
         }
     }
