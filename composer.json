@@ -9,6 +9,9 @@
         "totp",
         "aotp",
         "grid-otp",
+        "passkey",
+        "webauthn",
+        "mobile-otp",
         "hmac",
         "sha",
         "ocra",
@@ -34,7 +37,11 @@
         "paragonie/constant_time_encoding": "^3.1.3"
     },
     "require-dev": {
-        "infocyph/phpforge": "dev-main@dev"
+        "infocyph/phpforge": "dev-main@dev",
+        "web-auth/webauthn-lib": "^5.3"
+    },
+    "suggest": {
+        "web-auth/webauthn-lib": "Required to use the optional Passkey/WebAuthn integration."
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
