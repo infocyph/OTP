@@ -33,6 +33,17 @@ final readonly class SecretRotation
         }
     }
 
+    /** @return array{currentSecret:string,nextSecret:string,overlapUntil:?DateTimeImmutable,nextEnrollment:?EnrollmentPayload} */
+    public function __debugInfo(): array
+    {
+        return [
+            'currentSecret' => '[redacted]',
+            'nextSecret' => '[redacted]',
+            'overlapUntil' => $this->overlapUntil,
+            'nextEnrollment' => $this->nextEnrollment,
+        ];
+    }
+
     public function hasGracePeriod(): bool
     {
         return $this->overlapUntil !== null;
