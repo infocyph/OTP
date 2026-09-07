@@ -17,6 +17,8 @@ jobs:
       contents: read
     with:
       php_versions: '["8.4","8.5"]'
+      dependency_versions: '["prefer-lowest","prefer-stable"]'
       fail_on_skipped_tests: true
       integration_services: '["sqlite","redis"]'
       service_topologies: '{}'
+      benchmark_composer_script: 'benchmark'
