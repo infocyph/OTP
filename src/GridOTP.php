@@ -15,10 +15,13 @@ use RuntimeException;
 
 final readonly class GridOTP
 {
-    private const int MAX_FACTOR_ID_LENGTH = 190;
-    private const int MAX_TTL_SECONDS = 900;
-    private const int STATE_VERSION = 1;
     private const int ISSUE_ATTEMPTS = 4;
+
+    private const int MAX_FACTOR_ID_LENGTH = 190;
+
+    private const int MAX_TTL_SECONDS = 900;
+
+    private const int STATE_VERSION = 1;
 
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
@@ -163,44 +166,6 @@ final readonly class GridOTP
         );
     }
 
-    /** @return array<string,string> */
-    private static function randomGrid(): array
-    {
-        $labels = str_split(GridChallenge::RESPONSE_ALPHABET);
-        self::secureShuffle($labels);
-        $balanced = [];
-        $alphabetLength = strlen(GridChallenge::SECRET_ALPHABET);
-        for ($index = 0; $index < $alphabetLength; $index++) {
-            $balanced[] = $labels[$index % count($labels)];
-        }
-        self::secureShuffle($balanced);
-
-        $grid = [];
-        foreach (str_split(GridChallenge::SECRET_ALPHABET) as $index => $symbol) {
-            $grid[$symbol] = $balanced[$index];
-        }
-
-        return $grid;
-    }
-
-    /** @return list<int> */
-    private static function randomPositions(int $secretLength, int $challengeSize): array
-    {
-        $positions = range(1, $secretLength);
-        self::secureShuffle($positions);
-
-        return array_slice($positions, 0, $challengeSize);
-    }
-
-    /** @param array<int,mixed> $values */
-    private static function secureShuffle(array &$values): void
-    {
-        for ($index = count($values) - 1; $index > 0; $index--) {
-            $swap = random_int(0, $index);
-            [$values[$index], $values[$swap]] = [$values[$swap], $values[$index]];
-        }
-    }
-
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -232,31 +197,121 @@ final readonly class GridOTP
         return hash('sha256', "infocyph:otp:gridotp:lock:v1\0" . $factorId . "\0" . $challengeId);
     }
 
+    /** @return array<string, string> */
+    private static function randomGrid(): array
+    {
+        /** @var list<string> $labels */
+        $labels = str_split(GridChallenge::RESPONSE_ALPHABET);
+        self::secureShuffle($labels);
+
+        /** @var list<string> $balanced */
+        $balanced = [];
+        $labelCount = count($labels);
+        $alphabetLength = strlen(GridChallenge::SECRET_ALPHABET);
+        for ($index = 0; $index < $alphabetLength; $index++) {
+            $balanced[] = $labels[$index % $labelCount];
+        }
+        self::secureShuffle($balanced);
+
+        /** @var array<string, string> $grid */
+        $grid = [];
+        $symbols = str_split(GridChallenge::SECRET_ALPHABET);
+        foreach ($symbols as $index => $symbol) {
+            $grid[$symbol] = $balanced[$index];
+        }
+
+        return $grid;
+    }
+
+    /** @return list<int> */
+    private static function randomPositions(int $secretLength, int $challengeSize): array
+    {
+        /** @var list<int> $positions */
+        $positions = range(1, $secretLength);
+        self::secureShuffle($positions);
+
+        return array_slice($positions, 0, $challengeSize);
+    }
+
+    /**
+     * @template T
+     * @param list<T> $values
+     */
+    private static function secureShuffle(array &$values): void
+    {
+        for ($index = count($values) - 1; $index > 0; $index--) {
+            $swap = random_int(0, $index);
+            [$values[$index], $values[$swap]] = [$values[$swap], $values[$index]];
+        }
+    }
+
     private static function stateKey(string $factorId, string $challengeId): string
     {
         return hash('sha256', "infocyph:otp:gridotp:state:v1\0" . $factorId . "\0" . $challengeId);
     }
 
-    /** @param mixed $state @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
+    private function deleteLocked(string $stateKey, LockProviderInterface $locks, LockHandle $handle): void
+    {
+        CacheLock::ensureOwned($locks, $handle);
+        if (!$this->cache->delete($stateKey)) {
+            throw new RuntimeException('Unable to delete GridOTP challenge state.');
+        }
+    }
+
+    /**
+     * @param mixed $state
+     * @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool}
+     */
     private function requireState(mixed $state): array
     {
+        if (!is_array($state) || count($state) !== 5) {
+            throw new RuntimeException('Invalid GridOTP challenge state in CacheLayer.');
+        }
+
+        $version = $state['v'] ?? null;
+        $digest = $state['digest'] ?? null;
+        $remainingAttempts = $state['remainingAttempts'] ?? null;
+        $expiresAt = $state['expiresAt'] ?? null;
+        $consumed = $state['consumed'] ?? null;
         if (
-            !is_array($state)
-            || count($state) !== 5
-            || ($state['v'] ?? null) !== self::STATE_VERSION
-            || !is_string($state['digest'] ?? null)
-            || preg_match('/\A[0-9a-f]{64}\z/D', $state['digest']) !== 1
-            || !is_int($state['remainingAttempts'] ?? null)
-            || $state['remainingAttempts'] < 1
-            || $state['remainingAttempts'] > $this->maxAttempts
-            || !is_int($state['expiresAt'] ?? null)
-            || $state['expiresAt'] < 0
-            || !is_bool($state['consumed'] ?? null)
+            $version !== self::STATE_VERSION
+            || !is_string($digest)
+            || preg_match('/\A[0-9a-f]{64}\z/D', $digest) !== 1
+            || !is_int($remainingAttempts)
+            || $remainingAttempts < 1
+            || $remainingAttempts > $this->maxAttempts
+            || !is_int($expiresAt)
+            || $expiresAt < 0
+            || !is_bool($consumed)
         ) {
             throw new RuntimeException('Invalid GridOTP challenge state in CacheLayer.');
         }
 
-        return $state;
+        return [
+            'v' => $version,
+            'digest' => $digest,
+            'remainingAttempts' => $remainingAttempts,
+            'expiresAt' => $expiresAt,
+            'consumed' => $consumed,
+        ];
+    }
+
+    /** @param array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} $state */
+    private function storeLocked(
+        string $stateKey,
+        array $state,
+        int $now,
+        LockProviderInterface $locks,
+        LockHandle $handle,
+    ): void {
+        $ttl = $state['expiresAt'] - $now;
+        if ($ttl < 1) {
+            throw new RuntimeException('GridOTP challenge state expired before mutation.');
+        }
+        CacheLock::ensureOwned($locks, $handle);
+        if (!$this->cache->set($stateKey, $state, $ttl)) {
+            throw new RuntimeException('Unable to update GridOTP challenge state.');
+        }
     }
 
     private function verifyLocked(
@@ -308,31 +363,5 @@ final readonly class GridOTP
         $this->storeLocked($stateKey, $state, $now, $locks, $handle);
 
         return VerificationResult::mismatch();
-    }
-
-    /** @param array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} $state */
-    private function storeLocked(
-        string $stateKey,
-        array $state,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): void {
-        $ttl = $state['expiresAt'] - $now;
-        if ($ttl < 1) {
-            throw new RuntimeException('GridOTP challenge state expired before mutation.');
-        }
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->set($stateKey, $state, $ttl)) {
-            throw new RuntimeException('Unable to update GridOTP challenge state.');
-        }
-    }
-
-    private function deleteLocked(string $stateKey, LockProviderInterface $locks, LockHandle $handle): void
-    {
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->delete($stateKey)) {
-            throw new RuntimeException('Unable to delete GridOTP challenge state.');
-        }
     }
 }
