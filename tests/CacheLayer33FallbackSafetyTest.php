@@ -25,7 +25,7 @@ test('atomic provider returning null falls back to the coordinated lock path', f
     $cache->method('isFailOpen')->willReturn(false);
     $cache->method('hasPayloadIntegrity')->willReturn(true);
     $cache->method('isAuthoritative')->willReturn(true);
-    $cache->expects($this->once())->method('atomic')->willReturn(null);
+    $cache->expects($this->exactly(2))->method('atomic')->willReturn(null);
     $cache->expects($this->atLeastOnce())->method('authenticationStateLock')->willReturn($locks);
     $cache->expects($this->once())->method('get')->willReturn(null);
     $cache->expects($this->once())->method('set')->with(
