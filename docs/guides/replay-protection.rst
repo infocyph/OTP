@@ -1,39 +1,39 @@
 Replay protection
 =================
 
-A mathematically or cryptographically valid credential can still be unsafe if it
-is accepted twice. OTP 6.1 uses CacheLayer 3.3 for package-owned one-time and
-monotonic authentication state.
+A mathematically valid OTP or authentication proof can still be unsafe if
+accepted twice. Calculation-only helpers remain available where interoperability
+or enrollment checks need stateless behavior, while detailed verification paths
+can use CacheLayer for atomic acceptance state.
 
 Common configuration
 --------------------
 
-For replay-aware HOTP/TOTP/OCRA/MobileOTP calls, pass both values or neither:
+Replay-aware HOTP/TOTP/OCRA/MobileOTP use both of these values or neither:
 
 * an integrity-protected, fail-closed, authoritative CacheLayer
   ``AuthenticationStateCacheInterface``; and
-* a 1–190 byte generation-specific ``factorId``.
+* a 1–190 byte, generation-specific ``factorId``.
 
-Supplying only part of that pair throws ``InvalidArgumentException``. AOTP also
-uses a generation-specific factor ID, but its cache is passed directly to
-``issue()``/``verify*()``. GridOTP owns the cache in its constructor and takes a
-factor ID when issuing/verifying. Passkey owns the cache in its constructor and
-uses a flow-specific ``binding`` plus random ceremony ID rather than a durable
-factor ID for ceremony state.
+AOTP always requires the CacheLayer state cache and factor ID because issuance
+itself reserves a one-time challenge. GridOTP always requires CacheLayer because
+its challenge/attempt/replay record is package-owned state. Passkey always uses
+CacheLayer for short-lived registration/authentication ceremony state.
 
+Supplying only part of an optional replay pair throws ``InvalidArgumentException``.
 Unsafe cache policies and backend failures throw and must produce a temporary
 authentication failure.
 
-OTP 6.1 requires CacheLayer 3.3 or newer. Scalar replay transitions prefer the
+OTP 6.1 requires CacheLayer 3.3 or newer. Scalar replay transitions use the
 native ``AtomicCacheProviderInterface`` capability when the configured backend
 exposes it. Backends without atomics remain supported when they provide a
 coordinated authentication-state lock. Native atomic failures never fall back to
-locks after the atomic path has been selected.
+locks after an operation has been selected.
 
 ``GenericOtp``, ``GridOTP``, and ``Passkey`` are intentionally lock-based because
-their multi-field state must transition as one serializable unit.
+their multi-field state transitions must remain serializable.
 
-See :doc:`storage` for complete backend requirements.
+See :doc:`storage` for complete Redis, PDO, and local-development setup.
 
 TOTP
 ----
@@ -56,7 +56,7 @@ equal or older steps are replay even if not individually submitted.
 
 With an atomic-capable backend the transition is a bounded
 read/``setIfAbsent``/``compareAndSet`` loop. The state can only move forward.
-A backend without atomics uses the factor-specific coordinated lock fallback.
+A backend without atomics uses the factor-specific coordinated lock path.
 
 HOTP
 ----
@@ -76,6 +76,8 @@ counters return ``VerificationReason::Replay``. Persist the application's
 ``nextCounter`` as durable business state too; the CacheLayer backend used here
 must not evict or expire the monotonic replay record.
 
+Atomic-capable backends use the same bounded monotonic CAS algorithm as TOTP.
+
 Counter OCRA
 ------------
 
@@ -91,6 +93,7 @@ Counter OCRA
 
 Counter OCRA uses the same durable greatest-value rule as HOTP. ``replayTtl``
 must be null; a TTL is rejected because expiry could reopen older counters.
+Atomic-capable backends use the same monotonic CAS path.
 
 Non-counter OCRA
 ----------------
@@ -109,123 +112,94 @@ Non-counter OCRA
        replayTtl: 300,
    );
 
-The claim identity is derived from the complete authenticated OCRA message. The
-application-supplied TTL is mandatory. For time suites it must cover the complete
-accepted time window. Atomic-capable backends use a one-time ``setIfAbsent``
-claim; the lock fallback provides equivalent single-use behavior.
+The token identity is derived from the complete authenticated OCRA message,
+including suite, counter when present, encoded challenge, PIN digest, session,
+and matched timestep. The application-supplied TTL is mandatory. It must cover
+the complete server challenge/business validity; for time suites it must also be
+at least ``timeStepSeconds * (past + future + 1)``.
+
+On atomic-capable backends, first acceptance is one native ``setIfAbsent``
+claim. A false conditional result is inspected as existing state: the canonical
+value means replay, malformed state throws, and transient contention is retried
+within the bounded retry budget.
 
 AOTP
 ----
 
-AOTP is inherently stateful because a verifier must first reserve an issued
-challenge and then consume exactly that reservation after signature validation:
+AOTP issues a fresh challenge and reserves the exact canonical payload before
+returning it:
 
 .. code-block:: php
 
+   $flowId = bin2hex(random_bytes(16));
+   $context = 'login:web:' . $flowId;
+
    $challenge = $aotp->issue(
        cache: $stateCache,
-       factorId: 'user-42:aotp:key-v2',
-       context: 'login:web',
+       factorId: 'user-42:aotp:key-v1',
+       context: $context,
    );
 
-   $result = $aotp->verifyWithResult(
-       cache: $stateCache,
-       factorId: 'user-42:aotp:key-v2',
-       challenge: $submittedChallenge,
-       response: $submittedResponse,
-   );
+The state key binds factor ID plus the complete signed challenge. Modified
+context, audience, nonce, issuance, or expiration therefore cannot reuse the
+reservation. After signature verification, state transitions atomically from
+unconsumed to consumed and the consumed marker remains through original expiry.
 
-The reservation key is derived from the complete canonical challenge, including
-ID, nonce, audience, context, issue time, and expiration. Tampering with those
-fields therefore cannot find the original reservation.
+AOTP checks signature validity before returning ``Replay`` for consumed state.
+An invalid signer therefore receives ``Mismatch`` rather than learning whether a
+valid signer already consumed that challenge. Concurrent valid submissions still
+produce exactly one success.
 
-The state starts unconsumed and a valid signature atomically transitions it to
-consumed. Exactly one concurrent valid verifier can succeed; a later duplicate
-returns ``VerificationReason::Replay``. The consumed marker remains until the
-challenge's original expiration.
+Replay protection does not make AOTP phishing resistant. ``AOTP::respond()``
+requires independently trusted expected audience/context and refuses stale/future
+challenges, but a real-time relay can still proxy a genuine challenge unless the
+surrounding client/verifier flow independently binds the intended verifier and
+local operation. See :doc:`aotp` and :doc:`security`.
 
 GridOTP
 -------
 
-GridOTP uses a coordinated lock for the complete challenge state rather than a
-single scalar replay claim:
+GridOTP challenge state contains the canonical challenge digest, remaining
+attempts, absolute expiry, and consumed status. Verification mutates those fields
+under one coordinated CacheLayer lock. A successful response consumes the
+challenge; concurrent duplicates cannot both succeed. Wrong responses decrement
+attempts without extending the original expiry.
 
-.. code-block:: php
-
-   $gridOtp = new \Infocyph\OTP\GridOTP(
-       cache: $stateCache,
-       secret: $secret,
-       maxAttempts: 3,
-   );
-
-   $challenge = $gridOtp->issue('user-42:grid:secret-v2');
-   $result = $gridOtp->verifyWithResult(
-       'user-42:grid:secret-v2',
-       $submittedChallenge,
-       $submittedResponse,
-   );
-
-The state binds a digest of the complete challenge, remaining attempts, absolute
-expiry, and consumed status. A wrong well-formed response decrements attempts.
-Success changes the same record to consumed. That multi-field mutation is always
-serialized by CacheLayer's coordinated lock; it is not decomposed into separate
-atomic operations.
-
-The consumed marker remains until original expiry, so a duplicate valid response
-can be reported as replay. A response captured for one dynamic grid cannot be
-used against another challenge.
+Because GridOTP is a multi-field state machine, it does not switch to native
+atomics even when the backend exposes them.
 
 MobileOTP
 ---------
 
-Replay-aware MobileOTP uses the same greatest-accepted-timestep rule as TOTP,
-but the protocol period is 10 seconds:
+Replay-aware MobileOTP stores the greatest accepted 10-second timestep using the
+same monotonic scalar state machinery as TOTP:
 
 .. code-block:: php
 
    $result = $mobile->verifyWithWindow(
        otp: $submittedOtp,
-       window: new VerificationWindow(past: 1, future: 1),
        cache: $stateCache,
-       factorId: 'user-42:mobile:secret-v2',
+       factorId: 'user-42:mobile:secret-v1',
    );
 
-The TTL is ``10 * (past + future + 1)`` seconds. Once a timestep is accepted,
-equal or lower accepted candidates cannot succeed for that factor generation.
-The protocol permits windows up to 18 steps in each direction for legacy
-compatibility, but use the smallest window the deployment actually needs.
+Equal/older accepted timesteps are replay. The legacy verification window may be
+widened explicitly, but replay state still moves only forward.
 
 Passkey ceremonies
 ------------------
 
-Passkey/WebAuthn signatures and authenticator counters are validated by
-``web-auth/webauthn-lib``. OTP additionally makes each registration or
-authentication ceremony one-time at the application boundary.
+Passkey stores the complete registration/authentication options and ceremony
+metadata under a random one-time ceremony ID. Successful completion marks the
+ceremony consumed until its original expiry so duplicate valid browser responses
+can be reported as replay rather than as a missing ceremony.
 
-.. code-block:: php
+Passkey ceremony state is lock-based because type, options, binding, expiry, and
+consumed state transition together. Durable WebAuthn ``CredentialRecord`` data is
+not replay cache state and must remain in the application's authoritative durable
+store.
 
-   $binding = 'login-flow-9af3';
-   $ceremony = $passkey->beginAuthentication($binding);
-
-   $result = $passkey->finishAuthentication(
-       binding: $binding,
-       ceremonyId: $submittedCeremonyId,
-       credentialRecordJson: $storedCredentialRecord,
-       credentialJson: $browserCredentialJson,
-   );
-
-The server stores ceremony type, complete serialized request/creation options,
-optional user handle, absolute expiry, and consumed status under a random 128-bit
-ceremony ID. The entire record is lock-coordinated. A successful ceremony is
-marked consumed through its original TTL so concurrent/repeated assertions are
-reported as replay.
-
-Passkey durable ``CredentialRecord`` data is not replay cache. Persist the
-updated record returned after successful authentication because authenticator
-counter/backup/verification state may have changed.
-
-Factor and flow identity
-------------------------
+Factor identity
+---------------
 
 A factor ID must distinguish account, protocol, suite/configuration, secret/key
 generation, and any generation in which a moving counter can reset. Examples:
@@ -239,62 +213,55 @@ generation, and any generation in which a moving counter can reset. Examples:
    user-42:grid:secret-v2
    user-42:mobile:secret-v2
 
-The raw factor ID is hashed into package keys. Hashing prevents direct disclosure
-in backend key listings but does not make reuse safe. Change the ID when a
-secret/key rotates, a suite changes, a MobileOTP secret/PIN generation changes,
-or a counter legitimately resets.
+The raw factor ID is hashed into the package key. Hashing prevents direct
+disclosure in backend key listings but does not make reuse safe. Change the ID
+when a secret/key rotates, a suite changes, or a counter legitimately resets.
 
-Passkey ``binding`` is different: it identifies the specific registration/login
-flow. Make it flow-specific and bind it server-side to the intended account or
-pre-authentication session. Durable passkey identity comes from WebAuthn
-credential IDs, not the ceremony binding.
+Passkey ceremony bindings are different: use flow-specific identifiers. Durable
+credential identity comes from WebAuthn credential IDs.
 
 Stateless verification
 ----------------------
 
-``TOTP::verify()``, ``HOTP::verify()``, ``OCRA::verify()``, and
-``MobileOTP::verify()`` can perform protocol verification without package replay
-state. This is appropriate for test vectors, enrollment confirmation, or a caller
-that performs an equivalent atomic transition in a larger transaction. It is not
-single-use protection by itself.
+``TOTP::verify()``, ``HOTP::verify()``, ``OCRA::verify()``, and MobileOTP's
+non-cache verification path perform only protocol mathematics. This is useful
+for test vectors, enrollment confirmation, or callers that implement an
+equivalent atomic transition in a larger transaction. It is not single-use
+protection by itself.
 
-AOTP, GridOTP, and Passkey are challenge/ceremony protocols whose normal
-verification path is stateful by design.
+AOTP, GridOTP, GenericOtp, and Passkey ceremonies own issuance/acceptance state
+and therefore use the configured CacheLayer path directly.
 
 Concurrency and failures
 ------------------------
 
-For every production backend, test at least:
+For every production backend/topology, test at least:
 
-#. two concurrent equal TOTP/HOTP/OCRA/MobileOTP matches produce one acceptance
-   where the protocol/state policy promises single use;
-#. two concurrent valid AOTP submissions produce exactly one success and one
-   replay;
-#. GridOTP attempts and consumption cannot race under its lock;
-#. a successful Passkey ceremony cannot be accepted twice;
+#. two concurrent equal matches produce one success and one replay;
 #. a higher accepted moving factor prevents a later lower value;
 #. different factor/key generations do not collide;
+#. AOTP duplicate valid signatures consume one reservation exactly once;
+#. GridOTP attempts/expiry/consumption remain serialized under concurrency;
+#. Passkey duplicate ceremony completion succeeds at most once;
 #. atomic contention is bounded and never regresses state;
 #. an atomic backend failure never falls back to an unlocked or lock-based write;
 #. lock fallback never writes after lock timeout or ownership loss;
 #. malformed persisted state throws instead of becoming replay/miss;
-#. read/write/delete errors throw instead of becoming a cache miss; and
+#. read/write errors throw instead of becoming a cache miss; and
 #. restart, failover, expiry, and eviction match each primitive's durability
    requirements.
 
-Do not use ``Cache::memory`` for production authentication state. Do not use
+Do not use ``Cache::memory`` for production authentication state: it coordinates
+neither workers nor hosts and disappears on restart. Do not use
 ``Cache::remember()`` for these transitions because it does not express the
-required compare/claim/multi-field semantics.
+required compare/claim semantics.
 
 Rolling upgrades from 6.0
 -------------------------
 
-OTP 6.0 coordinates the existing HOTP/TOTP/OCRA replay mutations with locks. OTP
-6.1 prefers native atomics when available while keeping those existing replay
-keys and values. Do not run stateful 6.0 and atomic-path 6.1 workers concurrently
-for an extended rolling window because the two versions do not coordinate
-through the same primitive. Drain or replace 6.0 stateful workers before
-activating 6.1 workers that share the same replay backend.
-
-AOTP, GridOTP, MobileOTP, and Passkey use independently namespaced state added in
-6.1, so they do not collide with carried-forward HOTP/TOTP/OCRA/GenericOtp state.
+OTP 6.0 coordinates existing replay mutations with locks. OTP 6.1 prefers native
+atomics when available while keeping those existing replay keys and values. Do
+not run stateful 6.0 and atomic-path 6.1 workers concurrently for an extended
+rolling window, because the two versions do not coordinate through the same
+primitive. Drain or replace 6.0 stateful workers before activating 6.1 workers
+that share the same replay backend.
