@@ -16,9 +16,9 @@ use Throwable;
 /** @internal */
 final class CacheLock
 {
-    private const int MAX_ATOMIC_ATTEMPTS = 8;
-
     private const float LEASE_SECONDS = 30.0;
+
+    private const int MAX_ATOMIC_ATTEMPTS = 8;
 
     private const float WAIT_SECONDS = 1.0;
 
