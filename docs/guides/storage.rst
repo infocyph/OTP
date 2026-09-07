@@ -1,14 +1,12 @@
 CacheLayer state and durable persistence
 ========================================
 
-Generic OTP and replay protection use ``infocyph/cachelayer`` directly.
-Recovery codes deliberately keep ``RecoveryCodeStoreInterface`` because their
-batch history is durable application data, not expiring authentication cache.
-For adapter-specific connection, TLS, cluster, and deployment options, consult
-the `CacheLayer 3.3 documentation <https://github.com/infocyph/CacheLayer/tree/3.3>`_.
-The examples below show the OTP-specific safety settings. CacheLayer exposes the
-authentication-state policy together with any native atomic and coordinated-lock
-capabilities available from the selected backend.
+OTP uses ``infocyph/cachelayer`` directly for package-owned authentication
+state. Recovery codes deliberately keep ``RecoveryCodeStoreInterface`` because
+their batch history is durable application data, while Passkey credential
+records are also durable application-owned data. For adapter-specific connection,
+TLS, cluster, and deployment options, consult the `CacheLayer 3.3 documentation
+<https://github.com/infocyph/CacheLayer/tree/3.3>`_.
 
 Required CacheLayer policy
 --------------------------
@@ -28,7 +26,8 @@ Authentication state must fail closed. Always construct the cache with:
 
 ``failOpen: false`` is mandatory. CacheLayer's general-purpose default treats a
 read failure like a miss; that is useful for ordinary cached content but unsafe
-for OTP state because missing replay state can permit a credential again.
+for authentication state because losing replay/challenge state can reopen an
+accepted credential or make security decisions ambiguous.
 
 The integrity key authenticates CacheLayer payloads but does not encrypt them.
 Protect the backend, its transport, credentials, and backups. Keep the integrity
@@ -42,38 +41,45 @@ flush from an OTP flow.
 Atomic and lock capability pairing
 ----------------------------------
 
-Every stateful operation receives one CacheLayer
+Every stateful primitive receives one CacheLayer
 ``AuthenticationStateCacheInterface``. OTP rejects the cache unless it is
 fail-closed, payload-integrity protected, and backed by one authoritative direct
 backend.
 
-TOTP, HOTP, and OCRA prefer CacheLayer 3.3 native atomics when the cache also
-implements ``AtomicCacheProviderInterface`` and ``atomic()`` returns an
-``AtomicCacheInterface``. Monotonic replay state uses ``setIfAbsent()`` for the
-first value and ``compareAndSet()`` for later advancement. One-time OCRA replay
-uses ``setIfAbsent()``. Atomic contention is bounded; exhaustion throws instead
-of retrying indefinitely.
+The state models fall into two groups.
 
-If native atomics are not available, TOTP, HOTP, and OCRA fall back to the lock
-provider returned by ``authenticationStateLock()``. The complete
-read/decision/mutation transition remains coordinated by that lock. A cache with
-neither native atomics nor a coordinated lock is rejected.
+**Atomic-or-lock scalar transitions**
 
-``GenericOtp`` deliberately remains lock-based in 6.1 because issuing,
-replacing, consuming, decrementing attempts, and deleting its multi-field state
-must remain one serializable state machine. An atomic capability alone is not
-sufficient for Generic OTP; its cache must expose a coordinated lock.
+TOTP, HOTP, counter/non-counter OCRA, MobileOTP, and AOTP use CacheLayer 3.3
+native atomics where the transition maps cleanly to monotonic advancement or a
+single reservation/claim. Backends without atomics use the coordinated
+``authenticationStateLock()`` fallback.
 
-Capability selection is not a runtime failover mechanism. Once an atomic
-capability is available for a replay transition, an atomic backend exception is
-propagated and OTP does not retry the operation through locks. This prevents an
-unknown atomic commit outcome from being re-executed through another mutation
-path.
+* TOTP, HOTP, counter OCRA, and MobileOTP advance a greatest-accepted integer.
+* Non-counter OCRA performs a one-time claim for the authenticated message.
+* AOTP reserves a freshly issued challenge and later transitions its scalar
+  state from unconsumed to consumed.
 
-Lock acquisition is bounded and any acquisition, ownership-refresh, read,
-write, or delete failure aborts the authentication operation with an exception.
-Do not call ``Cache::remember()`` to implement OTP transitions. Its general
-cache semantics are not the OTP state protocol.
+**Always-lock multi-field transitions**
+
+``GenericOtp``, ``GridOTP``, and ``Passkey`` always require the coordinated lock
+even when the backend also exposes atomics:
+
+* Generic OTP mutates digest, attempts, absolute expiry, and consumption/deletion.
+* GridOTP mutates challenge digest, attempts, expiry, and consumed status.
+* Passkey mutates ceremony type/options/user binding/expiry/consumed state.
+
+These fields form one serializable state machine and must not be split into
+independent cache operations.
+
+Capability selection is not runtime failover. Once an atomic capability is
+selected, an atomic backend exception propagates and OTP does not retry the
+operation through locks, because the commit outcome might be unknown. Lock
+acquisition, ownership refresh, read, write, or delete failure also aborts the
+authentication operation.
+
+Do not use ``Cache::remember()`` for authentication mutations; its general cache
+semantics do not express compare/claim/consume transitions.
 
 Redis example
 -------------
@@ -96,8 +102,8 @@ Use a primary/authoritative Redis connection. Replicas with lag are unsafe for
 verification reads. Configure memory so authentication keys are not evicted.
 HOTP and counter-OCRA state has no TTL and must survive restarts and failover.
 CacheLayer 3.3 Redis/Valkey adapters expose native atomic replay operations, so
-TOTP/HOTP/OCRA use that path without acquiring OTP replay locks. Generic OTP
-still uses the cache's configured lock capability.
+scalar OTP transitions can use the native path while GenericOtp, GridOTP, and
+Passkey use the configured coordinated lock.
 
 PDO example
 -----------
@@ -144,7 +150,7 @@ State by primitive
 
 .. list-table:: Backend suitability
    :header-rows: 1
-   :widths: 22 25 53
+   :widths: 20 24 56
 
    * - Primitive
      - State lifetime
@@ -161,23 +167,37 @@ State by primitive
    * - Counter OCRA
      - Factor lifetime
      - Durable, non-evicting, authoritative, integrity-protected, atomic or lockable
-   * - Challenge OCRA
+   * - Non-counter OCRA
      - Application replay TTL
      - Shared, authoritative, integrity-protected, atomic or lockable
+   * - AOTP
+     - Issued challenge TTL
+     - Shared, authoritative, integrity-protected, atomic or lockable
+   * - GridOTP
+     - Issued challenge TTL
+     - Shared, authoritative, integrity-protected, lockable
+   * - MobileOTP
+     - Short replay TTL
+     - Shared, authoritative, integrity-protected, atomic or lockable
+   * - Passkey ceremony
+     - Short ceremony TTL
+     - Shared, authoritative, integrity-protected, lockable
+   * - Passkey CredentialRecord
+     - Credential lifetime
+     - Application-owned authoritative durable database
    * - Recovery codes
-     - Durable
-     - Application-owned atomic persistence
+     - Until replacement/consumption
+     - Application-owned atomic durable persistence
 
-``Cache::memory`` is for tests only. File cache/lock is limited to local or one
-shared-filesystem deployment. A tiered L1/L2 cache is rejected for replay and
-counter state because a stale promoted read can reopen an accepted moving
-factor. Replica reads and eventually consistent backends are not allowed.
-Evicting HOTP or counter-OCRA state is unsafe because those records must survive
-for the complete factor generation.
+``Cache::memory`` is for tests only. A tiered L1/L2 cache is rejected for
+security state because stale promoted reads can reopen accepted state. Replica
+reads and eventually consistent backends are not allowed. Evicting HOTP or
+counter-OCRA state is unsafe because those records must survive for the complete
+factor generation.
 
-.. list-table::
+.. list-table:: Package state representation
    :header-rows: 1
-   :widths: 22 30 18 30
+   :widths: 19 35 20 26
 
    * - Primitive
      - Cached value
@@ -200,42 +220,70 @@ for the complete factor generation.
      - No TTL
      - Older counters may reopen
    * - Non-counter OCRA
-     - One scalar token per authenticated message
+     - One scalar claim per authenticated message
      - Required application TTL
      - The message may replay during validity
+   * - AOTP
+     - Scalar reservation: unconsumed/consumed
+     - Challenge TTL
+     - Issued proof fails or may lose replay history
+   * - GridOTP
+     - Version/digest/attempt/expiry/consumed array
+     - Challenge TTL
+     - Active challenge becomes unusable
+   * - MobileOTP
+     - Greatest accepted timestep integer
+     - Accepted-window TTL
+     - A still-valid timestep may replay
+   * - Passkey ceremony
+     - Version/type/options/user/expiry/consumed array
+     - Ceremony TTL
+     - Active ceremony becomes unusable
    * - Recovery codes
      - Application-defined durable rows
      - Until replacement/consumption
      - Recovery access or audit state is corrupted
 
-All package cache keys are full lowercase SHA-256 hex identifiers derived from a
-versioned domain and the binding/factor/message context. Raw bindings, factor
-IDs, OTP values, challenges, and secrets are not embedded in cache keys. Values
-are native arrays or integers; the package adds no JSON or PHP serialization
-layer.
+All package cache keys are lowercase SHA-256 identifiers derived from versioned
+domains plus binding/factor/challenge context. Raw secrets and submitted OTPs are
+not embedded directly in keys. Cache values are native arrays or integers; OTP
+adds no extra JSON/PHP serialization layer to CacheLayer state. Passkey's stored
+``optionsJson`` is the upstream WebAuthn options payload intentionally retained
+inside the integrity-protected ceremony record.
 
 Application persistence is separate
 ------------------------------------
 
-CacheLayer is not the persistence answer for the complete MFA domain. Keep
-encrypted OTP secrets, factor ownership and status, HOTP's application
-``nextCounter``, recovery-code batches, device/user relationships, key-version
-metadata, and audit logs in the application's authoritative durable stores.
-CacheLayer holds only the challenge and replay/counter values listed above.
+CacheLayer is not the persistence answer for the complete authentication domain.
+Keep the following in authoritative durable application storage:
+
+* encrypted HOTP/TOTP/OCRA/GridOTP/MobileOTP secrets and factor status;
+* AOTP public keys and factor/key generation metadata;
+* HOTP application ``nextCounter``;
+* Passkey user-to-credential relationships and serialized ``CredentialRecord``;
+* recovery-code batches through an atomic ``RecoveryCodeStoreInterface``;
+* device/user relationships, enrollment status, revocation state, and audit.
+
+The AOTP private key belongs on the client/device, not in verifier persistence.
+A Passkey private key remains in the authenticator and is never stored by OTP.
 
 TTL rules
 ---------
 
-Generic OTP stores an absolute expiration inside the record as well as a backend
-TTL. Failed attempts preserve that absolute expiration and write only the
-remaining lifetime. TOTP's derived TTL covers every accepted past/current/future
-step. Non-counter OCRA requires ``replayTtl``; time suites reject a value shorter
-than the complete acceptance window.
+Generic OTP, GridOTP, Passkey ceremonies, and AOTP reservations retain absolute
+or protocol-defined expiration behavior and never extend validity on a failed
+attempt/mutation. TOTP and MobileOTP derive replay TTL from the complete accepted
+window. Non-counter OCRA requires ``replayTtl``; time suites reject a value
+shorter than the complete acceptance window.
 
-HOTP and counter-OCRA intentionally pass no TTL. Their monotonic record must be
+HOTP and counter-OCRA intentionally use no TTL. Their monotonic record must be
 durable for the factor generation. If an operational policy deletes it, rotate
 to a new factor ID and reset/migrate the application counter in one controlled
 operation—never silently recreate state under the old generation.
+
+Passkey credential records have no CacheLayer TTL because they do not belong in
+CacheLayer at all. Persist the updated record returned by every successful
+assertion.
 
 Failure handling and observability
 ----------------------------------
@@ -244,7 +292,8 @@ Treat CacheLayer exceptions as temporary authentication infrastructure failure,
 not credential mismatch. Return a generic client response, retain the original
 exception for internal diagnostics, and log only a redacted operation name and
 correlation ID. Never log cache keys, values, factor IDs, bindings, submitted
-codes, or provisioning URIs.
+codes, AOTP challenges/signatures, GridOTP grids/responses, Passkey ceremony
+options/browser credentials, or provisioning URIs.
 
 Atomic ``setIfAbsent()``/``compareAndSet()`` failures and bounded-contention
 exhaustion are operational failures and propagate. OTP never converts them to a
@@ -258,7 +307,7 @@ outcome is retained; the bounded lock lease limits failed cleanup.
 
 Monitor read/write/delete latency, atomic CAS/set-if-absent latency and
 contention, lock acquisition failures, lock contention, backend errors,
-evictions, memory pressure, and durable-store replication or failover health.
+evictions, memory pressure, and durable-store replication/failover health.
 Alert on unexpected loss of no-TTL counter records.
 
 Recovery-code persistence
@@ -267,23 +316,29 @@ Recovery-code persistence
 ``RecoveryCodeStoreInterface`` remains the application extension point. Its
 ``replace()`` and ``consume()`` operations must each be atomic and must return
 metadata from the committed mutation. A relational implementation normally
-uses one batch row and child digest rows with a unique
-``(binding, digest)`` key. See :doc:`custom-stores` for the full contract.
+uses one batch row and child digest rows with a unique ``(binding, digest)`` key.
+See :doc:`custom-stores` for the full contract.
 
 Required integration tests
 --------------------------
 
 Run against every production backend and topology:
 
-* two identical successful submissions yield exactly one acceptance;
+* two identical successful TOTP/HOTP/OCRA/MobileOTP/AOTP submissions yield
+  exactly one acceptance where single-use state applies;
+* AOTP duplicate valid signatures report replay and tampered challenges cannot
+  reach an issued reservation;
+* GridOTP wrong attempts decrement exactly once and success is single-use under
+  concurrency;
+* Passkey ceremony success is single-use and its consumed marker survives until
+  original expiry;
 * lower/equal monotonic values lose to a stored higher value;
 * native atomic adapters select the atomic path without acquiring replay locks;
-* adapters without atomics produce equivalent results through the lock fallback;
+* adapters without atomics produce equivalent scalar results through lock fallback;
 * an available atomic backend failure propagates and is never retried through locks;
 * Generic OTP wrong attempts decrement exactly once without extending expiry;
 * issue racing verify has a serializable replacement-or-consumption outcome;
 * atomic contention is bounded and fails closed;
 * lock timeout, lost ownership, read, write, and delete failure all fail closed;
-* expired TOTP and non-counter OCRA entries follow documented TTL precision;
 * backend restart/failover preserves HOTP and counter-OCRA state; and
 * namespace flushing and eviction policy cannot remove authentication state.
