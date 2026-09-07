@@ -11,13 +11,23 @@ Common configuration
 Pass both values or neither:
 
 * an integrity-protected, fail-closed, authoritative CacheLayer
-  ``AuthenticationStateCacheInterface`` with its configured lock; and
+  ``AuthenticationStateCacheInterface``; and
 * a 1–190 byte, generation-specific ``factorId``.
 
 Supplying only part of the pair throws ``InvalidArgumentException``. Unsafe
-cache policies, backend failures, and lock failures throw and must produce a
-temporary authentication failure. See
-:doc:`storage` for complete Redis, PDO, and local-development setup.
+cache policies and backend failures throw and must produce a temporary
+authentication failure.
+
+OTP 6.1 requires CacheLayer 3.3 or newer. Replay transitions use the native
+``AtomicCacheProviderInterface`` capability when the configured backend exposes
+it. Backends without atomics remain supported when they provide a coordinated
+authentication-state lock. Native atomic failures never fall back to locks.
+
+``GenericOtp`` is intentionally different: its multi-field attempt/expiry state
+still requires the coordinated lock capability even when the backend also
+supports atomics.
+
+See :doc:`storage` for complete Redis, PDO, and local-development setup.
 
 TOTP
 ----
@@ -36,8 +46,12 @@ TOTP
 
 After a cryptographic match, the package stores the greatest accepted timestep.
 The TTL is ``period * (past + future + 1)``. Once a future step is accepted,
-equal or older steps are replay even if not individually submitted. The entire
-read/compare/write transition occurs under one factor-specific lock.
+equal or older steps are replay even if not individually submitted.
+
+With an atomic-capable backend the transition is a bounded
+read/``setIfAbsent``/``compareAndSet`` loop. The state can only move forward.
+A backend without atomics uses the previous factor-specific coordinated lock
+path.
 
 HOTP
 ----
@@ -57,6 +71,8 @@ counters return ``VerificationReason::Replay``. Persist the application's
 ``nextCounter`` as durable business state too; the CacheLayer backend used here
 must not evict or expire the monotonic replay record.
 
+Atomic-capable backends use the same bounded monotonic CAS algorithm as TOTP.
+
 Counter OCRA
 ------------
 
@@ -72,6 +88,7 @@ Counter OCRA
 
 Counter OCRA uses the same durable greatest-value rule as HOTP. ``replayTtl``
 must be null; a TTL is rejected because expiry could reopen older counters.
+Atomic-capable backends use the same monotonic CAS path.
 
 Non-counter OCRA
 ----------------
@@ -95,6 +112,11 @@ including suite, counter when present, encoded challenge, PIN digest, session,
 and matched timestep. The application-supplied TTL is mandatory. It must cover
 the complete server challenge/business validity; for time suites it must also be
 at least ``timeStepSeconds * (past + future + 1)``.
+
+On atomic-capable backends, first acceptance is one native ``setIfAbsent``
+claim. A false conditional result is inspected as existing state: the canonical
+value means replay, malformed state throws, and transient contention is retried
+within the bounded retry budget.
 
 Factor identity
 ---------------
@@ -129,12 +151,25 @@ For every backend, test at least:
 #. two concurrent equal matches produce one success and one replay;
 #. a higher accepted moving factor prevents a later lower value;
 #. different factor generations do not collide;
-#. a lock timeout never falls back to an unlocked write;
-#. lost lock ownership prevents mutation;
+#. atomic contention is bounded and never regresses state;
+#. an atomic backend failure never falls back to an unlocked or lock-based write;
+#. lock fallback never writes after lock timeout or ownership loss;
+#. malformed persisted replay state throws instead of becoming replay/miss;
 #. read/write errors throw instead of becoming a cache miss; and
 #. restart, failover, expiry, and eviction match the primitive's durability
    requirements.
 
 Do not use ``Cache::memory`` for production replay state: it coordinates neither
 workers nor hosts and disappears on restart. Do not use ``Cache::remember()``
-for these transitions because it may compute without a lock after contention.
+for these transitions because it does not express the required compare/claim
+semantics.
+
+Rolling upgrades from 6.0
+-------------------------
+
+OTP 6.0 coordinates replay mutations with locks. OTP 6.1 prefers native atomics
+when available while keeping the same replay keys and values. Do not run
+stateful 6.0 and atomic-path 6.1 workers concurrently for an extended rolling
+window, because the two versions do not coordinate through the same primitive.
+Drain or replace 6.0 stateful workers before activating 6.1 workers that share
+the same replay backend.
