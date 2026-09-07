@@ -17,11 +17,15 @@ VerificationReason
    VerificationReason::Mismatch;       // "mismatch"
    VerificationReason::Replay;         // "replay"
 
-The first three are successful reasons. Replay means the cryptographic value
-matched but state rejected reuse; ``matched`` is false.
+The first three are successful reasons. Replay means cryptographic/protocol
+verification reached an already-consumed or already-advanced state;
+``matched`` is false.
 
 VerificationResult
 ------------------
+
+``VerificationResult`` is returned by detailed HOTP/TOTP/OCRA/AOTP/GridOTP/
+MobileOTP verification methods.
 
 Fields:
 
@@ -29,12 +33,16 @@ Fields:
 
    $result->matched;          // bool
    $result->reason;           // VerificationReason
-   $result->matchedTimestep;  // ?int, TOTP or time-drifted OCRA
+   $result->matchedTimestep;  // ?int, TOTP/MobileOTP/time-drifted OCRA
    $result->matchedCounter;   // ?int, HOTP/counter OCRA
    $result->nextCounter;      // ?int
    $result->driftOffset;      // int
    $result->replayDetected;   // bool
    $result->verifiedAt;       // ?DateTimeImmutable
+
+AOTP and GridOTP use the same result type but normally populate only
+``matched``, ``reason``, ``replayDetected``, and ``verifiedAt``. MobileOTP uses
+``matchedTimestep`` and ``driftOffset`` like a ten-second time-based protocol.
 
 A result never contains both timestep and counter. ``Matched`` has zero drift;
 ``Drifted`` has a timestep, no counter, and non-zero drift;
@@ -54,8 +62,9 @@ Helpers:
        // Successful match with a non-zero offset.
    }
 
-``isDrifted()`` also applies to HOTP resynchronization because it checks successful
-non-zero offset, while ``reason`` identifies protocol-specific semantics.
+``isDrifted()`` also applies to HOTP resynchronization because it checks
+successful non-zero offset, while ``reason`` identifies protocol-specific
+semantics.
 
 Factory methods
 ---------------
@@ -77,6 +86,119 @@ The public factories preserve invariants:
 
 Most applications consume results returned by protocol classes rather than
 constructing them.
+
+PasskeyResult
+-------------
+
+Passkey/WebAuthn uses a dedicated result because successful authentication must
+return the durable WebAuthn credential record that may have changed during
+verification.
+
+.. code-block:: php
+
+   $result->matched;               // bool
+   $result->reason;                // VerificationReason
+   $result->credentialId;          // ?string, URL-safe Base64
+   $result->credentialRecordJson;  // ?string, sensitive durable record
+   $result->userHandle;            // ?string, URL-safe Base64, sensitive
+   $result->replayDetected;        // bool
+
+A successful result always uses ``VerificationReason::Matched`` and contains a
+credential ID plus serialized ``CredentialRecord``. Persist
+``credentialRecordJson`` after registration and overwrite the old durable record
+after every successful authentication.
+
+Failure factories are ``malformed()``, ``mismatch()``, and ``replay()``.
+``replay()`` sets ``replayDetected`` to true. Debug output redacts credential
+record JSON and user handle.
+
+AotpKeyPair
+-----------
+
+``AOTP::generateKeyPair()`` returns:
+
+.. code-block:: php
+
+   $keys->publicKey;  // URL-safe Base64 Ed25519 public key
+   $keys->privateKey; // URL-safe Base64 Ed25519 private key, sensitive
+
+The public key represents 32 bytes and the private key 64 bytes before encoding.
+Debug output always redacts the private key. The verifier should persist only the
+public key; the private key belongs on the client/device.
+
+AotpChallenge
+-------------
+
+.. code-block:: php
+
+   $challenge->id;        // 128-bit random ID, URL-safe Base64
+   $challenge->nonce;     // 256-bit random nonce, URL-safe Base64
+   $challenge->audience;  // verifier audience
+   $challenge->context;   // optional operation context
+   $challenge->issuedAt;  // Unix timestamp
+   $challenge->expiresAt; // Unix timestamp
+
+Transport helpers:
+
+.. code-block:: php
+
+   $array = $challenge->toArray();
+   $challenge = AotpChallenge::fromArray($array);
+   $payload = $challenge->signingPayload();
+
+``signingPayload()`` is the canonical binary payload covered by the Ed25519
+signature. Debug output redacts nonce and non-empty context.
+
+AotpResponse
+------------
+
+.. code-block:: php
+
+   $response->challengeId; // challenge identifier
+   $response->signature;   // URL-safe Base64 detached Ed25519 signature
+
+``toArray()`` and ``fromArray()`` provide transport round-tripping. The signature
+represents exactly 64 bytes before URL-safe Base64 encoding.
+
+GridChallenge
+-------------
+
+.. code-block:: php
+
+   $challenge->id;           // 128-bit random ID, URL-safe Base64
+   $challenge->grid;         // symbol => decimal-label mapping
+   $challenge->positions;    // list<int>, one-based positions in response order
+   $challenge->secretLength; // 8..32
+   $challenge->issuedAt;
+   $challenge->expiresAt;
+
+Transport and integrity helpers:
+
+.. code-block:: php
+
+   $array = $challenge->toArray();
+   $challenge = GridChallenge::fromArray($array);
+   $payload = $challenge->canonicalPayload();
+
+The grid contains the complete 32-symbol secret alphabet and its response labels
+are balanced so each decimal digit occurs three or four times. Debug output
+redacts the grid and requested positions.
+
+PasskeyCeremony
+---------------
+
+A Passkey registration/authentication start returns a ``PasskeyCeremony``:
+
+.. code-block:: php
+
+   $ceremony->id;          // random 128-bit ceremony ID, URL-safe Base64
+   $ceremony->type;        // registration or authentication
+   $ceremony->optionsJson; // sensitive serialized WebAuthn options
+   $ceremony->expiresAt;   // absolute Unix timestamp
+
+The browser receives the options and ceremony ID. OTP separately stores the
+complete options in integrity-protected CacheLayer ceremony state so finish calls
+do not trust caller-supplied replacement options.
 
 RecoveryCodeGenerationResult
 ----------------------------
@@ -137,7 +259,8 @@ ParsedOtpAuthUri
    $parsed->additionalParameters; // array<string,string>
 
 Parser defaults are materialized: SHA-1, six digits, and a 30-second TOTP
-period.
+period. AOTP, GridOTP, MobileOTP, and Passkey intentionally do not use
+``otpauth://`` provisioning.
 
 VerificationWindow
 ------------------
@@ -150,7 +273,8 @@ VerificationWindow
    $asymmetric = new VerificationWindow(past: 2, future: 1);
    $symmetric = VerificationWindow::symmetric(2);
 
-Past and future values are non-negative and their sum cannot exceed 100.
+Past and future values are non-negative and their sum cannot exceed 100. A
+protocol may impose a tighter bound; MobileOTP caps each direction at 18 steps.
 
 OcraSuite
 ---------

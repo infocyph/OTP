@@ -74,6 +74,24 @@ final class CacheLock
         return self::consumeOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName);
     }
 
+    public static function consumeReserved(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        if ($ttl < 1) {
+            throw new InvalidArgumentException('Reserved authentication state TTL must be positive.');
+        }
+        $atomic = self::assertSafe($cache);
+        if ($atomic !== null) {
+            return self::consumeReservedAtomically($cache, $atomic, $stateKey, $ttl, $stateName);
+        }
+
+        return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName);
+    }
+
     public static function ensureOwned(LockProviderInterface $locks, LockHandle $handle): void
     {
         if (!$locks->refresh($handle, self::LEASE_SECONDS)) {
@@ -81,13 +99,26 @@ final class CacheLock
         }
     }
 
+    public static function reserveOnce(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        if ($ttl < 1) {
+            throw new InvalidArgumentException('Reserved authentication state TTL must be positive.');
+        }
+        $atomic = self::assertSafe($cache);
+        if ($atomic !== null) {
+            return self::reserveOnceAtomically($cache, $atomic, $stateKey, $ttl, $stateName);
+        }
+
+        return self::reserveOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName);
+    }
+
     /**
-     * Release is post-operation cleanup: it never replaces a committed result or
-     * the primary operation failure. The lock lease bounds failed cleanup.
-     *
      * @template T
-     * @param AuthenticationStateCacheInterface $cache Configured authentication-state cache.
-     * @param string $key State coordination lock key.
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
      */
@@ -163,13 +194,7 @@ final class CacheLock
         return self::synchronized(
             $cache,
             $lockKey,
-            function (LockProviderInterface $locks, LockHandle $handle) use (
-                $cache,
-                $stateKey,
-                $value,
-                $ttl,
-                $stateName,
-            ): bool {
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $value, $ttl, $stateName): bool {
                 $current = $cache->get($stateKey);
                 if ($current !== null && !is_int($current)) {
                     throw new RuntimeException('Invalid ' . $stateName . ' state in CacheLayer.');
@@ -177,7 +202,6 @@ final class CacheLock
                 if ($current !== null && $value <= $current) {
                     return false;
                 }
-
                 self::ensureOwned($locks, $handle);
                 if (!$cache->set($stateKey, $value, $ttl)) {
                     throw new RuntimeException('Unable to store ' . $stateName . ' state.');
@@ -217,7 +241,6 @@ final class CacheLock
             if ($atomic->setIfAbsent($stateKey, 1, $ttl)) {
                 return true;
             }
-
             $current = $cache->get($stateKey);
             if ($current === 1) {
                 return false;
@@ -240,12 +263,7 @@ final class CacheLock
         return self::synchronized(
             $cache,
             $lockKey,
-            function (LockProviderInterface $locks, LockHandle $handle) use (
-                $cache,
-                $stateKey,
-                $ttl,
-                $stateName,
-            ): bool {
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
                 $current = $cache->get($stateKey);
                 if ($current !== null && $current !== 1) {
                     throw new RuntimeException('Invalid ' . $stateName . ' token in CacheLayer.');
@@ -253,10 +271,111 @@ final class CacheLock
                 if ($current === 1) {
                     return false;
                 }
-
                 self::ensureOwned($locks, $handle);
                 if (!$cache->set($stateKey, 1, $ttl)) {
                     throw new RuntimeException('Unable to store ' . $stateName . ' token.');
+                }
+
+                return true;
+            },
+        );
+    }
+
+    private static function consumeReservedAtomically(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            $current = $cache->get($stateKey);
+            if ($current === null || $current === 1) {
+                return false;
+            }
+            if ($current !== 0) {
+                throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
+            }
+            if ($atomic->compareAndSet($stateKey, 0, 1, $ttl)) {
+                return true;
+            }
+        }
+
+        throw new RuntimeException('Unable to consume reserved ' . $stateName . ' after atomic contention.');
+    }
+
+    private static function consumeReservedWithLock(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        return self::synchronized(
+            $cache,
+            $lockKey,
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
+                $current = $cache->get($stateKey);
+                if ($current === null || $current === 1) {
+                    return false;
+                }
+                if ($current !== 0) {
+                    throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
+                }
+                self::ensureOwned($locks, $handle);
+                if (!$cache->set($stateKey, 1, $ttl)) {
+                    throw new RuntimeException('Unable to consume reserved ' . $stateName . '.');
+                }
+
+                return true;
+            },
+        );
+    }
+
+    private static function reserveOnceAtomically(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            if ($atomic->setIfAbsent($stateKey, 0, $ttl)) {
+                return true;
+            }
+            $current = $cache->get($stateKey);
+            if ($current === 0 || $current === 1) {
+                return false;
+            }
+            if ($current !== null) {
+                throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
+            }
+        }
+
+        throw new RuntimeException('Unable to reserve ' . $stateName . ' after atomic contention.');
+    }
+
+    private static function reserveOnceWithLock(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        return self::synchronized(
+            $cache,
+            $lockKey,
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
+                $current = $cache->get($stateKey);
+                if ($current === 0 || $current === 1) {
+                    return false;
+                }
+                if ($current !== null) {
+                    throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
+                }
+                self::ensureOwned($locks, $handle);
+                if (!$cache->set($stateKey, 0, $ttl)) {
+                    throw new RuntimeException('Unable to reserve ' . $stateName . '.');
                 }
 
                 return true;
