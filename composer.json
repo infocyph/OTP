@@ -55,6 +55,6 @@
         "sort-packages": true
     },
     "scripts": {
-        "benchmark": "@php vendor/bin/phpbench run --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none"
+        "benchmark": "@php vendor/bin/phpbench run benchmarks --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none"
     }
 }
