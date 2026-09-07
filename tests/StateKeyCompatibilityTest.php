@@ -125,7 +125,7 @@ test('GenericOtp keeps its v1 state and lock keys', function () {
     $locks->method('release');
     $cache->expects($this->once())->method('set')->with(
         'fa922a4eaa6817579b5c9c46517c6df43f02a07ef2653596e14ba95d1e7b1169',
-        $this->isType('array'),
+        $this->callback(static fn (mixed $state): bool => is_array($state)),
         300,
     )->willReturn(true);
 
