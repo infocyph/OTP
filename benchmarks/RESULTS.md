@@ -1,4 +1,34 @@
-# CacheLayer migration benchmark
+# OTP benchmark results
+
+## OTP 6.1 / CacheLayer 3.3 attribution
+
+OTP 6.1 adds dedicated subjects for CacheLayer 3.3 replay coordination. CI runs
+the benchmark suite through the repository `benchmark` Composer script on the
+supported PHP matrix. The new subjects separate the conditional primitives from
+the OTP replay coordinator:
+
+| Subject | Purpose |
+| --- | --- |
+| `benchAtomicSetIfAbsent` | Native CacheLayer one-time conditional insertion |
+| `benchAtomicCompareAndSet` | Native CacheLayer monotonic CAS |
+| `benchAtomicMonotonicAdvance` | OTP monotonic replay coordinator on an atomic-capable memory backend |
+| `benchLockFallbackMonotonicAdvance` | OTP monotonic replay coordinator on an authoritative file/lock backend |
+| `benchAtomicOneTimeClaim` | OTP one-time replay claim on native atomics |
+| `benchLockFallbackOneTimeClaim` | OTP one-time replay claim on coordinated-lock fallback |
+
+The lock-fallback and atomic subjects deliberately use different concrete
+backends because CacheLayer does not claim atomic coordination for its file
+backend. Their absolute timings therefore attribute complete valid paths; they
+must not be presented as a pure lock-vs-CAS micro-operation ratio. Direct
+`setIfAbsent` and CAS subjects provide the lower-level atomic cost attribution.
+
+No synthetic 6.1 improvement percentage is recorded in this file. Release
+numbers must come from an actual successful benchmark run, with PHP version and
+environment recorded alongside the result. Stateful TOTP/HOTP/OCRA subjects in
+`OtpBench.php` now naturally exercise CacheLayer 3.3 atomics when their selected
+backend exposes them, while `GenericOtp` remains the lock-path control.
+
+## CacheLayer migration benchmark — OTP 6.0 baseline
 
 Recorded on 2026-08-14 with PHP 8.4.24, PHPBench 1.7.0, no Xdebug, and no
 OPcache. The release run used ``composer ic:bench:run`` and completed all 54
@@ -10,7 +40,7 @@ The in-memory CacheLayer backend and filesystem lock isolate library overhead;
 production Redis/database latency, persistence, contention, and failover must
 be measured in the deployment environment.
 
-## Corrected edge workloads
+### Corrected edge workloads
 
 The subjects below now measure the operation named: Generic OTP failed-attempt
 transitions use one revolution so setup creates a fresh finite-attempt record,
@@ -31,7 +61,7 @@ is from the full release run and deliberately uses one revolution.
 | TOTP future 5 | Match final future step | 6.242 µs |
 | TOTP future 50 | Match final future step | 41.345 µs |
 
-## Security-state diagnostics
+### Security-state diagnostics
 
 | Subject | Mode |
 | --- | ---: |
