@@ -233,7 +233,7 @@ final readonly class GridOTP
             [$values[$index], $values[$swap]] = [$values[$swap], $values[$index]];
         }
 
-        return $values;
+        return array_values($values);
     }
 
     private static function stateKey(string $factorId, string $challengeId): string
