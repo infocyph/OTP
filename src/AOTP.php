@@ -6,11 +6,13 @@ namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Result\VerificationResult;
+use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\ValueObjects\AotpChallenge;
 use Infocyph\OTP\ValueObjects\AotpKeyPair;
 use Infocyph\OTP\ValueObjects\AotpResponse;
 use InvalidArgumentException;
+use LogicException;
 use RuntimeException;
 
 final readonly class AOTP
@@ -19,7 +21,13 @@ final readonly class AOTP
 
     private const int MAX_TTL_SECONDS = 600;
 
+    private const int PRIVATE_KEY_BYTES = 64;
+
+    private const int PUBLIC_KEY_BYTES = 32;
+
     private const int RESERVATION_ATTEMPTS = 4;
+
+    private const int SIGNATURE_BYTES = 64;
 
     /** @var non-empty-string */
     private string $binaryPublicKey;
@@ -28,12 +36,23 @@ final readonly class AOTP
         string $publicKey,
         private string $audience,
     ) {
-        $this->binaryPublicKey = self::decodeKey($publicKey, SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES, 'AOTP public key');
+        self::requireSodium();
+        $this->binaryPublicKey = self::decodeKey($publicKey, self::PUBLIC_KEY_BYTES, 'AOTP public key');
         self::assertAudience($audience);
+    }
+
+    public static function isAvailable(): bool
+    {
+        return function_exists('sodium_crypto_sign_keypair')
+            && function_exists('sodium_crypto_sign_publickey')
+            && function_exists('sodium_crypto_sign_secretkey')
+            && function_exists('sodium_crypto_sign_detached')
+            && function_exists('sodium_crypto_sign_verify_detached');
     }
 
     public static function generateKeyPair(): AotpKeyPair
     {
+        self::requireSodium();
         $pair = sodium_crypto_sign_keypair();
 
         return new AotpKeyPair(
@@ -48,13 +67,14 @@ final readonly class AOTP
         AotpChallenge $challenge,
         string $expectedAudience,
     ): AotpResponse {
+        self::requireSodium();
         self::assertAudience($expectedAudience);
         if (!hash_equals($expectedAudience, $challenge->audience)) {
             throw new InvalidArgumentException('AOTP challenge audience does not match the expected verifier.');
         }
         $binaryPrivateKey = self::decodeKey(
             $privateKey,
-            SODIUM_CRYPTO_SIGN_SECRETKEYBYTES,
+            self::PRIVATE_KEY_BYTES,
             'AOTP private key',
         );
         $signature = sodium_crypto_sign_detached($challenge->signingPayload(), $binaryPrivateKey);
@@ -190,11 +210,7 @@ final readonly class AOTP
     /** @return non-empty-string */
     private static function decodeKey(string $key, int $bytes, string $name): string
     {
-        try {
-            $decoded = sodium_base642bin($key, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-        } catch (\SodiumException) {
-            throw new InvalidArgumentException($name . ' must be valid URL-safe Base64 without padding.');
-        }
+        $decoded = Base64Url::decode($key, $name);
         if ($decoded === '' || strlen($decoded) !== $bytes) {
             throw new InvalidArgumentException($name . ' has an invalid length.');
         }
@@ -205,12 +221,8 @@ final readonly class AOTP
     /** @return non-empty-string */
     private static function decodeSignature(string $signature): string
     {
-        try {
-            $decoded = sodium_base642bin($signature, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-        } catch (\SodiumException) {
-            throw new InvalidArgumentException('AOTP signature must be valid URL-safe Base64 without padding.');
-        }
-        if ($decoded === '' || strlen($decoded) !== SODIUM_CRYPTO_SIGN_BYTES) {
+        $decoded = Base64Url::decode($signature, 'AOTP signature');
+        if ($decoded === '' || strlen($decoded) !== self::SIGNATURE_BYTES) {
             throw new InvalidArgumentException('AOTP signature has an invalid length.');
         }
 
@@ -219,7 +231,7 @@ final readonly class AOTP
 
     private static function encode(string $value): string
     {
-        return sodium_bin2base64($value, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+        return Base64Url::encode($value);
     }
 
     private static function lockKey(string $factorId, AotpChallenge $challenge): string
@@ -228,6 +240,13 @@ final readonly class AOTP
             'sha256',
             "infocyph:otp:aotp:lock:v1\0" . $factorId . "\0" . hash('sha256', $challenge->signingPayload(), true),
         );
+    }
+
+    private static function requireSodium(): void
+    {
+        if (!self::isAvailable()) {
+            throw new LogicException('AOTP requires ext-sodium for Ed25519 operations.');
+        }
     }
 
     private static function stateKey(string $factorId, AotpChallenge $challenge): string
