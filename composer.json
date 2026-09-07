@@ -27,7 +27,7 @@
         "php-64bit": "^8.4",
         "ext-ctype": "*",
         "bacon/bacon-qr-code": "^3.1.1",
-        "infocyph/cachelayer": "^3.1.1",
+        "infocyph/cachelayer": "^3.3",
         "paragonie/constant_time_encoding": "^3.1.3"
     },
     "require-dev": {
