@@ -97,7 +97,7 @@ $persist = $result->nextCounter;    // 11
 Persist `nextCounter`, not `matchedCounter`. Supported counters are
 `0..PHP_INT_MAX`; HOTP/TOTP use 6..9 digits and require at least 128-bit
 decoded secrets. Replay-aware HOTP stores the greatest accepted counter in the
-configured CacheLayer backend with no TTL.
+configured CacheLayer backend with no TTL. See [HOTP](docs/guides/hotp.rst).
 
 ### Generic OTP
 
