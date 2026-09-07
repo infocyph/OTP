@@ -70,10 +70,12 @@ is abandoned, delete the pending secret and its replay state.
 Verify a login with replay protection
 -------------------------------------
 
-Production verification should use one shared, authoritative CacheLayer backend.
-CacheLayer owns the corresponding state lock, so OTP receives one configuration
-unit. This Redis example is integrity-protected, fail-closed, and rejects
-object/closure payloads:
+Production verification should use one shared, fail-closed,
+integrity-protected, authoritative CacheLayer backend. CacheLayer 3.3 exposes
+native atomics on capable backends and the corresponding coordinated lock on
+lock-backed fallbacks, so OTP receives one authentication-state configuration
+unit. This Redis example uses the native atomic path and rejects object/closure
+payloads:
 
 .. code-block:: php
 
@@ -111,12 +113,15 @@ object/closure payloads:
        // Malformed or mismatched credentials. Return a generic client message.
    }
 
-Cache and factor ID are an all-or-nothing group. OTP obtains CacheLayer's
-configured lock and atomically advances the factor's last accepted timestep;
-only one concurrent request can accept the same code. Fail-open, unsigned,
-tiered, non-authoritative, and lock-incapable caches are rejected. Do not use
-``Cache::remember()`` for authentication mutations because its lock-timeout
-behavior is intentionally suitable for ordinary caching, not credential state.
+Cache and factor ID are an all-or-nothing group. TOTP atomically advances the
+factor's last accepted timestep with CacheLayer native conditional state when
+available; a backend without atomics uses CacheLayer's coordinated lock. Only
+one concurrent request can accept the same code and a higher accepted timestep
+can never be replaced by a lower one. Fail-open, unsigned,
+tiered/non-authoritative, and coordination-incapable caches are rejected. A
+selected atomic backend failure propagates and is never retried through the lock
+fallback. Do not use ``Cache::remember()`` for authentication mutations because
+it does not express these compare/claim semantics.
 
 Boolean verification
 --------------------
