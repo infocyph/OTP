@@ -197,26 +197,20 @@ final readonly class GridOTP
         return hash('sha256', "infocyph:otp:gridotp:lock:v1\0" . $factorId . "\0" . $challengeId);
     }
 
-    /** @return array<string, string> */
+    /** @return array<array-key, string> */
     private static function randomGrid(): array
     {
-        /** @var list<string> $labels */
-        $labels = str_split(GridChallenge::RESPONSE_ALPHABET);
-        self::secureShuffle($labels);
-
-        /** @var list<string> $balanced */
+        $labels = self::shuffleSecure(str_split(GridChallenge::RESPONSE_ALPHABET));
         $balanced = [];
         $labelCount = count($labels);
         $alphabetLength = strlen(GridChallenge::SECRET_ALPHABET);
         for ($index = 0; $index < $alphabetLength; $index++) {
             $balanced[] = $labels[$index % $labelCount];
         }
-        self::secureShuffle($balanced);
+        $balanced = self::shuffleSecure($balanced);
 
-        /** @var array<string, string> $grid */
         $grid = [];
-        $symbols = str_split(GridChallenge::SECRET_ALPHABET);
-        foreach ($symbols as $index => $symbol) {
+        foreach (str_split(GridChallenge::SECRET_ALPHABET) as $index => $symbol) {
             $grid[$symbol] = $balanced[$index];
         }
 
@@ -226,9 +220,7 @@ final readonly class GridOTP
     /** @return list<int> */
     private static function randomPositions(int $secretLength, int $challengeSize): array
     {
-        /** @var list<int> $positions */
-        $positions = range(1, $secretLength);
-        self::secureShuffle($positions);
+        $positions = self::shuffleSecure(range(1, $secretLength));
 
         return array_slice($positions, 0, $challengeSize);
     }
@@ -236,13 +228,16 @@ final readonly class GridOTP
     /**
      * @template T
      * @param list<T> $values
+     * @return list<T>
      */
-    private static function secureShuffle(array &$values): void
+    private static function shuffleSecure(array $values): array
     {
         for ($index = count($values) - 1; $index > 0; $index--) {
             $swap = random_int(0, $index);
             [$values[$index], $values[$swap]] = [$values[$swap], $values[$index]];
         }
+
+        return $values;
     }
 
     private static function stateKey(string $factorId, string $challengeId): string
@@ -258,10 +253,7 @@ final readonly class GridOTP
         }
     }
 
-    /**
-     * @param mixed $state
-     * @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool}
-     */
+    /** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
     private function requireState(mixed $state): array
     {
         if (!is_array($state) || count($state) !== 5) {
