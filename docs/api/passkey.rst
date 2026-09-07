@@ -10,13 +10,16 @@ Constructor and capability:
    new Passkey(
        AuthenticationStateCacheInterface $cache,
        string $rpId,
-       string $rpName,
        array $allowedOrigins,
        int $ttlSeconds = 300,
        bool $allowSubdomains = false,
    );
 
    public static function isAvailable(): bool;
+
+The RP display name is not configurable through OTP. WebAuthn-lib 5.3 deprecates
+setting ``PublicKeyCredentialRpEntity::name`` and serializes the RP ID as the
+name when the field is left empty.
 
 Registration:
 
