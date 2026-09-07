@@ -16,9 +16,12 @@ use RuntimeException;
 final readonly class AOTP
 {
     private const int MAX_FACTOR_ID_LENGTH = 190;
+
     private const int MAX_TTL_SECONDS = 600;
+
     private const int RESERVATION_ATTEMPTS = 4;
 
+    /** @var non-empty-string */
     private string $binaryPublicKey;
 
     public function __construct(
@@ -145,9 +148,7 @@ final readonly class AOTP
         }
 
         $signature = self::decodeSignature($response->signature);
-        if (
-            !sodium_crypto_sign_verify_detached($signature, $challenge->signingPayload(), $this->binaryPublicKey)
-        ) {
+        if (!sodium_crypto_sign_verify_detached($signature, $challenge->signingPayload(), $this->binaryPublicKey)) {
             return VerificationResult::mismatch();
         }
 
@@ -186,6 +187,7 @@ final readonly class AOTP
         }
     }
 
+    /** @return non-empty-string */
     private static function decodeKey(string $key, int $bytes, string $name): string
     {
         try {
@@ -200,6 +202,7 @@ final readonly class AOTP
         return $decoded;
     }
 
+    /** @return non-empty-string */
     private static function decodeSignature(string $signature): string
     {
         try {
