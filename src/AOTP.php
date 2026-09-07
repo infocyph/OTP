@@ -95,6 +95,7 @@ final readonly class AOTP
             self::PRIVATE_KEY_BYTES,
             'AOTP private key',
         );
+
         try {
             $signature = sodium_crypto_sign_detached($challenge->signingPayload(), $binaryPrivateKey);
         } finally {
