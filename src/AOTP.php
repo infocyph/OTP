@@ -195,7 +195,7 @@ final readonly class AOTP
         } catch (\SodiumException) {
             throw new InvalidArgumentException($name . ' must be valid URL-safe Base64 without padding.');
         }
-        if (strlen($decoded) !== $bytes) {
+        if ($decoded === '' || strlen($decoded) !== $bytes) {
             throw new InvalidArgumentException($name . ' has an invalid length.');
         }
 
@@ -210,7 +210,7 @@ final readonly class AOTP
         } catch (\SodiumException) {
             throw new InvalidArgumentException('AOTP signature must be valid URL-safe Base64 without padding.');
         }
-        if (strlen($decoded) !== SODIUM_CRYPTO_SIGN_BYTES) {
+        if ($decoded === '' || strlen($decoded) !== SODIUM_CRYPTO_SIGN_BYTES) {
             throw new InvalidArgumentException('AOTP signature has an invalid length.');
         }
 
