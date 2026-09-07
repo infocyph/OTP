@@ -41,7 +41,7 @@ final readonly class GenericOtp
         if (strlen($key) < 16 || strlen($key) > self::MAX_KEY_LENGTH) {
             throw new InvalidArgumentException('Generic OTP HMAC keys must contain between 16 and 1024 bytes.');
         }
-        CacheLock::assertSafe($cache);
+        CacheLock::assertLockSafe($cache);
     }
 
     public function delete(string $binding): bool

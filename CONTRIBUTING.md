@@ -127,18 +127,21 @@ A bug fix should normally include a regression test that fails without the fix.
 
 ## Performance Changes
 
-Run benchmarks when performance is affected or claimed:
+Run the repository benchmark suite used by OTP CI whenever performance is affected or claimed:
+
+```bash
+composer benchmark
+```
+
+PHPForge's additional benchmark tooling remains useful for focused local investigation:
 
 ```bash
 composer ic:benchmark
-```
-
-Additional benchmark commands:
-
-```bash
 composer ic:bench:quick
 composer ic:bench:chart
 ```
+
+The release-facing claim must be reproducible through `composer benchmark`, because that is the representative Composer script executed by the shared Security & Standards workflow on the supported PHP matrix.
 
 Performance claims must include reproducible before-and-after results from comparable environments. Avoid conclusions based on a single unstable run.
 

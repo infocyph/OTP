@@ -5,10 +5,10 @@ Generic OTP and replay protection use ``infocyph/cachelayer`` directly.
 Recovery codes deliberately keep ``RecoveryCodeStoreInterface`` because their
 batch history is durable application data, not expiring authentication cache.
 For adapter-specific connection, TLS, cluster, and deployment options, consult
-the `CacheLayer 3.1 documentation <https://github.com/infocyph/CacheLayer/tree/3.1>`_.
-The examples below show the OTP-specific safety settings. CacheLayer's factory
-configures the matching lock provider, and OTP consumes that capability from the
-cache itself.
+the `CacheLayer 3.3 documentation <https://github.com/infocyph/CacheLayer/tree/3.3>`_.
+The examples below show the OTP-specific safety settings. CacheLayer exposes the
+authentication-state policy together with any native atomic and coordinated-lock
+capabilities available from the selected backend.
 
 Required CacheLayer policy
 --------------------------
@@ -39,20 +39,41 @@ Use a dedicated namespace such as ``infocyph-otp``. Do not share it with
 application response caches, and never call ``clear()`` or a namespace-wide
 flush from an OTP flow.
 
-Cache and lock pairing
-----------------------
+Atomic and lock capability pairing
+----------------------------------
 
 Every stateful operation receives one CacheLayer
-``AuthenticationStateCacheInterface``. OTP obtains its lock from that same
-object, removing the independently pairable cache/lock arguments. The cache is
-rejected unless it is fail-closed, payload-integrity protected, authoritative,
-and exposes a configured state lock. Lock acquisition is bounded and any
-acquisition, ownership-refresh, read, write, or delete failure aborts the
-authentication operation with an exception.
+``AuthenticationStateCacheInterface``. OTP rejects the cache unless it is
+fail-closed, payload-integrity protected, and backed by one authoritative direct
+backend.
 
-Do not call ``Cache::remember()`` to implement OTP transitions. Its
-lock-contention fallback may compute without the lock; OTP performs the entire
-read/decision/mutation sequence under CacheLayer's configured lock provider.
+TOTP, HOTP, and OCRA prefer CacheLayer 3.3 native atomics when the cache also
+implements ``AtomicCacheProviderInterface`` and ``atomic()`` returns an
+``AtomicCacheInterface``. Monotonic replay state uses ``setIfAbsent()`` for the
+first value and ``compareAndSet()`` for later advancement. One-time OCRA replay
+uses ``setIfAbsent()``. Atomic contention is bounded; exhaustion throws instead
+of retrying indefinitely.
+
+If native atomics are not available, TOTP, HOTP, and OCRA fall back to the lock
+provider returned by ``authenticationStateLock()``. The complete
+read/decision/mutation transition remains coordinated by that lock. A cache with
+neither native atomics nor a coordinated lock is rejected.
+
+``GenericOtp`` deliberately remains lock-based in 6.1 because issuing,
+replacing, consuming, decrementing attempts, and deleting its multi-field state
+must remain one serializable state machine. An atomic capability alone is not
+sufficient for Generic OTP; its cache must expose a coordinated lock.
+
+Capability selection is not a runtime failover mechanism. Once an atomic
+capability is available for a replay transition, an atomic backend exception is
+propagated and OTP does not retry the operation through locks. This prevents an
+unknown atomic commit outcome from being re-executed through another mutation
+path.
+
+Lock acquisition is bounded and any acquisition, ownership-refresh, read,
+write, or delete failure aborts the authentication operation with an exception.
+Do not call ``Cache::remember()`` to implement OTP transitions. Its general
+cache semantics are not the OTP state protocol.
 
 Redis example
 -------------
@@ -74,6 +95,9 @@ Redis example
 Use a primary/authoritative Redis connection. Replicas with lag are unsafe for
 verification reads. Configure memory so authentication keys are not evicted.
 HOTP and counter-OCRA state has no TTL and must survive restarts and failover.
+CacheLayer 3.3 Redis/Valkey adapters expose native atomic replay operations, so
+TOTP/HOTP/OCRA use that path without acquiring OTP replay locks. Generic OTP
+still uses the cache's configured lock capability.
 
 PDO example
 -----------
@@ -93,8 +117,9 @@ PDO example
        options: $options,
    );
 
-``Cache::pdo()`` configures its PDO lock provider from the same connection. Test
-the target engine's lock behavior. SQLite is useful for local integration tests; production
+When the selected adapter does not expose CacheLayer's atomic capability, OTP
+uses the lock returned by the authentication-state cache. Test the target
+engine's lock behavior. SQLite is useful for local integration tests; production
 multi-host deployments normally require a network database or Redis.
 
 Local development example
@@ -110,10 +135,9 @@ Local development example
        options: $options,
    );
 
-``Cache::file()`` configures a file lock. File locks coordinate only processes
-sharing that filesystem. ``Cache::memory``
-and file-backed examples are not suitable for multiple hosts, containers, or
-durability across deployment replacement.
+File-backed state coordinates only processes sharing that filesystem.
+``Cache::memory`` and file-backed examples are not suitable for multiple hosts,
+containers, or durability across deployment replacement.
 
 State by primitive
 ------------------
@@ -130,16 +154,16 @@ State by primitive
      - Shared, fail-closed, authoritative, integrity-protected, lockable
    * - TOTP
      - Short replay TTL
-     - Shared, authoritative, integrity-protected, lockable
+     - Shared, authoritative, integrity-protected, atomic or lockable
    * - HOTP
      - Factor lifetime
-     - Durable, non-evicting, authoritative, integrity-protected, lockable
+     - Durable, non-evicting, authoritative, integrity-protected, atomic or lockable
    * - Counter OCRA
      - Factor lifetime
-     - Durable, non-evicting, authoritative, integrity-protected, lockable
+     - Durable, non-evicting, authoritative, integrity-protected, atomic or lockable
    * - Challenge OCRA
      - Application replay TTL
-     - Shared, authoritative, integrity-protected, lockable
+     - Shared, authoritative, integrity-protected, atomic or lockable
    * - Recovery codes
      - Durable
      - Application-owned atomic persistence
@@ -222,14 +246,20 @@ exception for internal diagnostics, and log only a redacted operation name and
 correlation ID. Never log cache keys, values, factor IDs, bindings, submitted
 codes, or provisioning URIs.
 
+Atomic ``setIfAbsent()``/``compareAndSet()`` failures and bounded-contention
+exhaustion are operational failures and propagate. OTP never converts them to a
+mismatch/replay result and never falls back to locks after an atomic operation
+has been selected.
+
 Lock release is post-operation cleanup. If both the state operation and release
 fail, the original read/write/delete exception is preserved. If a mutation was
 verified and committed before release cleanup fails, the committed authentication
 outcome is retained; the bounded lock lease limits failed cleanup.
 
-Monitor read/write/delete latency, lock acquisition failures, lock contention,
-backend errors, evictions, memory pressure, and durable-store replication or
-failover health. Alert on unexpected loss of no-TTL counter records.
+Monitor read/write/delete latency, atomic CAS/set-if-absent latency and
+contention, lock acquisition failures, lock contention, backend errors,
+evictions, memory pressure, and durable-store replication or failover health.
+Alert on unexpected loss of no-TTL counter records.
 
 Recovery-code persistence
 -------------------------
@@ -247,8 +277,12 @@ Run against every production backend and topology:
 
 * two identical successful submissions yield exactly one acceptance;
 * lower/equal monotonic values lose to a stored higher value;
+* native atomic adapters select the atomic path without acquiring replay locks;
+* adapters without atomics produce equivalent results through the lock fallback;
+* an available atomic backend failure propagates and is never retried through locks;
 * Generic OTP wrong attempts decrement exactly once without extending expiry;
 * issue racing verify has a serializable replacement-or-consumption outcome;
+* atomic contention is bounded and fails closed;
 * lock timeout, lost ownership, read, write, and delete failure all fail closed;
 * expired TOTP and non-counter OCRA entries follow documented TTL precision;
 * backend restart/failover preserves HOTP and counter-OCRA state; and

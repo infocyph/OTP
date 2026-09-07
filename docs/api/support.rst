@@ -146,8 +146,10 @@ Internal support
 
 ``CacheLock`` and ``SecretRotationPlanner`` are marked ``@internal``. They are
 implementation details, not supported application entry points. Use protocol
-``planRotation()`` methods for rotation; CacheLayer locking is consumed through
-the state-cache capability.
+``planRotation()`` methods for rotation. Replay-aware protocols consume
+CacheLayer 3.3 native atomic state when available and use the cache-owned lock as
+a fallback; ``GenericOtp`` continues to use the lock-backed state machine.
+Applications should not call or depend on these internal coordination helpers.
 
 Internal versus workflow responsibility
 ---------------------------------------

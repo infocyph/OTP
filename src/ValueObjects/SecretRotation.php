@@ -33,6 +33,28 @@ final readonly class SecretRotation
         }
     }
 
+    /**
+     * @return array{
+     *     currentSecret:string,
+     *     nextSecret:string,
+     *     overlapUntil:?DateTimeImmutable,
+     *     nextEnrollment:null|array{issuer:string,label:string,hasQrSvg:bool}
+     * }
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'currentSecret' => '[redacted]',
+            'nextSecret' => '[redacted]',
+            'overlapUntil' => $this->overlapUntil,
+            'nextEnrollment' => $this->nextEnrollment === null ? null : [
+                'issuer' => $this->nextEnrollment->issuer,
+                'label' => $this->nextEnrollment->label,
+                'hasQrSvg' => $this->nextEnrollment->qrSvg !== null,
+            ],
+        ];
+    }
+
     public function hasGracePeriod(): bool
     {
         return $this->overlapUntil !== null;

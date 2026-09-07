@@ -5,17 +5,22 @@ OTP state uses CacheLayer's public contracts directly:
 
 .. code-block:: php
 
+   use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
    use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 
-``AuthenticationStateCacheInterface`` extends CacheLayer's normal cache contract
-with the effective fail-open, payload-integrity, authoritative-read, and
-cache-owned lock capabilities. Generic OTP, HOTP, TOTP, and OCRA do not expose
-an OTP-specific cache, lock wrapper, or replay adapter.
+``AuthenticationStateCacheInterface`` exposes the effective fail-open,
+payload-integrity, authoritative-read, and cache-owned lock capabilities.
+CacheLayer 3.3 caches may additionally implement ``AtomicCacheProviderInterface``
+and return an ``AtomicCacheInterface`` for native conditional mutation. Generic
+OTP, HOTP, TOTP, and OCRA do not expose an OTP-specific cache, lock wrapper, or
+replay adapter.
 
-For authentication calls, configure ``failOpen: false``, an ``integrityKey``, a
-single authoritative direct backend, and CacheLayer's corresponding lock. OTP
-validates these capabilities before touching state. A cache and factor ID are
-required together on optional replay-aware methods. See
+For authentication calls, configure ``failOpen: false``, an ``integrityKey``,
+and one authoritative direct backend. TOTP, HOTP, and OCRA accept either the
+native CacheLayer atomic capability or the cache's coordinated lock fallback.
+``GenericOtp`` requires the coordinated lock because its record is a multi-field
+state machine. OTP validates these capabilities before mutation. A cache and
+factor ID are required together on optional replay-aware protocol methods. See
 :doc:`../guides/storage` for backend examples and failure semantics.
 
 RecoveryCodeStoreInterface
@@ -86,7 +91,8 @@ A conforming recovery-code store documents:
 * unknown-commit handling;
 * identifier and digest collation;
 * retention, backup, deletion, and capacity policy; and
-* real multi-process concurrency test coverage.
+* real multi-process concurrency test coverage, including replacement racing
+  consumption.
 
 See :doc:`../guides/custom-stores` for a relational outline and complete test
 matrix.

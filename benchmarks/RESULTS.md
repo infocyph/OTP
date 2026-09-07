@@ -1,4 +1,53 @@
-# CacheLayer migration benchmark
+# OTP benchmark results
+
+## OTP 6.1 / CacheLayer 3.3 attribution
+
+OTP 6.1 adds dedicated subjects for CacheLayer 3.3 replay coordination. CI runs
+the benchmark suite through the repository `benchmark` Composer script on the
+supported PHP matrix. The new subjects separate the conditional primitives from
+the OTP replay coordinator:
+
+| Subject | Purpose |
+| --- | --- |
+| `benchAtomicSetIfAbsent` | Native CacheLayer one-time conditional insertion |
+| `benchAtomicCompareAndSet` | Native CacheLayer monotonic CAS |
+| `benchAtomicMonotonicAdvance` | OTP monotonic replay coordinator on an atomic-capable memory backend |
+| `benchLockFallbackMonotonicAdvance` | OTP monotonic replay coordinator on an authoritative file/lock backend |
+| `benchAtomicOneTimeClaim` | OTP one-time replay claim on native atomics |
+| `benchLockFallbackOneTimeClaim` | OTP one-time replay claim on coordinated-lock fallback |
+
+The lock-fallback and atomic subjects deliberately use different concrete
+backends because CacheLayer does not claim atomic coordination for its file
+backend. Their absolute timings therefore attribute complete valid paths; they
+must not be presented as a pure lock-vs-CAS micro-operation ratio. Direct
+`setIfAbsent` and CAS subjects provide the lower-level atomic cost attribution.
+
+### 6.1 CI attribution snapshot
+
+Recorded on 2026-09-07 from successful GitHub Actions runs on Ubuntu 24.04 with
+Xdebug disabled, PHPBench 1.7.0, CacheLayer 3.3, and the repository's one-run
+representative CI benchmark configuration. Values below are PHPBench reported
+mode times in microseconds. GitHub-hosted runners are not a stable performance
+environment, so these numbers document path attribution only and are not a
+regression baseline.
+
+| Subject | PHP 8.4.25 | PHP 8.5.10 |
+| --- | ---: | ---: |
+| Atomic `setIfAbsent` | 16 µs | 18 µs |
+| Atomic CAS | 61 µs | 75 µs |
+| OTP atomic monotonic advance | 210 µs | 233 µs |
+| OTP lock-fallback monotonic advance | 465 µs | 548 µs |
+| OTP atomic one-time claim | 200 µs | 250 µs |
+| OTP lock-fallback one-time claim | 432 µs | 461 µs |
+
+The atomic path is materially lighter in this representative run, but no
+percentage claim is published because the valid atomic and lock-fallback
+subjects use different concrete backends and the CI runners are not stable.
+Stateful TOTP/HOTP/OCRA subjects in `OtpBench.php` naturally exercise CacheLayer
+3.3 atomics when their selected backend exposes them, while `GenericOtp` remains
+the lock-path control.
+
+## CacheLayer migration benchmark — OTP 6.0 baseline
 
 Recorded on 2026-08-14 with PHP 8.4.24, PHPBench 1.7.0, no Xdebug, and no
 OPcache. The release run used ``composer ic:bench:run`` and completed all 54
@@ -10,7 +59,7 @@ The in-memory CacheLayer backend and filesystem lock isolate library overhead;
 production Redis/database latency, persistence, contention, and failover must
 be measured in the deployment environment.
 
-## Corrected edge workloads
+### Corrected edge workloads
 
 The subjects below now measure the operation named: Generic OTP failed-attempt
 transitions use one revolution so setup creates a fresh finite-attempt record,
@@ -31,7 +80,7 @@ is from the full release run and deliberately uses one revolution.
 | TOTP future 5 | Match final future step | 6.242 µs |
 | TOTP future 50 | Match final future step | 41.345 µs |
 
-## Security-state diagnostics
+### Security-state diagnostics
 
 | Subject | Mode |
 | --- | ---: |

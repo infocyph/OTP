@@ -16,9 +16,21 @@ final readonly class RecoveryCodeGenerationResult
      * @phpstan-param list<string> $plainCodes
      */
     public function __construct(
+        #[\SensitiveParameter]
         public array $plainCodes,
         public int $totalGenerated,
         public int $remainingCount,
         public ?DateTimeImmutable $lastUsedAt = null,
     ) {}
+
+    /** @return array{plainCodes:string,totalGenerated:int,remainingCount:int,lastUsedAt:?DateTimeImmutable} */
+    public function __debugInfo(): array
+    {
+        return [
+            'plainCodes' => '[redacted]',
+            'totalGenerated' => $this->totalGenerated,
+            'remainingCount' => $this->remainingCount,
+            'lastUsedAt' => $this->lastUsedAt,
+        ];
+    }
 }

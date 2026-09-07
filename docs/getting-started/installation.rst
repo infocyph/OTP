@@ -8,7 +8,8 @@ The package requires:
 
 * PHP ``^8.4``;
 * a 64-bit PHP build;
-* the ``ctype`` extension; and
+* the ``ctype`` extension;
+* CacheLayer ``^3.3``; and
 * Composer.
 
 Install the current release:
@@ -100,9 +101,22 @@ Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
    $recoveryCodeKey = random_bytes(32);
 
 Use different keys for these two purposes. Both APIs accept 16–1024 key bytes.
-Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA calls also require a
-configured CacheLayer authentication-state cache and its owned lock. Start with
+Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA calls require a configured
+fail-closed, payload-integrity protected, authoritative CacheLayer
+authentication-state cache. TOTP, HOTP, and OCRA use CacheLayer 3.3 native
+atomics when available and otherwise require the cache's coordinated lock.
+``GenericOtp`` always requires that coordinated lock in OTP 6.1. Start with
 :doc:`../guides/storage` before wiring an authentication endpoint.
+
+Upgrading from OTP 6.0
+----------------------
+
+OTP 6.1 preserves the existing v1 replay keys and values, but an atomic-capable
+6.1 worker does not coordinate replay mutation through the same lock used by a
+6.0 worker. Do not run shared stateful 6.0 and atomic-path 6.1 workers through a
+long rolling window. Drain or replace the 6.0 stateful workers before activating
+6.1 workers against the same authentication-state backend. See
+:doc:`../guides/replay-protection` for the complete rule.
 
 Development checks
 ------------------
@@ -114,6 +128,11 @@ Contributors can run the repository's complete PHPForge gate:
    composer install
    composer ic:process
    composer ic:tests
+   composer benchmark
+
+CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices. The
+lower-bound matrix therefore exercises the CacheLayer 3.3 floor declared by the
+package.
 
 Next steps
 ----------
