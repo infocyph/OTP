@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\Support;
 
+use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
+use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
@@ -14,11 +16,142 @@ use Throwable;
 /** @internal */
 final class CacheLock
 {
+    private const int MAX_ATOMIC_ATTEMPTS = 8;
+
     private const float LEASE_SECONDS = 30.0;
 
     private const float WAIT_SECONDS = 1.0;
 
     public static function advance(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $value,
+        ?int $ttl,
+        string $stateName,
+    ): bool {
+        self::assertSafe($cache);
+        $atomic = self::atomic($cache);
+        if ($atomic !== null) {
+            return self::advanceAtomically($cache, $atomic, $stateKey, $value, $ttl, $stateName);
+        }
+
+        return self::advanceWithLock($cache, $stateKey, $lockKey, $value, $ttl, $stateName);
+    }
+
+    public static function assertLockSafe(AuthenticationStateCacheInterface $cache): void
+    {
+        self::assertAuthenticationStateSafe($cache);
+        if ($cache->authenticationStateLock() === null) {
+            throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
+        }
+    }
+
+    public static function assertSafe(AuthenticationStateCacheInterface $cache): void
+    {
+        self::assertAuthenticationStateSafe($cache);
+        if (self::atomic($cache) === null && $cache->authenticationStateLock() === null) {
+            throw new InvalidArgumentException(
+                'Authentication state caches must provide an atomic or coordinated lock capability.',
+            );
+        }
+    }
+
+    public static function consumeOnce(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        self::assertSafe($cache);
+        $atomic = self::atomic($cache);
+        if ($atomic !== null) {
+            return self::consumeOnceAtomically($cache, $atomic, $stateKey, $ttl, $stateName);
+        }
+
+        return self::consumeOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName);
+    }
+
+    public static function ensureOwned(LockProviderInterface $locks, LockHandle $handle): void
+    {
+        if (!$locks->refresh($handle, self::LEASE_SECONDS)) {
+            throw new RuntimeException('The OTP state lock was lost before mutation.');
+        }
+    }
+
+    /**
+     * Release is post-operation cleanup: it never replaces a committed result or
+     * the primary operation failure. The lock lease bounds failed cleanup.
+     *
+     * @template T
+     * @param AuthenticationStateCacheInterface $cache Configured authentication-state cache.
+     * @param string $key State coordination lock key.
+     * @param callable(LockProviderInterface, LockHandle): T $operation
+     * @return T
+     */
+    public static function synchronized(
+        AuthenticationStateCacheInterface $cache,
+        string $key,
+        callable $operation,
+    ): mixed {
+        self::assertLockSafe($cache);
+        $locks = $cache->authenticationStateLock()
+            ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
+        $handle = $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
+            ?? throw new RuntimeException('Unable to acquire the OTP state lock.');
+
+        try {
+            $result = $operation($locks, $handle);
+        } catch (Throwable $failure) {
+            try {
+                $locks->release($handle);
+            } catch (Throwable) {
+            }
+
+            throw $failure;
+        }
+
+        try {
+            $locks->release($handle);
+        } catch (Throwable) {
+        }
+
+        return $result;
+    }
+
+    private static function advanceAtomically(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        int $value,
+        ?int $ttl,
+        string $stateName,
+    ): bool {
+        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            $current = $cache->get($stateKey);
+            if ($current === null) {
+                if ($atomic->setIfAbsent($stateKey, $value, $ttl)) {
+                    return true;
+                }
+
+                continue;
+            }
+            if (!is_int($current)) {
+                throw new RuntimeException('Invalid ' . $stateName . ' state in CacheLayer.');
+            }
+            if ($value <= $current) {
+                return false;
+            }
+            if ($atomic->compareAndSet($stateKey, $current, $value, $ttl)) {
+                return true;
+            }
+        }
+
+        throw new RuntimeException('Unable to advance ' . $stateName . ' state after atomic contention.');
+    }
+
+    private static function advanceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
         string $lockKey,
@@ -54,7 +187,7 @@ final class CacheLock
         );
     }
 
-    public static function assertSafe(AuthenticationStateCacheInterface $cache): void
+    private static function assertAuthenticationStateSafe(AuthenticationStateCacheInterface $cache): void
     {
         if ($cache->isFailOpen()) {
             throw new InvalidArgumentException('Authentication state caches must be configured fail-closed.');
@@ -65,12 +198,38 @@ final class CacheLock
         if (!$cache->isAuthoritative()) {
             throw new InvalidArgumentException('Authentication state caches must use one authoritative direct backend.');
         }
-        if ($cache->authenticationStateLock() === null) {
-            throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
-        }
     }
 
-    public static function consumeOnce(
+    private static function atomic(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
+    {
+        return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
+    }
+
+    private static function consumeOnceAtomically(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            if ($atomic->setIfAbsent($stateKey, 1, $ttl)) {
+                return true;
+            }
+
+            $current = $cache->get($stateKey);
+            if ($current === 1) {
+                return false;
+            }
+            if ($current !== null) {
+                throw new RuntimeException('Invalid ' . $stateName . ' token in CacheLayer.');
+            }
+        }
+
+        throw new RuntimeException('Unable to consume ' . $stateName . ' token after atomic contention.');
+    }
+
+    private static function consumeOnceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
         string $lockKey,
@@ -102,52 +261,5 @@ final class CacheLock
                 return true;
             },
         );
-    }
-
-    public static function ensureOwned(LockProviderInterface $locks, LockHandle $handle): void
-    {
-        if (!$locks->refresh($handle, self::LEASE_SECONDS)) {
-            throw new RuntimeException('The OTP state lock was lost before mutation.');
-        }
-    }
-
-    /**
-     * Release is post-operation cleanup: it never replaces a committed result or
-     * the primary operation failure. The lock lease bounds failed cleanup.
-     *
-     * @template T
-     * @param AuthenticationStateCacheInterface $cache Configured authentication-state cache.
-     * @param string $key State coordination lock key.
-     * @param callable(LockProviderInterface, LockHandle): T $operation
-     * @return T
-     */
-    public static function synchronized(
-        AuthenticationStateCacheInterface $cache,
-        string $key,
-        callable $operation,
-    ): mixed {
-        self::assertSafe($cache);
-        $locks = $cache->authenticationStateLock()
-            ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
-        $handle = $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
-            ?? throw new RuntimeException('Unable to acquire the OTP state lock.');
-
-        try {
-            $result = $operation($locks, $handle);
-        } catch (Throwable $failure) {
-            try {
-                $locks->release($handle);
-            } catch (Throwable) {
-            }
-
-            throw $failure;
-        }
-
-        try {
-            $locks->release($handle);
-        } catch (Throwable) {
-        }
-
-        return $result;
     }
 }
