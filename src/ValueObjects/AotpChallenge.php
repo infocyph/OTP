@@ -11,6 +11,7 @@ final readonly class AotpChallenge
     public const int VERSION = 1;
 
     private const int MAX_AUDIENCE_LENGTH = 255;
+
     private const int MAX_CONTEXT_LENGTH = 4096;
 
     public function __construct(
@@ -30,7 +31,20 @@ final readonly class AotpChallenge
         }
     }
 
-    /** @param array<string,mixed> $data */
+    /** @return array{id:string,nonce:string,audience:string,context:string,issuedAt:int,expiresAt:int} */
+    public function __debugInfo(): array
+    {
+        return [
+            'id' => $this->id,
+            'nonce' => '[redacted]',
+            'audience' => $this->audience,
+            'context' => $this->context === '' ? '' : '[redacted]',
+            'issuedAt' => $this->issuedAt,
+            'expiresAt' => $this->expiresAt,
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {
         if (
@@ -76,19 +90,6 @@ final readonly class AotpChallenge
             'nonce' => $this->nonce,
             'audience' => $this->audience,
             'context' => $this->context,
-            'issuedAt' => $this->issuedAt,
-            'expiresAt' => $this->expiresAt,
-        ];
-    }
-
-    /** @return array{id:string,nonce:string,audience:string,context:string,issuedAt:int,expiresAt:int} */
-    public function __debugInfo(): array
-    {
-        return [
-            'id' => $this->id,
-            'nonce' => '[redacted]',
-            'audience' => $this->audience,
-            'context' => $this->context === '' ? '' : '[redacted]',
             'issuedAt' => $this->issuedAt,
             'expiresAt' => $this->expiresAt,
         ];
