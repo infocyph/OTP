@@ -9,12 +9,18 @@ use Infocyph\OTP\ValueObjects\AotpChallenge;
 use Infocyph\OTP\ValueObjects\AotpResponse;
 use Infocyph\OTP\VerificationReason;
 
-test('AOTP signs an issued audience-bound challenge and consumes it once', function () {
+test('AOTP signs an issued audience-context-bound challenge and consumes it once', function () {
     $cache = CacheLayerState::memory();
     $keys = AOTP::generateKeyPair();
     $aotp = new AOTP($keys->publicKey, 'login.example.com');
-    $challenge = $aotp->issue($cache, 'user-42:aotp:key-v1', 'login', now: 1_000);
-    $response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com');
+    $challenge = $aotp->issue($cache, 'user-42:aotp:key-v1', 'login:flow-7f2c', now: 1_000);
+    $response = AOTP::respond(
+        $keys->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-7f2c',
+        now: 1_001,
+    );
 
     $first = $aotp->verifyWithResult($cache, 'user-42:aotp:key-v1', $challenge, $response, 1_001);
     $second = $aotp->verifyWithResult($cache, 'user-42:aotp:key-v1', $challenge, $response, 1_002);
@@ -31,9 +37,21 @@ test('AOTP rejects the wrong signer without consuming the challenge', function (
     $correct = AOTP::generateKeyPair();
     $wrong = AOTP::generateKeyPair();
     $aotp = new AOTP($correct->publicKey, 'login.example.com');
-    $challenge = $aotp->issue($cache, 'factor', now: 1_000);
-    $wrongResponse = AOTP::respond($wrong->privateKey, $challenge, 'login.example.com');
-    $correctResponse = AOTP::respond($correct->privateKey, $challenge, 'login.example.com');
+    $challenge = $aotp->issue($cache, 'factor', 'login:flow-a', now: 1_000);
+    $wrongResponse = AOTP::respond(
+        $wrong->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 1_001,
+    );
+    $correctResponse = AOTP::respond(
+        $correct->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 1_001,
+    );
 
     expect($aotp->verifyWithResult($cache, 'factor', $challenge, $wrongResponse, 1_001)->reason)
         ->toBe(VerificationReason::Mismatch)
@@ -53,8 +71,20 @@ test('AOTP binds issued state to the complete challenge payload', function () {
         $issued->issuedAt,
         $issued->expiresAt,
     );
-    $tamperedResponse = AOTP::respond($keys->privateKey, $tampered, 'login.example.com');
-    $correctResponse = AOTP::respond($keys->privateKey, $issued, 'login.example.com');
+    $tamperedResponse = AOTP::respond(
+        $keys->privateKey,
+        $tampered,
+        'login.example.com',
+        'transfer:100000',
+        now: 1_001,
+    );
+    $correctResponse = AOTP::respond(
+        $keys->privateKey,
+        $issued,
+        'login.example.com',
+        'transfer:100',
+        now: 1_001,
+    );
 
     expect($aotp->verifyWithResult($cache, 'factor', $tampered, $tamperedResponse, 1_001)->reason)
         ->toBe(VerificationReason::Mismatch)
@@ -65,8 +95,14 @@ test('AOTP rejects expired, future, and wrong-factor challenges', function () {
     $cache = CacheLayerState::memory();
     $keys = AOTP::generateKeyPair();
     $aotp = new AOTP($keys->publicKey, 'login.example.com');
-    $challenge = $aotp->issue($cache, 'factor-a', ttlSeconds: 60, now: 1_000);
-    $response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com');
+    $challenge = $aotp->issue($cache, 'factor-a', 'login:flow-a', ttlSeconds: 60, now: 1_000);
+    $response = AOTP::respond(
+        $keys->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 1_001,
+    );
 
     expect($aotp->verifyWithResult($cache, 'factor-a', $challenge, $response, 999)->reason)
         ->toBe(VerificationReason::Mismatch)
@@ -76,14 +112,77 @@ test('AOTP rejects expired, future, and wrong-factor challenges', function () {
         ->toBe(VerificationReason::Mismatch);
 });
 
-test('AOTP enforces verifier audience before signing', function () {
+test('AOTP client enforces independently expected audience and context before signing', function () {
     $cache = CacheLayerState::memory();
     $keys = AOTP::generateKeyPair();
     $aotp = new AOTP($keys->publicKey, 'login.example.com');
-    $challenge = $aotp->issue($cache, 'factor');
+    $challenge = $aotp->issue($cache, 'factor', 'login:flow-a', now: 1_000);
 
-    expect(fn () => AOTP::respond($keys->privateKey, $challenge, 'evil.example.com'))
-        ->toThrow(InvalidArgumentException::class, 'audience');
+    expect(fn () => AOTP::respond(
+        $keys->privateKey,
+        $challenge,
+        'evil.example.com',
+        'login:flow-a',
+        now: 1_001,
+    ))->toThrow(InvalidArgumentException::class, 'audience')
+        ->and(fn () => AOTP::respond(
+            $keys->privateKey,
+            $challenge,
+            'login.example.com',
+            'transfer:1000',
+            now: 1_001,
+        ))->toThrow(InvalidArgumentException::class, 'context');
+});
+
+test('AOTP client refuses challenges outside their signing lifetime', function () {
+    $cache = CacheLayerState::memory();
+    $keys = AOTP::generateKeyPair();
+    $aotp = new AOTP($keys->publicKey, 'login.example.com');
+    $challenge = $aotp->issue($cache, 'factor', 'login:flow-a', ttlSeconds: 60, now: 1_000);
+
+    expect(fn () => AOTP::respond(
+        $keys->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 999,
+    ))->toThrow(InvalidArgumentException::class, 'not currently valid')
+        ->and(fn () => AOTP::respond(
+            $keys->privateKey,
+            $challenge,
+            'login.example.com',
+            'login:flow-a',
+            now: 1_060,
+        ))->toThrow(InvalidArgumentException::class, 'not currently valid');
+});
+
+test('AOTP does not reveal consumed state to an invalid signer', function () {
+    $cache = CacheLayerState::memory();
+    $correct = AOTP::generateKeyPair();
+    $wrong = AOTP::generateKeyPair();
+    $aotp = new AOTP($correct->publicKey, 'login.example.com');
+    $challenge = $aotp->issue($cache, 'factor', 'login:flow-a', now: 1_000);
+    $correctResponse = AOTP::respond(
+        $correct->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 1_001,
+    );
+    $wrongResponse = AOTP::respond(
+        $wrong->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 1_001,
+    );
+
+    expect($aotp->verifyWithResult($cache, 'factor', $challenge, $correctResponse, 1_001)->matched)
+        ->toBeTrue()
+        ->and($aotp->verifyWithResult($cache, 'factor', $challenge, $wrongResponse, 1_002)->reason)
+        ->toBe(VerificationReason::Mismatch)
+        ->and($aotp->verifyWithResult($cache, 'factor', $challenge, $correctResponse, 1_002)->reason)
+        ->toBe(VerificationReason::Replay);
 });
 
 test('AOTP payloads round-trip and redact sensitive debug state', function () {
@@ -91,7 +190,13 @@ test('AOTP payloads round-trip and redact sensitive debug state', function () {
     $keys = AOTP::generateKeyPair();
     $aotp = new AOTP($keys->publicKey, 'login.example.com');
     $challenge = $aotp->issue($cache, 'factor', 'transaction', now: 1_000);
-    $response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com');
+    $response = AOTP::respond(
+        $keys->privateKey,
+        $challenge,
+        'login.example.com',
+        'transaction',
+        now: 1_001,
+    );
     $parsedChallenge = AotpChallenge::fromArray($challenge->toArray());
     $parsedResponse = AotpResponse::fromArray($response->toArray());
 
@@ -99,18 +204,25 @@ test('AOTP payloads round-trip and redact sensitive debug state', function () {
         ->and($parsedResponse->signature)->toBe($response->signature)
         ->and($keys->__debugInfo()['privateKey'])->toBe('[redacted]')
         ->and($challenge->__debugInfo()['nonce'])->toBe('[redacted]')
+        ->and($challenge->__debugInfo()['context'])->toBe('[redacted]')
         ->and($response->__debugInfo()['signature'])->toBe('[redacted]');
 });
 
 test('AOTP validates key and challenge configuration bounds', function () {
     $keys = AOTP::generateKeyPair();
     $cache = CacheLayerState::memory();
+    $aotp = new AOTP($keys->publicKey, 'login.example.com');
 
     expect(fn () => new AOTP('bad', 'login.example.com'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => new AOTP($keys->publicKey, ''))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => (new AOTP($keys->publicKey, 'login.example.com'))->issue($cache, '', now: 1_000))
+        ->and(fn () => new AOTP($keys->publicKey, "login\n.example.com"))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $aotp->issue($cache, '', 'login', now: 1_000))
         ->toThrow(InvalidArgumentException::class)
-        ->and(fn () => (new AOTP($keys->publicKey, 'login.example.com'))->issue($cache, 'factor', ttlSeconds: 0, now: 1_000))
+        ->and(fn () => $aotp->issue($cache, 'factor', '', now: 1_000))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $aotp->issue($cache, 'factor', "login\nflow", now: 1_000))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $aotp->issue($cache, 'factor', 'login', ttlSeconds: 0, now: 1_000))
         ->toThrow(InvalidArgumentException::class);
 });
 
@@ -125,8 +237,14 @@ test('AOTP concurrent verification accepts exactly one request', function () {
     }
     $keys = AOTP::generateKeyPair();
     $aotp = new AOTP($keys->publicKey, 'login.example.com');
-    $challenge = $aotp->issue(CacheLayerState::sqlite($path), 'factor', now: 1_000);
-    $response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com');
+    $challenge = $aotp->issue(CacheLayerState::sqlite($path), 'factor', 'login:flow-a', now: 1_000);
+    $response = AOTP::respond(
+        $keys->privateKey,
+        $challenge,
+        'login.example.com',
+        'login:flow-a',
+        now: 1_001,
+    );
 
     $results = Concurrency::run(static function () use ($path, $keys, $challenge, $response): int {
         $service = new AOTP($keys->publicKey, 'login.example.com');
