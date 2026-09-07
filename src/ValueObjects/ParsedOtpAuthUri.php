@@ -32,7 +32,7 @@ final readonly class ParsedOtpAuthUri
      *     period:?int,
      *     counter:?int,
      *     ocraSuite:?string,
-     *     additionalParameters:array<string,string>
+     *     additionalParameterCount:int
      * }
      */
     public function __debugInfo(): array
@@ -47,7 +47,7 @@ final readonly class ParsedOtpAuthUri
             'period' => $this->period,
             'counter' => $this->counter,
             'ocraSuite' => $this->ocraSuite,
-            'additionalParameters' => $this->additionalParameters,
+            'additionalParameterCount' => count($this->additionalParameters),
         ];
     }
 }
