@@ -4,12 +4,11 @@ Installation
 Requirements
 ------------
 
-The package requires:
+The base package requires:
 
 * PHP ``^8.4``;
 * a 64-bit PHP build;
 * the ``ctype`` extension;
-* the ``sodium`` extension;
 * CacheLayer ``^3.3``; and
 * Composer.
 
@@ -22,8 +21,31 @@ Install the current release:
 
 Composer installs CacheLayer, constant-time Base32, and QR dependencies
 automatically. OTP depends on CacheLayer directly and does not ask applications
-to implement a second OTP-specific cache abstraction. ``ext-sodium`` supplies
-AOTP's Ed25519 operations and URL-safe binary transport helpers.
+to implement a second OTP-specific cache abstraction.
+
+Optional AOTP dependency
+------------------------
+
+AOTP uses Ed25519 and therefore requires PHP's ``sodium`` extension. Sodium is
+not required by HOTP, TOTP, OCRA, GenericOtp, GridOTP, MobileOTP, RecoveryCodes,
+or OTP's Passkey wrapper.
+
+OTP declares ``ext-sodium`` under Composer ``suggest`` and installs it in
+``require-dev`` so AOTP is continuously tested without making the extension a
+mandatory platform requirement for every consumer.
+
+Check capability before enabling AOTP:
+
+.. code-block:: php
+
+   use Infocyph\OTP\AOTP;
+
+   if (!AOTP::isAvailable()) {
+       // Disable AOTP enrollment/authentication for this runtime.
+   }
+
+Constructing or using AOTP without sodium fails with ``LogicException`` rather
+than silently selecting a weaker algorithm.
 
 Optional Passkey dependency
 ---------------------------
@@ -43,7 +65,7 @@ the WebAuthn/CBOR/PKI/Symfony dependency graph.
 
 ``Passkey::isAvailable()`` reports whether the optional package is loaded.
 Constructing ``Passkey`` without it throws ``LogicException`` with the install
-command.
+command. OTP's Passkey wrapper does not itself require ``ext-sodium``.
 
 Autoloading
 -----------
@@ -78,10 +100,11 @@ Check the production image, not only the development machine:
    php -m
    composer check-platform-reqs --no-dev
 
-The second command must print ``true``. ``php -m`` must include ``ctype`` and
-``sodium``. Counters and timestamps depend on 64-bit integer behavior. When the
-application uses Passkey, its committed application lock file must also include
-a compatible ``web-auth/webauthn-lib`` installation.
+The second command must print ``true``. ``php -m`` must include ``ctype``. It
+must also include ``sodium`` when the application enables AOTP. Counters and
+timestamps depend on 64-bit integer behavior. When the application uses Passkey,
+its committed application lock file must also include a compatible
+``web-auth/webauthn-lib`` installation.
 
 Production installation
 -----------------------
@@ -97,7 +120,8 @@ Install from a committed lock file in an application:
 
 This library intentionally does not ship its own lock file in release archives;
 the consuming application should lock the selected package version and any
-optional Passkey dependency it uses.
+optional Passkey dependency it uses. Production images that enable AOTP must
+also enable ``ext-sodium`` at the PHP platform level.
 
 First configuration
 -------------------
@@ -116,9 +140,12 @@ Generate secrets with the protocol class rather than inventing values:
    $totpSecret = TOTP::generateSecret();
    $hotpSecret = HOTP::generateSecret(32);
    $ocraSecret = OCRA::generateSecret(32);
-   $aotpKeys = AOTP::generateKeyPair();
    $gridSecret = GridOTP::generateSecret();
    $mobileOtpSecret = MobileOTP::generateSecret();
+
+   $aotpKeys = AOTP::isAvailable()
+       ? AOTP::generateKeyPair()
+       : null;
 
 HOTP, TOTP, and ``OCRA::fromBase32()`` require 16–1024 decoded bytes. Store
 factor secrets encrypted and never put them in source code,
@@ -179,8 +206,9 @@ Contributors can run the repository's complete PHPForge gate:
    composer benchmark
 
 CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices. The
-matrix therefore exercises CacheLayer 3.3, the required ``sodium`` platform
-extension, and the optional WebAuthn integration through ``require-dev``.
+development matrix installs ``ext-sodium`` and ``web-auth/webauthn-lib`` through
+``require-dev`` so both optional integrations are exercised while the clean
+``--no-dev`` install verifies that neither is required by the base package.
 
 Next steps
 ----------
