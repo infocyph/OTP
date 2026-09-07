@@ -8,6 +8,7 @@ use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\Result\VerificationResult;
+use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\ValueObjects\GridChallenge;
 use InvalidArgumentException;
@@ -82,7 +83,7 @@ final readonly class GridOTP
     {
         self::assertFactorId($factorId);
         for ($attempt = 0; $attempt < self::ISSUE_ATTEMPTS; $attempt++) {
-            $id = self::encode(random_bytes(16));
+            $id = Base64Url::encode(random_bytes(16));
             $stateKey = self::stateKey($factorId, $id);
             $challenge = CacheLock::synchronized(
                 $this->cache,
@@ -185,11 +186,6 @@ final readonly class GridOTP
                 'GridOTP secrets must contain 8 to 32 symbols from ' . GridChallenge::SECRET_ALPHABET . '.',
             );
         }
-    }
-
-    private static function encode(string $value): string
-    {
-        return sodium_bin2base64($value, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
     }
 
     private static function lockKey(string $factorId, string $challengeId): string
