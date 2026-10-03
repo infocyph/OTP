@@ -57,8 +57,7 @@ final readonly class GenericOtp
         ];
     }
 
-    public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
-    {
+    public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool {
         self::assertBinding($binding);
         CacheLock::checkpoint($runwire);
         $stateKey = self::stateKey($binding);
@@ -120,8 +119,7 @@ final readonly class GenericOtp
         #[\SensitiveParameter]
         string $otp,
         ?RunwireExecutionContext $runwire = null,
-    ): bool
-    {
+    ): bool {
         self::assertBinding($binding);
         if (strlen($otp) !== $this->digits || !ctype_digit($otp)) {
             return false;
