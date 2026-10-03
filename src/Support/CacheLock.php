@@ -195,7 +195,9 @@ final class CacheLock
         callable $transition,
         ?RunwireExecutionContext $runwire = null,
     ): mixed {
-        self::checkpoint($runwire);
+        if ($runwire !== null) {
+            self::checkpoint($runwire);
+        }
         $atomic = self::stateAtomic($cache);
         if ($atomic !== null) {
             return self::transitionAtomically($cache, $atomic, $stateKey, $stateName, $transition, $runwire);
@@ -558,7 +560,9 @@ final class CacheLock
         ?RunwireExecutionContext $runwire,
     ): mixed {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            self::checkpoint($runwire);
+            if ($runwire !== null) {
+                self::checkpoint($runwire);
+            }
             $current = $cache->get($stateKey);
             $decision = $transition($current);
             if (!array_key_exists('replacement', $decision)) {
@@ -569,7 +573,9 @@ final class CacheLock
             if ($ttl !== null && $ttl < 1) {
                 throw new RuntimeException('Atomic authentication state transitions require a positive TTL.');
             }
-            self::checkpoint($runwire);
+            if ($runwire !== null) {
+                self::checkpoint($runwire);
+            }
             $mutated = $current === null
                 ? $atomic->setIfAbsent($stateKey, $decision['replacement'], $ttl)
                 : $atomic->compareAndSet($stateKey, $current, $decision['replacement'], $ttl);
