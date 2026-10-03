@@ -1,6 +1,6 @@
 # OTP audit, hardening, and optional Runwire integration plan
 
-Date: 2026-10-03. Status: audit complete; implementation and release gates pending.
+Date: 2026-10-03. Status: implementation complete; release acceptance complete; ready for manual merge/tag decision.
 
 ## Decision
 
@@ -8,7 +8,7 @@ Deliver **one consolidated release, targeting 7.0.0**, containing security/corre
 
 Keep PHP `^8.4` / 64-bit requirements. Raise CacheLayer directly to `^4.0`; OTP 7.0 does not support CacheLayer 3.x. Keep Runwire optional. This dependency-floor break is carried by the same consolidated **7.0.0** candidate with explicit CacheLayer 3.x → 4.x migration and rollback guidance rather than a split release.
 
-This document follows `vendor/infocyph/phpforge/resources/engineering-principles.md`: security and protocol correctness first; smallest changes in existing owners; explicit lifecycle and persistence ownership; no speculative framework layers; measured performance; no weakened quality gates. No production code or Composer dependencies were changed during this audit.
+This document follows `vendor/infocyph/phpforge/resources/engineering-principles.md`: security and protocol correctness first; smallest changes in existing owners; explicit lifecycle and persistence ownership; no speculative framework layers; measured performance; no weakened quality gates. The initial audit was read-only; the tracked implementation batches and Composer/runtime changes are now complete on this branch.
 
 ## Evidence and limits
 
@@ -233,11 +233,11 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | Complete | Complete (CacheLayer 4.0 resolved; 4 QA lanes, analyzers, clean install, Redis/SQLite, benchmarks green) | Complete |
 | 8 | Performance baseline and minimal optional Runwire integration | Complete | Complete (4 QA lanes, analyzers, no-dev clean install, benchmarks green; pre/post snapshots recorded) | Complete |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Complete | Complete (real CoroutineRuntime scopes, cancellation/commit/isolation tests, cooperative contention benchmark, full matrix green) | Complete |
-| 10 | Documentation, migration/rollback, full release acceptance | Complete | Running (7.0 docs/release notes/plan rename complete; exact-revision release acceptance pending) | In progress |
+| 10 | Documentation, migration/rollback, full release acceptance | Complete | Complete (7.0 docs/release notes/plan rename; 4 QA lanes, analyzers, clean install, benchmarks and Composer audit green) | Complete |
 
 Tracker rule: update this table in the same branch as implementation. A batch is complete only after its scoped implementation and focused QA are both complete; final release gates remain separate.
 
-Known upstream release blocker: current stable `phpbench/phpbench` 1.7.0 still requires abandoned `doctrine/annotations:^2.0`. Composer audit reports no security advisory and exits successfully, but the dependency-hygiene warning cannot be removed from OTP without forcing a development PHPBench line or changing PHPForge. Keep this visible through final release acceptance rather than suppressing it.
+Known upstream development warning: current stable `phpbench/phpbench` 1.7.0 still requires abandoned `doctrine/annotations:^2.0`. The final Composer audit exits 0 with no security advisory; the abandonment notice remains visible as a transitive development-tool warning and is not suppressed or treated as an OTP runtime dependency.
 
 ### Workstream A — hardening and state safety
 
