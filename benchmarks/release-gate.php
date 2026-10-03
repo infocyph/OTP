@@ -122,7 +122,9 @@ function environment(bool $stable, string $release): array
 
 function cpuModel(): string
 {
-    $contents = @file_get_contents('/proc/cpuinfo');
+    $contents = is_readable('/proc/cpuinfo')
+        ? file_get_contents('/proc/cpuinfo')
+        : false;
     if (is_string($contents) && preg_match('/^model name\s*:\s*(.+)$/m', $contents, $match) === 1) {
         return trim($match[1]);
     }
