@@ -14,6 +14,7 @@ test('atomic GenericOtp terminal tombstone rejects a delayed verifier with an ea
     $nestedAccepted = null;
     $triggerNestedVerifier = false;
     $otp = null;
+    $code = null;
 
     $atomic = $this->createMock(AtomicCacheInterface::class);
     $cache = $this->createMockForIntersectionOfInterfaces([
@@ -25,7 +26,11 @@ test('atomic GenericOtp terminal tombstone rejects a delayed verifier with an ea
     $cache->method('isAuthoritative')->willReturn(true);
     $cache->method('atomic')->willReturn($atomic);
     $cache->method('authenticationStateLock')->willReturn(null);
-    $cache->method('get')->willReturnCallback(static fn(string $key): mixed => $state);
+    $cache->method('get')->willReturnCallback(function (string $key) use (&$state): mixed {
+        unset($key);
+
+        return $state;
+    });
 
     $atomic->method('setIfAbsent')->willReturnCallback(
         function (string $key, mixed $value, mixed $ttl) use (&$state): bool {
@@ -45,12 +50,12 @@ test('atomic GenericOtp terminal tombstone rejects a delayed verifier with an ea
             mixed $expected,
             mixed $replacement,
             mixed $ttl,
-        ) use (&$state, &$nestedAccepted, &$triggerNestedVerifier, &$otp): bool {
+        ) use (&$state, &$nestedAccepted, &$triggerNestedVerifier, &$otp, &$code): bool {
             unset($key, $ttl);
             if ($triggerNestedVerifier) {
                 $triggerNestedVerifier = false;
                 usleep(1_100_000);
-                $nestedAccepted = $otp?->verify('binding', $GLOBALS['atomicGenericCode']);
+                $nestedAccepted = $otp?->verify('binding', $code ?? '');
             }
             if ($state !== $expected) {
                 return false;
@@ -63,11 +68,10 @@ test('atomic GenericOtp terminal tombstone rejects a delayed verifier with an ea
     );
 
     $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 30);
-    $GLOBALS['atomicGenericCode'] = $otp->generate('binding');
+    $code = $otp->generate('binding');
     $triggerNestedVerifier = true;
 
-    $delayedAccepted = $otp->verify('binding', $GLOBALS['atomicGenericCode']);
-    unset($GLOBALS['atomicGenericCode']);
+    $delayedAccepted = $otp->verify('binding', $code);
 
     expect($nestedAccepted)->toBeTrue()
         ->and($delayedAccepted)->toBeFalse()
@@ -88,7 +92,11 @@ test('atomic GridOTP attempt-exhaustion tombstone rejects a valid response from 
     $cache->method('isAuthoritative')->willReturn(true);
     $cache->method('atomic')->willReturn($atomic);
     $cache->method('authenticationStateLock')->willReturn(null);
-    $cache->method('get')->willReturnCallback(static fn(string $key): mixed => $state);
+    $cache->method('get')->willReturnCallback(function (string $key) use (&$state): mixed {
+        unset($key);
+
+        return $state;
+    });
 
     $atomic->method('setIfAbsent')->willReturnCallback(
         function (string $key, mixed $value, mixed $ttl) use (&$state): bool {
