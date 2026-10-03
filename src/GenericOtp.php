@@ -41,7 +41,7 @@ final readonly class GenericOtp
         if (strlen($key) < 16 || strlen($key) > self::MAX_KEY_LENGTH) {
             throw new InvalidArgumentException('Generic OTP HMAC keys must contain between 16 and 1024 bytes.');
         }
-        CacheLock::assertLockSafe($cache);
+        CacheLock::assertSafe($cache);
     }
 
     /** @return array{cache:string,key:string,digits:int,ttlSeconds:int,maxAttempts:int} */
@@ -59,13 +59,19 @@ final readonly class GenericOtp
     public function delete(string $binding): bool
     {
         self::assertBinding($binding);
+        $stateKey = self::stateKey($binding);
+        if (($atomic = CacheLock::stateAtomic($this->cache)) !== null) {
+            $atomic->getAndDelete($stateKey);
+
+            return true;
+        }
 
         return CacheLock::synchronized($this->cache, self::lockKey($binding), function (
             LockProviderInterface $locks,
             LockHandle $handle,
-        ) use ($binding): bool {
+        ) use ($stateKey): bool {
             CacheLock::ensureOwned($locks, $handle);
-            if (!$this->cache->delete(self::stateKey($binding))) {
+            if (!$this->cache->delete($stateKey)) {
                 throw new RuntimeException('Unable to delete generic OTP state.');
             }
 
@@ -77,24 +83,31 @@ final readonly class GenericOtp
     {
         self::assertBinding($binding);
         $otp = self::randomDigits($this->digits);
-        CacheLock::synchronized($this->cache, self::lockKey($binding), function (
-            LockProviderInterface $locks,
-            LockHandle $handle,
-        ) use ($binding, $otp): void {
-            CacheLock::ensureOwned($locks, $handle);
-            $now = time();
-            if ($now > PHP_INT_MAX - $this->ttlSeconds) {
-                throw new InvalidArgumentException('Generic OTP expiration exceeds the supported timestamp range.');
-            }
-            if (!$this->cache->set(self::stateKey($binding), [
-                'v' => self::STATE_VERSION,
-                'digest' => $this->digest($binding, $otp),
-                'remainingAttempts' => $this->maxAttempts,
-                'expiresAt' => $now + $this->ttlSeconds,
-            ], $this->ttlSeconds)) {
-                throw new RuntimeException('Unable to store generic OTP state.');
-            }
-        });
+        CacheLock::transition(
+            $this->cache,
+            self::stateKey($binding),
+            self::lockKey($binding),
+            'generic OTP',
+            function (mixed $current) use ($binding, $otp): array {
+                unset($current);
+                $now = time();
+                if ($now > PHP_INT_MAX - $this->ttlSeconds) {
+                    throw new InvalidArgumentException('Generic OTP expiration exceeds the supported timestamp range.');
+                }
+
+                return [
+                    'result' => null,
+                    'replacement' => [
+                        'v' => self::STATE_VERSION,
+                        'digest' => $this->digest($binding, $otp),
+                        'remainingAttempts' => $this->maxAttempts,
+                        'expiresAt' => $now + $this->ttlSeconds,
+                    ],
+                    'ttl' => $this->ttlSeconds,
+                    'failure' => 'Unable to store generic OTP state.',
+                ];
+            },
+        );
 
         return $otp;
     }
@@ -107,11 +120,15 @@ final readonly class GenericOtp
         }
 
         $candidateDigest = $this->digest($binding, $otp);
+        $now = time();
 
-        return CacheLock::synchronized($this->cache, self::lockKey($binding), fn(
-            LockProviderInterface $locks,
-            LockHandle $handle,
-        ): bool => $this->verifyLocked($binding, $candidateDigest, time(), $locks, $handle));
+        return CacheLock::transition(
+            $this->cache,
+            self::stateKey($binding),
+            self::lockKey($binding),
+            'generic OTP',
+            fn(mixed $stored): array => $this->verifyState($stored, $candidateDigest, $now),
+        );
     }
 
     private static function assertBinding(string $binding): void
@@ -148,17 +165,6 @@ final readonly class GenericOtp
         return hash('sha256', "infocyph:otp:generic:state:v1\0" . $binding);
     }
 
-    private function deleteLocked(
-        string $stateKey,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): void {
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->delete($stateKey)) {
-            throw new RuntimeException('Unable to delete generic OTP state.');
-        }
-    }
-
     private function digest(string $binding, string $otp): string
     {
         return hash_hmac('sha256', "generic-otp\0" . $binding . "\0" . $otp, $this->key);
@@ -188,44 +194,64 @@ final readonly class GenericOtp
         return $state;
     }
 
-    private function verifyLocked(
-        string $binding,
-        string $candidateDigest,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): bool {
-        $stateKey = self::stateKey($binding);
-        $stored = $this->cache->get($stateKey);
+    /**
+     * @return array{
+     *     result:bool,
+     *     replacement?:array{v:int,digest:string,remainingAttempts:int,expiresAt:int},
+     *     ttl?:int,
+     *     delete?:bool,
+     *     failure?:string
+     * }
+     */
+    private function verifyState(mixed $stored, string $candidateDigest, int $now): array
+    {
         if ($stored === null) {
-            return false;
+            return ['result' => false];
         }
 
         $state = $this->requireState($stored);
         if ($state['expiresAt'] <= $now) {
-            $this->deleteLocked($stateKey, $locks, $handle);
+            $state['expiresAt'] = $now;
 
-            return false;
+            return [
+                'result' => false,
+                'replacement' => $state,
+                'ttl' => 1,
+                'delete' => true,
+                'failure' => 'Unable to delete generic OTP state.',
+            ];
         }
         if (hash_equals($state['digest'], $candidateDigest)) {
-            $this->deleteLocked($stateKey, $locks, $handle);
+            $state['expiresAt'] = $now;
 
-            return true;
+            return [
+                'result' => true,
+                'replacement' => $state,
+                'ttl' => 1,
+                'delete' => true,
+                'failure' => 'Unable to delete generic OTP state.',
+            ];
         }
 
         $remaining = $state['remainingAttempts'] - 1;
         if ($remaining === 0) {
-            $this->deleteLocked($stateKey, $locks, $handle);
+            $state['expiresAt'] = $now;
 
-            return false;
+            return [
+                'result' => false,
+                'replacement' => $state,
+                'ttl' => 1,
+                'delete' => true,
+                'failure' => 'Unable to delete generic OTP state.',
+            ];
         }
 
         $state['remainingAttempts'] = $remaining;
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->set($stateKey, $state, $state['expiresAt'] - $now)) {
-            throw new RuntimeException('Unable to update generic OTP state.');
-        }
 
-        return false;
-    }
-}
+        return [
+            'result' => false,
+            'replacement' => $state,
+            'ttl' => $state['expiresAt'] - $now,
+            'failure' => 'Unable to update generic OTP state.',
+        ];
+    }}
