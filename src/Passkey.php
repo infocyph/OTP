@@ -12,8 +12,11 @@ use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\ValueObjects\PasskeyCeremony;
 use InvalidArgumentException;
+use JsonException;
 use LogicException;
+use RangeException;
 use RuntimeException;
+use TypeError;
 use Symfony\Component\Serializer\Exception\ExceptionInterface as SerializerException;
 use Symfony\Component\Serializer\SerializerInterface;
 use Webauthn\AttestationStatement\AttestationStatementSupportManager;
@@ -26,6 +29,7 @@ use Webauthn\CeremonyStep\CeremonyStepManagerFactory;
 use Webauthn\CredentialRecord;
 use Webauthn\Denormalizer\WebauthnSerializerFactory;
 use Webauthn\Exception\AuthenticatorResponseVerificationException;
+use Webauthn\Exception\InvalidDataException;
 use Webauthn\PublicKeyCredential;
 use Webauthn\PublicKeyCredentialCreationOptions;
 use Webauthn\PublicKeyCredentialParameters;
@@ -137,7 +141,7 @@ final readonly class Passkey
         self::assertUserName($username, 'Passkey username');
         self::assertUserName($displayName, 'Passkey display name');
         $options = PublicKeyCredentialCreationOptions::create(
-            rp: PublicKeyCredentialRpEntity::create($this->rpId, $this->rpId),
+            rp: PublicKeyCredentialRpEntity::create(id: $this->rpId),
             user: PublicKeyCredentialUserEntity::create($username, $userHandle, $displayName),
             challenge: random_bytes(32),
             pubKeyCredParams: [
@@ -417,13 +421,72 @@ final readonly class Passkey
 
     private function deserializeCredential(string $json): ?PublicKeyCredential
     {
+        if (!self::hasCredentialPayloadShape($json)) {
+            return null;
+        }
+
         try {
             $credential = $this->deserializeMixed($json, PublicKeyCredential::class);
-        } catch (SerializerException) {
+        } catch (InvalidDataException|RangeException|SerializerException|TypeError) {
             return null;
         }
 
         return $credential instanceof PublicKeyCredential ? $credential : null;
+    }
+
+    private static function hasCredentialPayloadShape(string $json): bool
+    {
+        try {
+            $data = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return false;
+        }
+        if (!is_array($data) || array_is_list($data)) {
+            return false;
+        }
+
+        $id = $data['id'] ?? null;
+        $rawId = $data['rawId'] ?? null;
+        $type = $data['type'] ?? null;
+        $response = $data['response'] ?? null;
+        if (
+            !is_string($id)
+            || $id === ''
+            || !is_string($rawId)
+            || $rawId === ''
+            || $type !== 'public-key'
+            || !is_array($response)
+            || array_is_list($response)
+            || !is_string($response['clientDataJSON'] ?? null)
+            || $response['clientDataJSON'] === ''
+        ) {
+            return false;
+        }
+
+        if (array_key_exists('transports', $response)) {
+            $transports = $response['transports'];
+            if (!is_array($transports) || !array_is_list($transports)) {
+                return false;
+            }
+            foreach ($transports as $transport) {
+                if (!is_string($transport)) {
+                    return false;
+                }
+            }
+        }
+
+        if (array_key_exists('userHandle', $response) && !is_string($response['userHandle']) && $response['userHandle'] !== null) {
+            return false;
+        }
+
+        $registration = is_string($response['attestationObject'] ?? null)
+            && $response['attestationObject'] !== '';
+        $authentication = is_string($response['authenticatorData'] ?? null)
+            && $response['authenticatorData'] !== ''
+            && is_string($response['signature'] ?? null)
+            && $response['signature'] !== '';
+
+        return $registration || $authentication;
     }
 
     private function deserializeMixed(string $json, string $type): mixed

@@ -223,8 +223,8 @@ Acceptance must exercise framework → OTP and framework → another library →
 | Batch | Scope | Implementation | Focused QA | Status |
 | --- | --- | --- | --- | --- |
 | 1 | F1 diagnostic redaction | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
-| 2 | F3 strict protocol validation | Complete | Running (PR #51) | In progress |
-| 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Pending | Pending | Pending |
+| 2 | F3 strict protocol validation | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
+| 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Complete | Running (PR #51) | In progress |
 | 4 | F4 GridOTP entropy policy and migration | Pending | Pending | Pending |
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Pending | Pending | Pending |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Pending | Pending | Pending |
