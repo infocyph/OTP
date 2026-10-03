@@ -4,8 +4,8 @@ CacheLayer state and durable persistence
 OTP uses ``infocyph/cachelayer`` for package-owned authentication state.
 Recovery codes and Passkey credential records deliberately remain durable
 application data rather than authentication cache. For adapter-specific
-connection, TLS, cluster, and deployment options, consult the `CacheLayer 3.3
-documentation <https://github.com/infocyph/CacheLayer/tree/3.3>`_.
+connection, TLS, cluster, and deployment options, consult the `CacheLayer 4.0
+documentation <https://github.com/infocyph/CacheLayer/tree/4.0>`_.
 
 Required CacheLayer policy
 --------------------------
@@ -45,15 +45,16 @@ Every stateful operation receives one CacheLayer
 fail-closed, payload-integrity protected, and backed by one authoritative direct
 backend.
 
-TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 3.3 native atomics where
+TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 4.0 native atomics where
 their scalar transition maps safely to conditional mutation. If native atomics
 are not available, those paths use the lock provider returned by
 ``authenticationStateLock()``.
 
-``GenericOtp``, ``GridOTP``, and ``Passkey`` deliberately remain lock-based
-because their issue/verify/attempt/expiry/consumption records mutate multiple
-fields as one serializable state machine. An atomic capability alone is not
-sufficient for those primitives; their cache must expose a coordinated lock.
+``GenericOtp``, ``GridOTP``, and ``Passkey`` mutate complete multi-field
+records as one serializable state machine. OTP uses CacheLayer 4.0 whole-record
+CAS when a safe atomic capability is available and otherwise uses the
+coordinated lock fallback. Backends that cannot provide either accepted atomic
+or lock semantics are rejected before authentication state is mutated.
 
 Capability selection is not runtime failover. Once an atomic capability is
 selected, an atomic backend exception propagates and OTP does not retry the same
@@ -84,8 +85,8 @@ Redis example
 Use a primary/authoritative Redis connection. Replicas with lag are unsafe for
 verification reads. Configure memory so authentication keys are not evicted.
 HOTP and counter-OCRA state has no TTL and must survive restarts and failover.
-CacheLayer 3.3 Redis/Valkey adapters expose native atomic replay operations, so
-eligible scalar transitions use that path without acquiring replay locks.
+CacheLayer 4.0 Redis/Valkey adapters expose native atomic replay operations, so
+eligible scalar and whole-record transitions use that path without acquiring replay locks.
 
 PDO example
 -----------

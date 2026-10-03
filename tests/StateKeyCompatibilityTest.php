@@ -7,9 +7,13 @@ use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
+use Infocyph\OTP\AOTP;
 use Infocyph\OTP\GenericOtp;
+use Infocyph\OTP\GridOTP;
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\OCRA;
+use Infocyph\OTP\Passkey;
+use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\TOTP;
 
 
@@ -130,4 +134,54 @@ test('GenericOtp keeps its v1 state and lock keys', function () {
     )->willReturn(true);
 
     expect((new GenericOtp($cache, str_repeat('g', 32)))->generate('binding-v1'))->toHaveLength(6);
+});
+
+
+test('AOTP keeps its v1 challenge state key', function () {
+    if (!AOTP::isAvailable()) {
+        expect(AOTP::isAvailable())->toBeFalse();
+
+        return;
+    }
+
+    $cache = CacheLayerState::memory();
+    $keyPair = AOTP::generateKeyPair();
+    $challenge = (new AOTP($keyPair->publicKey, 'https://example.com'))
+        ->issue($cache, 'factor-v1', 'login', now: 1_000);
+    $expectedKey = hash(
+        'sha256',
+        "infocyph:otp:aotp:state:v1\0factor-v1\0" . hash('sha256', $challenge->signingPayload(), true),
+    );
+
+    expect($cache->get($expectedKey))->toBe(0);
+});
+
+test('GridOTP keeps its v1 challenge state key', function () {
+    $cache = CacheLayerState::memory();
+    $challenge = (new GridOTP($cache, 'ABCDEFGH'))
+        ->issue('factor-v1', now: 1_000);
+    $expectedKey = hash(
+        'sha256',
+        "infocyph:otp:gridotp:state:v1\0factor-v1\0" . $challenge->id,
+    );
+
+    expect($cache->get($expectedKey))->toBeArray();
+});
+
+test('Passkey keeps its v1 ceremony state key', function () {
+    if (!Passkey::isAvailable()) {
+        expect(Passkey::isAvailable())->toBeFalse();
+
+        return;
+    }
+
+    $cache = CacheLayerState::memory();
+    $ceremony = (new Passkey($cache, 'example.com', ['https://example.com']))
+        ->beginRegistration('binding-v1', 'user-handle', 'alice', 'Alice', now: 1_000);
+    $expectedKey = hash(
+        'sha256',
+        "infocyph:otp:passkey:state:v1\0binding-v1\0" . $ceremony->id,
+    );
+
+    expect($cache->get($expectedKey))->toBeArray();
 });

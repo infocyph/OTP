@@ -7,6 +7,7 @@ namespace Infocyph\OTP\Tests\Support;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
+use RuntimeException;
 use Throwable;
 
 final class RedisState
@@ -41,6 +42,13 @@ final class RedisState
         );
 
         return $cache;
+    }
+
+    public static function requireAvailable(): void
+    {
+        if (!self::available()) {
+            throw new RuntimeException('Redis concurrency tests require phpredis and a live Redis/Valkey service.');
+        }
     }
 
     private static function client(): \Redis

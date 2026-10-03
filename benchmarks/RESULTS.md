@@ -1,5 +1,122 @@
 # OTP benchmark results
 
+## OTP 7.0 / sustained component regression gate
+
+Run #222 on 2026-10-03 added a paired component regression gate that the
+earlier PHPBench snapshots intentionally did not provide. Baseline and candidate
+used production `--no-dev` dependency sets on the same PHP 8.5 GitHub Actions
+runner, with the same environment fingerprint. The normal-path workload reuses
+one `GenericOtp` service and authoritative CacheLayer memory backend, omits a
+Runwire context, warms 5,000 operations, then runs three sustained 8-second
+trials. Each result records median successful RPM, sampled p50/p95/p99,
+errors/timeouts, CPU, memory, queue/backend metadata, and stability spread.
+
+| Measurement | Pre-Runwire baseline | OTP 7.0 candidate |
+| --- | ---: | ---: |
+| Median successful RPM | 1,452,458.78 | 1,434,179.15 |
+| Three-trial RPM spread | 0.19% | 0.24% |
+| RPM regression | — | **1.26%** |
+| Maximum allowed regression | — | **2.00%** |
+
+For this isolated component workload, the PHPForge result contract passed for both documents and
+`ic:benchmark:compare --max-regression=2 --stable-environment` passed. The
+producer also enforces an absolute normal-path p99 ceiling of 1 ms, peak memory
+below 64 MB, and worker-memory growth below 8 MB; exceeding any of those limits
+fails the workload before comparison. Queue growth is not applicable to this
+single-worker component workload and backend connections are zero.
+
+A separate candidate-only cold-start workload launches fresh PHP processes,
+loads Composer, constructs CacheLayer/GenericOtp, and generates a validated code.
+Three repetitions of 30 measured process starts produced 1,228.20 successful RPM
+with 0.23% spread. Its benchmark-result contract passed independently and is not
+mixed into the sustained-RPM regression calculation.
+
+The uploaded release-gate JSON artifacts remain the detailed record for
+p50/p95/p99, CPU, memory, operation counts, errors/timeouts, and environment
+metadata. The existing PHPBench sections below remain path-attribution evidence;
+they are not used as the 2% release regression gate.
+
+The final release workflow supplements this component guard with three broader
+acceptance surfaces: a paired generate→verify round-trip workload, a four-worker
+SQLite concurrent verification workload, and a sustained persistent Runwire
+request/scope lifecycle workload. The Runwire workload creates and completes a
+fresh request context for every operation and asserts zero active tasks, request
+scopes, and background tasks after each request. Exact-head workflow artifacts are
+the authoritative performance record for release acceptance.
+
+## OTP 7.0 / Runwire cooperative contention snapshot
+
+Batch 9 adds a synthetic one-miss lock provider exercised through a real
+``CoroutineRuntime`` request scope. The provider rejects blocking waits, misses
+once, yields through the supplied scope, and then acquires successfully.
+
+| Subject | PHP 8.4 | PHP 8.5 |
+| --- | ---: | ---: |
+| Cooperative lock contention, one forced miss | 6,329 µs | 6,443 µs |
+| Generic OTP generate, no context | 115 µs | 135 µs |
+| Generic OTP generate, supplied context | 121 µs | 157 µs |
+
+The cooperative contention subject intentionally includes one scheduler sleep of
+up to 5 ms, so its ~6.3-6.4 ms CI result is evidence that the cooperative path is
+executed and bounded, not a target latency or throughput claim. The ordinary
+no-context path remains independently benchmarked and all Batch 9 correctness
+and lifecycle gates passed on the same revision.
+
+## OTP 7.0 / optional Runwire Batch 8 snapshot
+
+Recorded on 2026-10-03 from the exact green Batch 8 revision on the same GitHub
+Actions class as the pre-Runwire snapshot. Runwire 2.1 was installed for
+development coverage. Existing benchmark subjects did not supply a Runwire
+context; ``benchGenericOtpGenerateWithRunwire`` supplied the shared
+``RunwireExecutionContext`` with a standalone runtime/request and no coroutine
+scope.
+
+| Subject | PHP 8.4 | PHP 8.5 |
+| --- | ---: | ---: |
+| Generic OTP generate, no context | 141 µs | 60 µs |
+| Generic OTP generate, supplied context | 140 µs | 66 µs |
+| Generic OTP verify, no context | 141 µs | 76 µs |
+| GridOTP round trip, no context | 499 µs | 277 µs |
+| OTP atomic monotonic advance, no context | 460 µs | 280 µs |
+| OTP lock-fallback monotonic advance, no context | 625 µs | 386 µs |
+| Passkey begin authentication, no context | 1,796 µs | 1,029 µs |
+| Passkey begin registration, no context | 2,376 µs | 1,379 µs |
+
+These CI measurements are single-iteration attribution snapshots and vary
+materially between runners; by themselves they do not satisfy the plan's
+sustained 2% RPM regression budget. That limitation is superseded by the final
+sustained release gate recorded above. Within the same final jobs, the supplied Generic OTP context
+measured 140 vs 141 µs on PHP 8.4 and 66 vs 60 µs on PHP 8.5, with roughly
+0.5 KiB additional reported peak memory. Treat those values as evidence that the
+path is benchmarked, not as a performance gain or regression conclusion.
+Cooperative contention and persistent-runtime measurements belong to Batch 9.
+
+## OTP 7.0 / CacheLayer 4.0 pre-Runwire baseline
+
+Recorded on 2026-10-03 from the green Batch 7 GitHub Actions benchmark lanes on
+Ubuntu 24.04 with Xdebug disabled, PHPBench 1.7.0, and CacheLayer 4.0. These
+one-iteration CI modes are an attribution snapshot, not a stable throughput or
+RPM regression baseline. They are recorded before OTP adds any optional Runwire
+execution-context checks.
+
+| Subject | PHP 8.4 | PHP 8.5 |
+| --- | ---: | ---: |
+| Generic OTP generate | 114 µs | 72 µs |
+| Generic OTP verify | 138 µs | 113 µs |
+| GridOTP round trip | 522 µs | 252 µs |
+| Atomic `setIfAbsent` | 22 µs | 13 µs |
+| Atomic CAS | 85 µs | 44 µs |
+| OTP atomic monotonic advance | 406 µs | 242 µs |
+| OTP lock-fallback monotonic advance | 611 µs | 372 µs |
+| OTP atomic one-time claim | 409 µs | 252 µs |
+| OTP lock-fallback one-time claim | 579 µs | 352 µs |
+| Passkey begin authentication | 1,492 µs | 1,261 µs |
+| Passkey begin registration | 2,243 µs | 1,955 µs |
+
+The Batch 8 post-change run must compare the same subjects on the same CI class.
+Normal execution with no supplied Runwire context is the primary regression path;
+Runwire installed but unused must not alter state semantics.
+
 ## OTP 6.1 / CacheLayer 3.3 attribution
 
 OTP 6.1 adds dedicated subjects for CacheLayer 3.3 replay coordination. CI runs

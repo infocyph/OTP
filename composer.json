@@ -32,16 +32,18 @@
         "php-64bit": "^8.4",
         "ext-ctype": "*",
         "bacon/bacon-qr-code": "^3.1.1",
-        "infocyph/cachelayer": "^3.3",
+        "infocyph/cachelayer": "^4.0",
         "paragonie/constant_time_encoding": "^3.1.3"
     },
     "require-dev": {
         "ext-sodium": "*",
         "infocyph/phpforge": "dev-main@dev",
+        "infocyph/runwire": "^2.1",
         "web-auth/webauthn-lib": "^5.3"
     },
     "suggest": {
         "ext-sodium": "Required to use the optional AOTP Ed25519 integration.",
+        "infocyph/runwire": "Optional cooperative cancellation, deadlines, and lock waiting for stateful OTP operations.",
         "web-auth/webauthn-lib": "Required to use the optional Passkey/WebAuthn integration."
     },
     "minimum-stability": "stable",
@@ -66,6 +68,11 @@
         "sort-packages": true
     },
     "scripts": {
-        "benchmark": "@php vendor/bin/phpbench run benchmarks --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none"
+        "benchmark": "@php vendor/bin/phpbench run benchmarks --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none",
+        "benchmark:ci": [
+            "@benchmark",
+            "@benchmark:release"
+        ],
+        "benchmark:release": "@php benchmarks/release-gate.php --autoload=vendor/autoload.php --output=build/benchmark-result.json --release=working-tree"
     }
 }

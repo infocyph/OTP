@@ -16,8 +16,15 @@ test('GridOTP generates a dynamic balanced grid and verifies its response once',
     $response = GridOTP::respond($challenge, $secret);
     $counts = array_count_values($challenge->grid);
 
+    $challengedSymbols = array_map(
+        static fn (int $position): string => $secret[$position - 1],
+        $challenge->positions,
+    );
+
     expect($secret)->toMatch('/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{12}$/')
+        ->and(count(array_unique(str_split($secret))))->toBeGreaterThanOrEqual(10)
         ->and($challenge->positions)->toHaveCount(6)
+        ->and(array_unique($challengedSymbols))->toHaveCount(6)
         ->and($challenge->grid)->toHaveCount(32)
         ->and(min($counts))->toBe(3)
         ->and(max($counts))->toBe(4)
@@ -88,6 +95,41 @@ test('GridOTP challenges round-trip through transport arrays', function () {
         ->and($parsed->__debugInfo()['grid'])->toBe('[redacted]');
 });
 
+test('GridOTP generated secrets guarantee challenge-capable symbol diversity', function (int $length) {
+    $secret = GridOTP::generateSecret($length);
+
+    expect(strlen($secret))->toBe($length)
+        ->and(count(array_unique(str_split($secret))))->toBeGreaterThanOrEqual(min(10, $length));
+})->with([8, 9, 10, 12, 32]);
+
+test('GridOTP exposes migration-safe diversity policy for enrolled secrets', function () {
+    $cache = CacheLayerState::memory();
+    $legacySecret = 'AAAAAAAA';
+    $strongSecret = 'AABBCCDDEEFF';
+
+    expect(GridOTP::hasSufficientDiversity($legacySecret))->toBeFalse()
+        ->and(GridOTP::hasSufficientDiversity($strongSecret))->toBeTrue()
+        ->and(fn () => new GridOTP($cache, $legacySecret, enforceDiversity: true))
+        ->toThrow(InvalidArgumentException::class);
+
+    $legacy = new GridOTP($cache, $legacySecret);
+    $legacyChallenge = $legacy->issue('legacy-factor', now: 1_000);
+    $legacyResponse = GridOTP::respond($legacyChallenge, $legacySecret);
+
+    expect($legacy->verify('legacy-factor', $legacyChallenge, $legacyResponse, 1_001))->toBeTrue();
+
+    $strong = new GridOTP($cache, $strongSecret, enforceDiversity: true);
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $challenge = $strong->issue('strong-factor-' . $attempt, now: 2_000 + $attempt);
+        $challengedSymbols = array_map(
+            static fn (int $position): string => $strongSecret[$position - 1],
+            $challenge->positions,
+        );
+
+        expect(array_unique($challengedSymbols))->toHaveCount(6);
+    }
+});
+
 test('GridOTP validates secrets and configuration bounds', function () {
     $cache = CacheLayerState::memory();
     $secret = GridOTP::generateSecret();
@@ -113,10 +155,6 @@ test('GridOTP expiry and factor binding fail closed', function () {
 });
 
 test('GridOTP concurrent verification accepts exactly one request', function () {
-    if (!extension_loaded('pcntl') || !extension_loaded('posix') || !extension_loaded('pdo_sqlite')) {
-        $this->markTestSkipped('pcntl, posix, and pdo_sqlite are required.');
-    }
-
     $path = tempnam(sys_get_temp_dir(), 'otp-grid-');
     if ($path === false) {
         throw new RuntimeException('Unable to create GridOTP concurrency database.');

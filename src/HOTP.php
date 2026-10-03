@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
 use Infocyph\OTP\Support\CacheLock;
@@ -43,6 +44,17 @@ final readonly class HOTP
         $this->secret = SecretUtility::normalizeBase32($secret);
         $this->binarySecret = SecretUtility::requireStrongBase32($this->secret);
         $this->algorithm = AlgorithmValidator::normalize($algorithm);
+    }
+
+    /** @return array{secret:string,binarySecret:string,digits:int,algorithm:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'secret' => '[redacted]',
+            'binarySecret' => '[redacted]',
+            'digits' => $this->digits,
+            'algorithm' => $this->algorithm,
+        ];
     }
 
     public static function generateSecret(int $bytes = 20): string
@@ -185,6 +197,7 @@ final readonly class HOTP
         int $lookAhead = 0,
         ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
+        ?RunwireExecutionContext $runwire = null,
     ): VerificationResult {
         self::assertVerificationConfiguration($counter, $lookAhead, $cache, $factorId);
         if (strlen($otp) !== $this->digits || !ctype_digit($otp)) {
@@ -198,7 +211,7 @@ final readonly class HOTP
         if (
             $cache !== null
             && $factorId !== null
-            && !$this->advanceReplayState($cache, $factorId, $matchedCounter)
+            && !$this->advanceReplayState($cache, $factorId, $matchedCounter, $runwire)
         ) {
             return VerificationResult::replay(matchedCounter: $matchedCounter);
         }
@@ -247,11 +260,12 @@ final readonly class HOTP
         AuthenticationStateCacheInterface $cache,
         string $factorId,
         int $counter,
+        ?RunwireExecutionContext $runwire,
     ): bool {
         $stateKey = hash('sha256', "infocyph:otp:hotp:counter:v1\0" . $factorId);
         $lockKey = hash('sha256', "infocyph:otp:hotp:lock:v1\0" . $factorId);
 
-        return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'HOTP replay');
+        return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'HOTP replay', $runwire);
     }
 
     private function findMatchingCounter(string $otp, int $counter, int $lookAhead): ?int

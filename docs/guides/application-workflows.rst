@@ -242,7 +242,8 @@ mapped decimal response. The verifier uses the returned challenge plus response:
    );
 
 GridOTP's attempt counter, integrity digest, expiry, and consumed state mutate
-under one CacheLayer lock. It reduces direct secret/keylogger exposure but is not
+as one serializable CacheLayer record through whole-record CAS or the
+coordinated lock fallback. It reduces direct secret/keylogger exposure but is not
 shoulder-surfing proof. See :doc:`grid-otp`.
 
 MobileOTP legacy interoperability
@@ -388,6 +389,57 @@ state that should not survive the account. ``GenericOtp::delete()`` only cancels
 the active generic challenge for the supplied binding; it is not a user-wide
 purge operation. Avoid broad cache namespace flushes that could affect other
 active authentication flows.
+
+Optional Runwire request context
+--------------------------------
+
+Runwire integration is passed-instance only. The host owns the runtime,
+``RequestContext``, and optional ``CoroutineScope``; OTP only consumes the
+existing CacheLayer ``RunwireExecutionContext`` at state boundaries.
+
+Direct use in a persistent host:
+
+.. code-block:: php
+
+   use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
+
+   $execution = new RunwireExecutionContext(
+       runtime: $hostRuntimeContext,
+       request: $hostRequestContext,
+       scope: $hostCoroutineScope,
+   );
+
+   $accepted = $genericOtp->verify(
+       $binding,
+       $submittedCode,
+       runwire: $execution,
+   );
+
+Intermediate libraries should forward the exact same object instead of
+rediscovering runtime state:
+
+.. code-block:: php
+
+   function verifySecondFactor(
+       \Infocyph\OTP\GenericOtp $otp,
+       string $binding,
+       string $code,
+       ?RunwireExecutionContext $runwire = null,
+   ): bool {
+       return $otp->verify($binding, $code, runwire: $runwire);
+   }
+
+Normal CLI/FPM code that does not own a Runwire lifecycle simply omits the
+``runwire`` argument and keeps the synchronous path. Persistent workers must
+construct/receive request-scoped context after worker startup/fork and must not
+store it on a long-lived factor/service object. OTP never calls
+``RunwireIntegration::bind()``/``release()``, starts workers/event loops, or
+closes the host scope.
+
+Cancellation/deadline checks happen before state-changing work and during
+cooperative lock polling. Required cleanup still runs synchronously, and a
+mutation that has already committed is never reclassified as an ordinary
+credential failure because cancellation arrived afterward.
 
 Operational failure behavior
 ----------------------------

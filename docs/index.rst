@@ -54,7 +54,7 @@ Choosing a primitive
      - Ed25519 public key, protected client private key, CacheLayer challenge state
    * - Human dynamic-grid challenge
      - ``GridOTP``
-     - Encrypted knowledge secret and locked CacheLayer challenge state
+     - Encrypted knowledge secret and CacheLayer challenge state
    * - Existing Mobile-OTP/mOTP deployment
      - ``MobileOTP``
      - Encrypted Init-Secret/PIN, factor generation, CacheLayer replay state
@@ -122,3 +122,9 @@ examples. Production deployments should always review :doc:`guides/security`,
    api/contracts
    api/results
    api/support
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Releases
+
+   releases/7.0.0

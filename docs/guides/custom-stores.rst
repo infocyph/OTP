@@ -2,9 +2,9 @@ Custom durable stores
 =====================
 
 The package does not define custom store contracts for Generic OTP or protocol
-replay state. Select a CacheLayer 3.3 authentication-state adapter for those
-paths; HOTP/TOTP/OCRA use its native atomics when available or its coordinated
-lock fallback, while ``GenericOtp`` requires the coordinated lock. See
+replay state. Select a CacheLayer 4.0 authentication-state adapter for those
+paths; OTP uses its native atomics for safe scalar/whole-record transitions
+when available and its coordinated lock fallback otherwise. See
 :doc:`storage`. The only application persistence contract is
 ``RecoveryCodeStoreInterface`` because recovery-code batches require durable,
 auditable lifecycle state.

@@ -10,16 +10,16 @@ OTP state uses CacheLayer's public contracts directly:
 
 ``AuthenticationStateCacheInterface`` exposes the effective fail-open,
 payload-integrity, authoritative-read, and cache-owned lock capabilities.
-CacheLayer 3.3 caches may additionally implement ``AtomicCacheProviderInterface``
+CacheLayer 4.0 caches may additionally implement ``AtomicCacheProviderInterface``
 and return an ``AtomicCacheInterface`` for native conditional mutation. Generic
 OTP, HOTP, TOTP, and OCRA do not expose an OTP-specific cache, lock wrapper, or
 replay adapter.
 
 For authentication calls, configure ``failOpen: false``, an ``integrityKey``,
-and one authoritative direct backend. TOTP, HOTP, and OCRA accept either the
-native CacheLayer atomic capability or the cache's coordinated lock fallback.
-``GenericOtp`` requires the coordinated lock because its record is a multi-field
-state machine. OTP validates these capabilities before mutation. A cache and
+and one authoritative direct backend. OTP uses CacheLayer native atomics for
+safe scalar and whole-record transitions, including GenericOtp/GridOTP/Passkey
+records, and uses the cache's coordinated lock fallback when atomics are not
+available. OTP validates these capabilities before mutation. A cache and
 factor ID are required together on optional replay-aware protocol methods. See
 :doc:`../guides/storage` for backend examples and failure semantics.
 

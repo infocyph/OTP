@@ -24,14 +24,16 @@ Supplying only part of an optional replay pair throws ``InvalidArgumentException
 Unsafe cache policies and backend failures throw and must produce a temporary
 authentication failure.
 
-OTP 6.1 requires CacheLayer 3.3 or newer. Scalar replay transitions use the
+OTP 7.0 requires CacheLayer 4.0 or newer. Scalar replay transitions use the
 native ``AtomicCacheProviderInterface`` capability when the configured backend
 exposes it. Backends without atomics remain supported when they provide a
 coordinated authentication-state lock. Native atomic failures never fall back to
 locks after an operation has been selected.
 
-``GenericOtp``, ``GridOTP``, and ``Passkey`` are intentionally lock-based because
-their multi-field state transitions must remain serializable.
+``GenericOtp``, ``GridOTP``, and ``Passkey`` use fenced whole-record CAS
+when CacheLayer exposes a safe atomic capability. Backends without that
+capability use the coordinated lock fallback for the same serializable
+transition.
 
 See :doc:`storage` for complete Redis, PDO, and local-development setup.
 
@@ -256,12 +258,21 @@ neither workers nor hosts and disappears on restart. Do not use
 ``Cache::remember()`` for these transitions because it does not express the
 required compare/claim semantics.
 
-Rolling upgrades from 6.0
--------------------------
+Rolling upgrade to 7.0
+----------------------
 
-OTP 6.0 coordinates existing replay mutations with locks. OTP 6.1 prefers native
-atomics when available while keeping those existing replay keys and values. Do
-not run stateful 6.0 and atomic-path 6.1 workers concurrently for an extended
-rolling window, because the two versions do not coordinate through the same
-primitive. Drain or replace 6.0 stateful workers before activating 6.1 workers
-that share the same replay backend.
+OTP 7.0 requires CacheLayer 4.0. CacheLayer 4.0 changes signed-record identity
+binding, so do not mix CacheLayer 3.x and 4.x workers on the same OTP state
+namespace or assume their signed envelopes are mutually readable.
+
+Drain old workers before the cutover. Let short-lived TOTP/MobileOTP replay
+records and GenericOtp/GridOTP/Passkey/AOTP challenges expire, or invalidate
+those flows explicitly. Preserve application-owned HOTP counters and durable
+Passkey CredentialRecords. For no-TTL monotonic state that cannot be migrated
+safely, rotate to a new factor generation/factor ID rather than silently
+discarding replay history under the same generation.
+
+Rollback is symmetric: stop 7.0 writers before restoring a CacheLayer 3.x
+application. Do not expect state written by CacheLayer 4.0 to be readable by the
+old stack. Re-establish safe factor generations/state before accepting
+credentials again.

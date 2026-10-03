@@ -10,10 +10,11 @@ unsafe.
 OTP 6.0 to 6.1
 --------------
 
-OTP 6.1 raises the CacheLayer floor to ``^3.3``. Public HOTP/TOTP/OCRA result
-contracts and the package-owned existing v1 replay keys/values remain unchanged.
-CacheLayer 3.3 native atomics are preferred for scalar replay transitions and a
-coordinated lock is used when the configured backend does not expose atomics.
+OTP 7.0 raises the CacheLayer floor to ``^4.0``. Public HOTP/TOTP/OCRA result
+contracts and OTP's v1 replay key domains remain unchanged. CacheLayer 4.0 native
+atomics are preferred for scalar and fenced whole-record replay transitions, and
+a coordinated lock is used when the configured backend does not expose a safe
+atomic capability.
 ``GenericOtp`` remains lock-based.
 
 Do not run shared stateful 6.0 and atomic-path 6.1 workers through a prolonged
@@ -138,8 +139,8 @@ CacheLayer state migration
 ``OtpStoreInterface`` and ``ReplayStoreInterface`` were removed in 6.0. Pass a
 CacheLayer ``AuthenticationStateCacheInterface`` capability and a
 generation-specific factor ID directly to detailed HOTP/TOTP/OCRA verification.
-The cache must be fail-closed, integrity-protected, and authoritative. OTP 6.1
-uses a CacheLayer 3.3 atomic capability when available and otherwise requires
+The cache must be fail-closed, integrity-protected, and authoritative. OTP 7.0
+uses a CacheLayer 4.0 atomic capability when available and otherwise requires
 the cache's coordinated lock. ``GenericOtp`` always requires that lock. Unsafe
 configurations are rejected before state is mutated, and authentication must
 never turn backend errors into cache misses or credential results.

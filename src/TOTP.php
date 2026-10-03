@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\AlgorithmValidator;
 use Infocyph\OTP\Support\CacheLock;
@@ -48,6 +49,18 @@ final readonly class TOTP
         $this->secret = SecretUtility::normalizeBase32($secret);
         $this->binarySecret = SecretUtility::requireStrongBase32($this->secret);
         $this->algorithm = AlgorithmValidator::normalize($algorithm);
+    }
+
+    /** @return array{secret:string,binarySecret:string,digits:int,period:int,algorithm:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'secret' => '[redacted]',
+            'binarySecret' => '[redacted]',
+            'digits' => $this->digits,
+            'period' => $this->period,
+            'algorithm' => $this->algorithm,
+        ];
     }
 
     public static function generateSecret(int $bytes = 20): string
@@ -209,6 +222,7 @@ final readonly class TOTP
         ?VerificationWindow $window = null,
         ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
+        ?RunwireExecutionContext $runwire = null,
     ): VerificationResult {
         $window ??= new VerificationWindow();
         self::assertReplayConfiguration($cache, $factorId);
@@ -224,7 +238,7 @@ final readonly class TOTP
 
         if ($cache !== null && $factorId !== null) {
             $ttl = $this->period * ($window->past + $window->future + 1);
-            if (!$this->advanceReplayState($cache, $factorId, $match['step'], $ttl)) {
+            if (!$this->advanceReplayState($cache, $factorId, $match['step'], $ttl, $runwire)) {
                 return VerificationResult::replay($match['step'], driftOffset: $match['offset']);
             }
         }
@@ -256,11 +270,12 @@ final readonly class TOTP
         string $factorId,
         int $timeStep,
         int $ttl,
+        ?RunwireExecutionContext $runwire,
     ): bool {
         $stateKey = hash('sha256', "infocyph:otp:totp:timestep:v1\0" . $factorId);
         $lockKey = hash('sha256', "infocyph:otp:totp:lock:v1\0" . $factorId);
 
-        return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'TOTP replay');
+        return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'TOTP replay', $runwire);
     }
 
     /**

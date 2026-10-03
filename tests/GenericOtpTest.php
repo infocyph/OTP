@@ -53,6 +53,11 @@ test('generic OTP requires safe key and bounded configuration', function () {
 test('authentication state policy rejects unsafe CacheLayer configurations', function () {
     $key = str_repeat('g', 32);
     $integrityKey = str_repeat('i', 32);
+    $noCapability = $this->createMock(AuthenticationStateCacheInterface::class);
+    $noCapability->method('isFailOpen')->willReturn(false);
+    $noCapability->method('hasPayloadIntegrity')->willReturn(true);
+    $noCapability->method('isAuthoritative')->willReturn(true);
+    $noCapability->method('authenticationStateLock')->willReturn(null);
 
     expect(fn () => new GenericOtp(
         Cache::memory('fail-open', new CacheOptions(integrityKey: $integrityKey)),
@@ -69,16 +74,17 @@ test('authentication state policy rejects unsafe CacheLayer configurations', fun
             ),
             $key,
         ))->toThrow(InvalidArgumentException::class, 'authoritative direct backend')
-        ->and(fn () => new GenericOtp(
+        ->and(fn () => new GenericOtp($noCapability, $key))
+        ->toThrow(InvalidArgumentException::class, 'atomic or coordinated lock capability')
+        ->and(new GenericOtp(
             new Cache(
-                new ArrayCacheAdapter('no-lock'),
+                new ArrayCacheAdapter('atomic-only'),
                 options: new CacheOptions(integrityKey: $integrityKey, failOpen: false),
             ),
             $key,
-        ))->toThrow(InvalidArgumentException::class, 'coordinated lock capability')
+        ))->toBeInstanceOf(GenericOtp::class)
         ->and(new GenericOtp(CacheLayerState::memory(), $key))->toBeInstanceOf(GenericOtp::class);
 });
-
 test('generic OTP HMAC is bound to challenge and key', function () {
     $cache = CacheLayerState::memory();
     $keyA = new GenericOtp($cache, str_repeat('a', 32));

@@ -10,9 +10,7 @@ use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\Tests\Support\RedisState;
 
 beforeEach(function () {
-    if (!RedisState::available()) {
-        $this->markTestSkipped('A live Redis/Valkey service with phpredis is required.');
-    }
+    RedisState::requireAvailable();
 });
 
 test('Redis serializes generic OTP success and failed-attempt races', function () {

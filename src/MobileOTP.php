@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
@@ -36,6 +37,15 @@ final readonly class MobileOTP
         self::assertPin($pin);
         $this->pin = $pin;
         $this->secret = $secret;
+    }
+
+    /** @return array{secret:string,pin:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'secret' => '[redacted]',
+            'pin' => '[redacted]',
+        ];
     }
 
     public static function generateSecret(): string
@@ -89,6 +99,7 @@ final readonly class MobileOTP
         int $offsetSteps = 0,
         ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
+        ?RunwireExecutionContext $runwire = null,
     ): VerificationResult {
         $window ??= new VerificationWindow();
         self::assertReplayConfiguration($cache, $factorId);
@@ -104,7 +115,7 @@ final readonly class MobileOTP
         }
         if ($cache !== null && $factorId !== null) {
             $ttl = self::PERIOD * ($window->past + $window->future + 1);
-            if (!$this->advanceReplayState($cache, $factorId, $match['step'], $ttl)) {
+            if (!$this->advanceReplayState($cache, $factorId, $match['step'], $ttl, $runwire)) {
                 return VerificationResult::replay($match['step'], driftOffset: $match['offset']);
             }
         }
@@ -171,11 +182,12 @@ final readonly class MobileOTP
         string $factorId,
         int $timeStep,
         int $ttl,
+        ?RunwireExecutionContext $runwire,
     ): bool {
         $stateKey = hash('sha256', "infocyph:otp:mobile:timestep:v1\0" . $factorId);
         $lockKey = hash('sha256', "infocyph:otp:mobile:lock:v1\0" . $factorId);
 
-        return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'MobileOTP replay');
+        return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'MobileOTP replay', $runwire);
     }
 
     /** @return array{step:int,offset:int}|null */

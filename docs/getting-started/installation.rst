@@ -9,7 +9,7 @@ The base package requires:
 * PHP ``^8.4``;
 * a 64-bit PHP build;
 * the ``ctype`` extension;
-* CacheLayer ``^3.3``; and
+* CacheLayer ``^4.0``; and
 * Composer.
 
 Install the current release:
@@ -66,6 +66,24 @@ the WebAuthn/CBOR/PKI/Symfony dependency graph.
 ``Passkey::isAvailable()`` reports whether the optional package is loaded.
 Constructing ``Passkey`` without it throws ``LogicException`` with the install
 command. OTP's Passkey wrapper does not itself require ``ext-sodium``.
+
+Optional Runwire dependency
+---------------------------
+
+Runwire is optional and is useful only when the host already owns a compatible
+Runwire 2.1+ request/coroutine lifecycle. Install it explicitly when that
+integration is required:
+
+.. code-block:: bash
+
+   composer require infocyph/runwire:^2.1
+
+OTP accepts CacheLayer's existing ``RunwireExecutionContext`` as a trailing
+optional ``runwire`` argument on stateful operations. When omitted, behavior
+remains synchronous. OTP never discovers or starts a runtime, never binds or
+releases CacheLayer's process-global Runwire integration, and never closes a
+host-owned scope. See :doc:`../guides/application-workflows` for direct and
+forwarded examples.
 
 Autoloading
 -----------
@@ -171,27 +189,31 @@ Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
 Use different keys for these two purposes. Both APIs accept 16–1024 key bytes.
 Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA/AOTP/MobileOTP calls require
 a configured fail-closed, payload-integrity protected, authoritative CacheLayer
-authentication-state cache. TOTP, HOTP, OCRA, AOTP, and MobileOTP use CacheLayer
-3.3 native atomics when suitable and otherwise require the cache's coordinated
-lock. ``GenericOtp``, ``GridOTP``, and ``Passkey`` ceremonies always require the
-coordinated lock because their complete transitions are multi-field. Start with
+authentication-state cache. CacheLayer 4.0 native atomics are preferred for
+scalar and whole-record transitions. GenericOtp, GridOTP, and Passkey use
+whole-record CAS when available; a coordinated lock is the fallback when the
+selected backend does not expose a safe atomic capability. Start with
 :doc:`../guides/storage` before wiring an authentication endpoint.
 
-Upgrading from OTP 6.0
-----------------------
+Upgrading to OTP 7.0
+--------------------
 
-OTP 6.1 preserves the existing v1 replay keys and values, but an atomic-capable
-6.1 worker does not coordinate replay mutation through the same lock used by a
-6.0 worker. Do not run shared stateful 6.0 and atomic-path 6.1 workers through a
-long rolling window. Drain or replace the 6.0 stateful workers before activating
-6.1 workers against the same authentication-state backend. See
-:doc:`../guides/replay-protection` for the complete rule.
+OTP 7.0 raises the runtime dependency floor to CacheLayer 4.0. CacheLayer 4.0
+changes signed-record identity binding, so authentication-state envelopes written
+by CacheLayer 3.x must not be assumed readable by 4.x or vice versa. Do not run
+mixed 3.x/4.x workers against one OTP state namespace.
 
-AOTP, GridOTP, MobileOTP, and Passkey introduce independently namespaced v1
-state and therefore do not collide with HOTP/TOTP/OCRA/GenericOtp state carried
-forward from 6.1. Rotate factor IDs whenever an enrolled AOTP key, GridOTP secret,
-or MobileOTP secret/PIN generation changes. Passkey ceremony bindings should be
-flow-specific and never reused as durable credential identifiers.
+Use a coordinated cutover: stop old writers, let short-lived challenge/replay
+records expire or invalidate them deliberately, preserve application-owned HOTP
+counters and Passkey CredentialRecords, then start only the 7.0/CacheLayer-4
+workers. For no-TTL monotonic replay/counter state, use a new factor generation
+and factor ID when the prior signed state cannot be carried safely. Do not clear
+state casually in a way that re-opens previously accepted credentials.
+
+OTP's package-owned v1 key domains remain stable inside the 7.0 line; the
+incompatibility is the CacheLayer 3.x/4.x signed storage envelope, not an
+arbitrary OTP key rename. See :doc:`migration` for the full cutover and rollback
+rules.
 
 Development checks
 ------------------
@@ -206,9 +228,10 @@ Contributors can run the repository's complete PHPForge gate:
    composer benchmark
 
 CI runs both ``prefer-lowest`` and ``prefer-stable`` dependency matrices. The
-development matrix installs ``ext-sodium`` and ``web-auth/webauthn-lib`` through
-``require-dev`` so both optional integrations are exercised while the clean
-``--no-dev`` install verifies that neither is required by the base package.
+development matrix installs ``ext-sodium``, ``web-auth/webauthn-lib``, and
+``infocyph/runwire`` through ``require-dev`` so optional integrations are
+exercised while the clean ``--no-dev`` install verifies that none is required
+by the base package.
 
 Next steps
 ----------
