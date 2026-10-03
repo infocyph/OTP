@@ -5,8 +5,14 @@ declare(strict_types=1);
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\OTP\GenericOtp;
+
+const COLD_START_OPERATIONS = 30;
+const COLD_START_STABILITY_SPREAD_PERCENT = 10.0;
 const DEFAULT_DURATION_SECONDS = 8.0;
 const DEFAULT_REPETITIONS = 3;
+const MAX_MEMORY_GROWTH_MB = 8.0;
+const MAX_P99_LATENCY_MS = 1.0;
+const MAX_PEAK_MEMORY_MB = 64.0;
 const STABILITY_SPREAD_PERCENT = 3.0;
 const WARMUP_OPERATIONS = 5_000;
 
@@ -17,6 +23,7 @@ $options = getopt('', [
     'release:',
     'repetitions::',
     'stable',
+    'workload::',
 ]);
 
 $autoload = $options['autoload'] ?? null;
@@ -25,6 +32,7 @@ $release = $options['release'] ?? null;
 $duration = isset($options['duration']) ? (float) $options['duration'] : DEFAULT_DURATION_SECONDS;
 $repetitions = isset($options['repetitions']) ? (int) $options['repetitions'] : DEFAULT_REPETITIONS;
 $stableEnvironment = array_key_exists('stable', $options);
+$workloadName = $options['workload'] ?? 'sustained';
 
 if (!is_string($autoload) || $autoload === '' || !is_file($autoload)) {
     throw new RuntimeException('A readable --autoload path is required.');
@@ -41,10 +49,15 @@ if ($duration < 1.0 || $duration > 60.0) {
 if ($repetitions < 3 || $repetitions > 10) {
     throw new RuntimeException('--repetitions must be between 3 and 10.');
 }
+if (!in_array($workloadName, ['cold-start', 'sustained'], true)) {
+    throw new RuntimeException('--workload must be either cold-start or sustained.');
+}
 
 require $autoload;
 
-$workload = runWorkload($duration, $repetitions);
+$workload = $workloadName === 'cold-start'
+    ? runColdStartWorkload($autoload, $repetitions)
+    : runSustainedWorkload($duration, $repetitions);
 $environmentStable = $stableEnvironment
     && ($workload['result']['stability']['status'] ?? null) === 'stable';
 $document = [
@@ -64,7 +77,8 @@ if (file_put_contents($output, $json . PHP_EOL) === false) {
 }
 
 printf(
-    "Sustained benchmark: %.2f successful RPM, %.2f%% spread, %s environment\n",
+    "%s benchmark: %.2f successful RPM, %.2f%% spread, %s environment\n",
+    $workloadName === 'cold-start' ? 'Cold-start' : 'Sustained',
     $workload['result']['successful_rpm'],
     $workload['result']['stability']['spread_percent'],
     $environmentStable ? 'stable' : 'unverified',
@@ -169,7 +183,7 @@ function percentile(array $values, float $percentile): ?float
 /**
  * @return array<string, mixed>
  */
-function runWorkload(float $duration, int $repetitions): array
+function runSustainedWorkload(float $duration, int $repetitions): array
 {
     $rpms = [];
     $latencies = [];
@@ -253,9 +267,21 @@ function runWorkload(float $duration, int $repetitions): array
         ? ((max($rpms) - min($rpms)) / $rpmMedian) * 100
         : 100.0;
     $latencyAverage = $latencies === [] ? null : array_sum($latencies) / count($latencies);
+    $p99 = percentile($latencies, 99);
     $memoryGrowth = 0.0;
     foreach ($memoryStarts as $index => $startMemory) {
         $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
+    }
+    $peakMemory = $memoryPeaks === [] ? null : max($memoryPeaks);
+
+    if ($p99 !== null && $p99 > MAX_P99_LATENCY_MS) {
+        throw new RuntimeException('Sustained benchmark exceeded the absolute p99 latency budget.');
+    }
+    if ($peakMemory !== null && $peakMemory > MAX_PEAK_MEMORY_MB) {
+        throw new RuntimeException('Sustained benchmark exceeded the absolute peak-memory budget.');
+    }
+    if ($memoryGrowth > MAX_MEMORY_GROWTH_MB) {
+        throw new RuntimeException('Sustained benchmark exceeded the absolute memory-growth budget.');
     }
 
     return [
@@ -268,7 +294,11 @@ function runWorkload(float $duration, int $repetitions): array
             'queue' => 'none',
             'backend_connections' => 0,
             'duration_per_repetition_seconds' => $duration,
+            'soak_duration_seconds' => $duration * $repetitions,
             'stability_spread_limit_percent' => STABILITY_SPREAD_PERCENT,
+            'p99_latency_budget_ms' => MAX_P99_LATENCY_MS,
+            'peak_memory_budget_mb' => MAX_PEAK_MEMORY_MB,
+            'memory_growth_budget_mb' => MAX_MEMORY_GROWTH_MB,
         ],
         'repetitions' => $repetitions,
         'warmup_operations' => WARMUP_OPERATIONS,
@@ -286,7 +316,7 @@ function runWorkload(float $duration, int $repetitions): array
                 'average' => $latencyAverage,
                 'p50' => percentile($latencies, 50),
                 'p95' => percentile($latencies, 95),
-                'p99' => percentile($latencies, 99),
+                'p99' => $p99,
                 'maximum' => $latencies === [] ? null : max($latencies),
             ],
             'cpu' => [
@@ -297,7 +327,7 @@ function runWorkload(float $duration, int $repetitions): array
                 'average_mb' => ($memoryStarts === [] || $memoryEnds === [])
                     ? null
                     : (array_sum($memoryStarts) + array_sum($memoryEnds)) / (count($memoryStarts) * 2),
-                'peak_mb' => $memoryPeaks === [] ? null : max($memoryPeaks),
+                'peak_mb' => $peakMemory,
                 'growth_mb' => $memoryGrowth,
             ],
             'stability' => [
@@ -306,4 +336,136 @@ function runWorkload(float $duration, int $repetitions): array
             ],
         ],
     ];
+}
+
+
+/**
+ * @return array<string, mixed>
+ */
+function runColdStartWorkload(string $autoload, int $repetitions): array
+{
+    $rpms = [];
+    $latencies = [];
+    $attempted = 0;
+    $successful = 0;
+    $failed = 0;
+    $wallSeconds = 0.0;
+    $warmupOperations = 3;
+
+    for ($repetition = 0; $repetition < $repetitions; $repetition++) {
+        for ($index = 0; $index < $warmupOperations; $index++) {
+            runColdStartOperation($autoload);
+        }
+
+        $start = hrtime(true);
+        $repSuccessful = 0;
+        for ($index = 0; $index < COLD_START_OPERATIONS; $index++) {
+            $before = hrtime(true);
+            if (runColdStartOperation($autoload)) {
+                $repSuccessful++;
+                $successful++;
+            } else {
+                $failed++;
+            }
+            $attempted++;
+            $latencies[] = (hrtime(true) - $before) / 1_000_000;
+        }
+        $elapsed = (hrtime(true) - $start) / 1_000_000_000;
+        $wallSeconds += $elapsed;
+        $rpms[] = $elapsed > 0.0 ? ($repSuccessful / $elapsed) * 60 : 0.0;
+    }
+
+    if ($failed !== 0) {
+        throw new RuntimeException('Cold-start benchmark recorded failed operations.');
+    }
+
+    $rpmMedian = median($rpms);
+    $spread = $rpmMedian > 0.0
+        ? ((max($rpms) - min($rpms)) / $rpmMedian) * 100
+        : 100.0;
+
+    return [
+        'name' => 'generic-otp-php-process-cold-start',
+        'type' => 'custom',
+        'metadata' => [
+            'operation' => 'fresh PHP process + Composer autoload + CacheLayer + GenericOtp::generate',
+            'backend' => 'CacheLayer memory authoritative state',
+            'runwire_context' => 'absent',
+            'operations_per_repetition' => COLD_START_OPERATIONS,
+            'stability_spread_limit_percent' => COLD_START_STABILITY_SPREAD_PERCENT,
+        ],
+        'repetitions' => $repetitions,
+        'warmup_operations' => $warmupOperations,
+        'duration_seconds' => $wallSeconds,
+        'concurrency' => 1,
+        'result' => [
+            'attempted_operations' => $attempted,
+            'successful_operations' => $successful,
+            'failed_operations' => $failed,
+            'timeouts' => 0,
+            'successful_rpm' => round($rpmMedian, 5),
+            'error_rate' => 0.0,
+            'latency_ms' => [
+                'minimum' => min($latencies),
+                'average' => array_sum($latencies) / count($latencies),
+                'p50' => percentile($latencies, 50),
+                'p95' => percentile($latencies, 95),
+                'p99' => percentile($latencies, 99),
+                'maximum' => max($latencies),
+            ],
+            'cpu' => [
+                'average_percent' => null,
+                'peak_percent' => null,
+            ],
+            'memory' => [
+                'average_mb' => null,
+                'peak_mb' => null,
+                'growth_mb' => null,
+            ],
+            'stability' => [
+                'status' => $spread <= COLD_START_STABILITY_SPREAD_PERCENT ? 'stable' : 'unverified',
+                'spread_percent' => round($spread, 5),
+            ],
+        ],
+    ];
+}
+
+function runColdStartOperation(string $autoload): bool
+{
+    $code = <<<'PHP'
+require $argv[1];
+
+$cache = \Infocyph\CacheLayer\Cache\Cache::memory(
+    'otp-cold-start',
+    new \Infocyph\CacheLayer\Cache\CacheOptions(
+        integrityKey: str_repeat('i', 32),
+        allowClosures: false,
+        allowObjects: false,
+        failOpen: false,
+    ),
+);
+$otp = new \Infocyph\OTP\GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
+$generated = $otp->generate('cold-start');
+
+exit(strlen($generated) === 6 && ctype_digit($generated) ? 0 : 2);
+PHP;
+
+    $process = proc_open(
+        [PHP_BINARY, '-d', 'opcache.enable_cli=0', '-r', $code, '--', $autoload],
+        [
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ],
+        $pipes,
+    );
+    if (!is_resource($process)) {
+        throw new RuntimeException('Unable to start the cold-start benchmark process.');
+    }
+
+    foreach ($pipes as $pipe) {
+        stream_get_contents($pipe);
+        fclose($pipe);
+    }
+
+    return proc_close($process) === 0;
 }
