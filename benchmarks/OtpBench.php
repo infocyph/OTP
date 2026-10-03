@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\CacheLayer\Cache\Lock\FileLockProvider;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\OCRA;
@@ -18,6 +19,8 @@ use Infocyph\OTP\Support\ProvisioningUriParser;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\TOTP;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
+use Infocyph\Runwire\RequestContext;
+use Infocyph\Runwire\RuntimeContext;
 use PhpBench\Attributes\BeforeMethods;
 use PhpBench\Attributes\Revs;
 
@@ -67,6 +70,8 @@ final class OtpBench
     private string $recoveryCode;
 
     private RecoveryCodes $recoveryCodes;
+
+    private RunwireExecutionContext $runwire;
 
     private string $secret;
 
@@ -130,6 +135,8 @@ final class OtpBench
             maxAttempts: 1,
         );
         $this->recoveryCodes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
+        $runtime = RuntimeContext::standalone();
+        $this->runwire = new RunwireExecutionContext($runtime, RequestContext::create($runtime));
 
         $this->totpCode = $this->totp->generate(1716532624);
         $this->hotpCode = $this->hotp->generate(5);
@@ -182,6 +189,11 @@ final class OtpBench
     public function benchGenericOtpGenerate(): void
     {
         $this->genericOtpMissing->generate('bench:another@example.com');
+    }
+
+    public function benchGenericOtpGenerateWithRunwire(): void
+    {
+        $this->genericOtpMissing->generate('bench:runwire@example.com', $this->runwire);
     }
 
     #[Revs(1)]
