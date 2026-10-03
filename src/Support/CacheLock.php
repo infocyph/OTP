@@ -576,5 +576,4 @@ final class CacheLock
 
         throw new RuntimeException('Unable to transition ' . $stateName . ' state after atomic contention.');
     }
-
 }
