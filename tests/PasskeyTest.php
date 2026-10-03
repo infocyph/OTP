@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
+use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Passkey;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\ValueObjects\PasskeyCeremony;
@@ -12,6 +15,20 @@ use Webauthn\CredentialRecord;
 use Webauthn\Denormalizer\WebauthnSerializerFactory;
 use Webauthn\PublicKeyCredentialDescriptor;
 use Webauthn\TrustPath\EmptyTrustPath;
+
+$registrationResponse = static function (): string {
+    $response = '{"id":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY","type":"public-key","rawId":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY=","response":{"clientDataJSON":"ew0KCSJ0eXBlIiA6ICJ3ZWJhdXRobi5jcmVhdGUiLA0KCSJjaGFsbGVuZ2UiIDogIlhLQURrWlNXOUI0aDBGZWs4S2JoUXVuM200ZGZKWU4zY2k5d2RYRE5KdlUiLA0KCSJvcmlnaW4iIDogImh0dHBzOi8vd2ViYXV0aG4uc3BvbWt5LWxhYnMuY29tIiwNCgkidG9rZW5CaW5kaW5nIiA6IA0KCXsNCgkJInN0YXR1cyIgOiAic3VwcG9ydGVkIg0KCX0NCn0","attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVkBZ5YE6oKCTpikraFLRGLQ1zqOxGkTDakbGTB0WSKfdKNZRQAAAABgKLAXsdRMArSzr82vyWuyACBaxUSBWmUWEuRF3rzJbcoAjJUn3RmxA4cWOcvvViKtJqQBAwM5AQAgWQEAv5VUWjpRGBvp2zawiX2JKC9WSDvVxlLfqNqU1EYsdN6iNg16FFF/0EHkt7tJz9wkwC3Cx5vYFyblUw7UF5m8qS579OcGRjvb6MHj+MQFuOKCoowBMY/VjuF+TT14deKMuWtShT2MCab1gtfnkuGAlEcu2CASvAwtbEPKZ2JkaouWWaJ3hDOYTXWYgCgtM5DqqnN9JUZjXrgmAfQC82SYh6ZAV+MQ2s4RG2jP/dvEt235oFSIkr3JEqhStQvJ+CFmjVk67oFtofcISax44CynCd2Lr89inWU1B0JwSB1oyuLPq5HCQuSmFed/piGjVfFgCbN0tCXJkAGufkDXE3J4xSFDAQAB"}}';
+    $responseData = json_decode($response, true, 32, JSON_THROW_ON_ERROR);
+    $clientData = json_encode([
+        'type' => 'webauthn.create',
+        'challenge' => 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU',
+        'origin' => 'https://webauthn.spomky-labs.com',
+        'crossOrigin' => false,
+    ], JSON_THROW_ON_ERROR);
+    $responseData['response']['clientDataJSON'] = rtrim(strtr(base64_encode($clientData), '+/', '-_'), '=');
+    $response = json_encode($responseData, JSON_THROW_ON_ERROR);
+    return $response;
+};
 
 test('passkey dependency is available in the development matrix', function () {
     expect(Passkey::isAvailable())->toBeTrue();
@@ -224,7 +241,7 @@ test('malformed WebAuthn payload corpus remains a non-consuming credential failu
     }
 });
 
-test('valid WebAuthn registration fixture succeeds once and then reports replay', function () {
+test('valid WebAuthn registration fixture succeeds once and then reports replay', function () use ($registrationResponse) {
     $cache = CacheLayerState::memory();
     $service = new Passkey(
         $cache,
@@ -248,16 +265,7 @@ test('valid WebAuthn registration fixture succeeds once and then reports replay'
     $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
     expect($cache->set($stateKey, $state, 60))->toBeTrue();
 
-    $response = '{"id":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY","type":"public-key","rawId":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY=","response":{"clientDataJSON":"ew0KCSJ0eXBlIiA6ICJ3ZWJhdXRobi5jcmVhdGUiLA0KCSJjaGFsbGVuZ2UiIDogIlhLQURrWlNXOUI0aDBGZWs4S2JoUXVuM200ZGZKWU4zY2k5d2RYRE5KdlUiLA0KCSJvcmlnaW4iIDogImh0dHBzOi8vd2ViYXV0aG4uc3BvbWt5LWxhYnMuY29tIiwNCgkidG9rZW5CaW5kaW5nIiA6IA0KCXsNCgkJInN0YXR1cyIgOiAic3VwcG9ydGVkIg0KCX0NCn0","attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVkBZ5YE6oKCTpikraFLRGLQ1zqOxGkTDakbGTB0WSKfdKNZRQAAAABgKLAXsdRMArSzr82vyWuyACBaxUSBWmUWEuRF3rzJbcoAjJUn3RmxA4cWOcvvViKtJqQBAwM5AQAgWQEAv5VUWjpRGBvp2zawiX2JKC9WSDvVxlLfqNqU1EYsdN6iNg16FFF/0EHkt7tJz9wkwC3Cx5vYFyblUw7UF5m8qS579OcGRjvb6MHj+MQFuOKCoowBMY/VjuF+TT14deKMuWtShT2MCab1gtfnkuGAlEcu2CASvAwtbEPKZ2JkaouWWaJ3hDOYTXWYgCgtM5DqqnN9JUZjXrgmAfQC82SYh6ZAV+MQ2s4RG2jP/dvEt235oFSIkr3JEqhStQvJ+CFmjVk67oFtofcISax44CynCd2Lr89inWU1B0JwSB1oyuLPq5HCQuSmFed/piGjVfFgCbN0tCXJkAGufkDXE3J4xSFDAQAB"}}';
-    $responseData = json_decode($response, true, 32, JSON_THROW_ON_ERROR);
-    $clientData = json_encode([
-        'type' => 'webauthn.create',
-        'challenge' => 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU',
-        'origin' => 'https://webauthn.spomky-labs.com',
-        'crossOrigin' => false,
-    ], JSON_THROW_ON_ERROR);
-    $responseData['response']['clientDataJSON'] = rtrim(strtr(base64_encode($clientData), '+/', '-_'), '=');
-    $response = json_encode($responseData, JSON_THROW_ON_ERROR);
+    $response = $registrationResponse();
     $first = $service->finishRegistration($binding, $ceremony->id, $response, 101);
     $second = $service->finishRegistration($binding, $ceremony->id, $response, 102);
 
@@ -266,6 +274,81 @@ test('valid WebAuthn registration fixture succeeds once and then reports replay'
         ->and($first->credentialRecordJson)->not->toBeNull()
         ->and($second->reason)->toBe(VerificationReason::Replay)
         ->and($second->replayDetected)->toBeTrue();
+});
+
+test('expired atomic passkey ceremony remains terminal for a stale valid registration', function () use ($registrationResponse) {
+    $state = null;
+
+    $atomic = $this->createMock(AtomicCacheInterface::class);
+    $cache = $this->createMockForIntersectionOfInterfaces([
+        AuthenticationStateCacheInterface::class,
+        AtomicCacheProviderInterface::class,
+    ]);
+    $cache->method('isFailOpen')->willReturn(false);
+    $cache->method('hasPayloadIntegrity')->willReturn(true);
+    $cache->method('isAuthoritative')->willReturn(true);
+    $cache->method('authenticationStateLock')->willReturn(null);
+    $cache->method('atomic')->willReturn($atomic);
+    $cache->method('get')->willReturnCallback(function (string $key) use (&$state): mixed {
+        unset($key);
+
+        return $state;
+    });
+
+    $atomic->method('setIfAbsent')->willReturnCallback(
+        function (string $key, mixed $value, mixed $ttl) use (&$state): bool {
+            unset($key, $ttl);
+            if ($state !== null) {
+                return false;
+            }
+
+            $state = $value;
+
+            return true;
+        },
+    );
+    $atomic->method('compareAndSet')->willReturnCallback(
+        function (string $key, mixed $expected, mixed $replacement, mixed $ttl) use (&$state): bool {
+            unset($key, $ttl);
+            if ($state !== $expected) {
+                return false;
+            }
+
+            $state = $replacement;
+
+            return true;
+        },
+    );
+
+    $service = new Passkey(
+        $cache,
+        'webauthn.spomky-labs.com',
+        ['https://webauthn.spomky-labs.com'],
+        ttlSeconds: 10,
+    );
+    $binding = 'atomic-expiry-registration';
+    $ceremony = $service->beginRegistration(
+        $binding,
+        'f6eabc4b-b92b-4c24-867c-efcba88cc94f',
+        'test@example.com',
+        'Test User',
+        now: 100,
+    );
+
+    expect($state)->toBeArray();
+    $options = json_decode($state['optionsJson'], true, 32, JSON_THROW_ON_ERROR);
+    $options['challenge'] = 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU';
+    $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
+
+    $expired = $service->finishRegistration($binding, $ceremony->id, '{}', 111);
+    $stale = $service->finishRegistration($binding, $ceremony->id, $registrationResponse(), 101);
+
+    expect($expired->reason)->toBe(VerificationReason::Mismatch)
+        ->and($state)->toBeArray()
+        ->and($state['consumed'] ?? null)->toBeTrue()
+        ->and($stale->matched)->toBeFalse()
+        ->and($stale->reason)->toBe(VerificationReason::Replay)
+        ->and($stale->replayDetected)->toBeTrue();
 });
 
 test('valid WebAuthn assertion fixture succeeds once and advances the credential counter', function () {

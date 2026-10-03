@@ -683,6 +683,7 @@ final readonly class Passkey
         }
         $state = $this->requireState($stored);
         if ($state['expiresAt'] <= $now) {
+            $state['consumed'] = true;
             $state['expiresAt'] = $now;
 
             return [
