@@ -441,7 +441,7 @@ final readonly class Passkey
 
         try {
             $credential = $this->deserializeMixed($json, PublicKeyCredential::class);
-        } catch (InvalidDataException|RangeException|SerializerException|TypeError) {
+        } catch (InvalidArgumentException|InvalidDataException|JsonException|RangeException|SerializerException|TypeError) {
             return null;
         }
 
