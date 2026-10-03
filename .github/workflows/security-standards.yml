@@ -21,4 +21,87 @@ jobs:
       fail_on_skipped_tests: true
       integration_services: '["sqlite","redis"]'
       service_topologies: '{}'
-      benchmark_composer_script: 'benchmark'
+      benchmark_composer_script: 'benchmark:ci'
+      benchmark_result_file: 'build/benchmark-result.json'
+      benchmark_max_regression_percent: 2
+
+
+  sustained-performance:
+    if: github.event_name == 'pull_request'
+    name: Sustained performance gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      OTP_PERF_BASELINE_SHA: df54c49b823c6beaad65cc2f829fb8b9c6502236
+      OTP_BENCHMARK_RUNNER: github-actions-paired
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v7
+        with:
+          path: candidate
+
+      - name: Checkout pre-Runwire baseline
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.OTP_PERF_BASELINE_SHA }}
+          path: baseline
+
+      - name: Setup PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies
+        shell: bash
+        run: |
+          composer update --working-dir=baseline --no-dev --no-interaction --prefer-dist --no-progress --prefer-stable
+          composer update --working-dir=candidate --no-dev --no-interaction --prefer-dist --no-progress --prefer-stable
+
+      - name: Run paired sustained benchmark
+        shell: bash
+        run: |
+          mkdir -p perf
+          php candidate/benchmarks/release-gate.php \
+            --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+            --output="$GITHUB_WORKSPACE/perf/baseline.json" \
+            --release="$OTP_PERF_BASELINE_SHA" \
+            --duration=8 \
+            --repetitions=3 \
+            --stable
+          php candidate/benchmarks/release-gate.php \
+            --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
+            --output="$GITHUB_WORKSPACE/perf/candidate.json" \
+            --release="$GITHUB_SHA" \
+            --duration=8 \
+            --repetitions=3 \
+            --stable
+
+      - name: Install PHPForge validation tooling
+        run: composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
+
+      - name: Validate representative benchmark results
+        shell: bash
+        run: |
+          composer --working-dir=candidate ic:benchmark:validate "$GITHUB_WORKSPACE/perf/baseline.json"
+          composer --working-dir=candidate ic:benchmark:validate "$GITHUB_WORKSPACE/perf/candidate.json"
+
+      - name: Enforce 2 percent successful-RPM budget
+        shell: bash
+        run: |
+          composer --working-dir=candidate ic:benchmark:compare \
+            "$GITHUB_WORKSPACE/perf/baseline.json" \
+            "$GITHUB_WORKSPACE/perf/candidate.json" \
+            --max-regression=2 \
+            --stable-environment
+
+      - name: Upload sustained benchmark results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sustained-performance-results
+          path: perf/*.json
+          retention-days: 61
+          if-no-files-found: error

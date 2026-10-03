@@ -68,6 +68,11 @@
         "sort-packages": true
     },
     "scripts": {
-        "benchmark": "@php vendor/bin/phpbench run benchmarks --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none"
+        "benchmark": "@php vendor/bin/phpbench run benchmarks --config=vendor/infocyph/phpforge/resources/phpbench.json --bootstrap=vendor/autoload.php --report=aggregate --output=json --progress=none",
+        "benchmark:ci": [
+            "@benchmark",
+            "@benchmark:release"
+        ],
+        "benchmark:release": "@php benchmarks/release-gate.php --autoload=vendor/autoload.php --output=build/benchmark-result.json --release=working-tree"
     }
 }
