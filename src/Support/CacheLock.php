@@ -141,7 +141,7 @@ final class CacheLock
         return $locks === null || self::lockRequiresAtomic($locks) ? $atomic : null;
     }
 
-        /**
+    /**
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
@@ -286,8 +286,6 @@ final class CacheLock
         return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
     }
 
-
-
     private static function consumeOnceAtomically(
         AuthenticationStateCacheInterface $cache,
         AtomicCacheInterface $atomic,
@@ -389,8 +387,6 @@ final class CacheLock
             },
         );
     }
-
-    
 
     private static function lockRequiresAtomic(LockProviderInterface $locks): bool
     {
