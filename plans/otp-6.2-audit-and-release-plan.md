@@ -229,13 +229,15 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Complete | Complete (Pest/Pint/analyzers; full gate retains Batch 6 F5 skip findings) | Complete |
 | 4 | F4 GridOTP entropy policy and migration | Complete | Complete (GridOTP regressions green; full gate retains Batch 6 F5 skip findings) | Complete |
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Complete | Complete (fenced CAS regressions, v1 state keys, Pest/Pint green; Redis acceptance continues in Batch 6) | Complete |
-| 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | In progress | Pending | In progress |
-| 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | Pending | Pending | Pending |
+| 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Complete | Complete (4 QA lanes, live Redis/SQLite, zero skips, analyzers/clean install/benchmarks green) | Complete |
+| 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | In progress | Pending | In progress |
 | 8 | Performance baseline and minimal optional Runwire integration | Pending | Pending | Pending |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
 | 10 | Documentation, migration/rollback, full release acceptance | Pending | Pending | Pending |
 
 Tracker rule: update this table in the same branch as implementation. A batch is complete only after its scoped implementation and focused QA are both complete; final release gates remain separate.
+
+Known upstream release blocker: current stable `phpbench/phpbench` 1.7.0 still requires abandoned `doctrine/annotations:^2.0`. Composer audit reports no security advisory and exits successfully, but the dependency-hygiene warning cannot be removed from OTP without forcing a development PHPBench line or changing PHPForge. Keep this visible through final release acceptance rather than suppressing it.
 
 ### Workstream A — hardening and state safety
 
