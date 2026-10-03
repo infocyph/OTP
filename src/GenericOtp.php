@@ -44,6 +44,18 @@ final readonly class GenericOtp
         CacheLock::assertLockSafe($cache);
     }
 
+    /** @return array{cache:string,key:string,digits:int,ttlSeconds:int,maxAttempts:int} */
+    public function __debugInfo(): array
+    {
+        return [
+            'cache' => get_debug_type($this->cache),
+            'key' => '[redacted]',
+            'digits' => $this->digits,
+            'ttlSeconds' => $this->ttlSeconds,
+            'maxAttempts' => $this->maxAttempts,
+        ];
+    }
+
     public function delete(string $binding): bool
     {
         self::assertBinding($binding);

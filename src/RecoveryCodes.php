@@ -33,6 +33,15 @@ final readonly class RecoveryCodes
         }
     }
 
+    /** @return array{store:string,key:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'store' => get_debug_type($this->store),
+            'key' => '[redacted]',
+        ];
+    }
+
     public function consume(string $binding, #[\SensitiveParameter] string $code): RecoveryCodeConsumptionResult
     {
         self::assertBinding($binding);

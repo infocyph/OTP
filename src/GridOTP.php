@@ -45,6 +45,18 @@ final readonly class GridOTP
         CacheLock::assertLockSafe($cache);
     }
 
+    /** @return array{cache:string,secret:string,challengeSize:int,ttlSeconds:int,maxAttempts:int} */
+    public function __debugInfo(): array
+    {
+        return [
+            'cache' => get_debug_type($this->cache),
+            'secret' => '[redacted]',
+            'challengeSize' => $this->challengeSize,
+            'ttlSeconds' => $this->ttlSeconds,
+            'maxAttempts' => $this->maxAttempts,
+        ];
+    }
+
     public static function generateSecret(int $length = 12): string
     {
         if ($length < 8 || $length > 32) {

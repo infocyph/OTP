@@ -38,6 +38,15 @@ final readonly class MobileOTP
         $this->secret = $secret;
     }
 
+    /** @return array{secret:string,pin:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'secret' => '[redacted]',
+            'pin' => '[redacted]',
+        ];
+    }
+
     public static function generateSecret(): string
     {
         return bin2hex(random_bytes(8));

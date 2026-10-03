@@ -74,6 +74,19 @@ final readonly class Passkey
         $this->serializer = new WebauthnSerializerFactory(AttestationStatementSupportManager::create())->create();
     }
 
+    /** @return array{cache:string,rpId:string,ttlSeconds:int,assertionValidator:string,attestationValidator:string,serializer:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'cache' => get_debug_type($this->cache),
+            'rpId' => $this->rpId,
+            'ttlSeconds' => $this->ttlSeconds,
+            'assertionValidator' => get_debug_type($this->assertionValidator),
+            'attestationValidator' => get_debug_type($this->attestationValidator),
+            'serializer' => get_debug_type($this->serializer),
+        ];
+    }
+
     public static function isAvailable(): bool
     {
         return class_exists(CeremonyStepManagerFactory::class)

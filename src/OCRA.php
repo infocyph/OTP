@@ -38,6 +38,16 @@ final readonly class OCRA
         $this->base32Secret = rtrim(Base32::encodeUpper($sharedKey), '=');
     }
 
+    /** @return array{suite:string,base32Secret:string,sharedKey:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'suite' => $this->suite->suite,
+            'base32Secret' => '[redacted]',
+            'sharedKey' => '[redacted]',
+        ];
+    }
+
     public static function fromBase32(string $suite, #[\SensitiveParameter] string $secret): self
     {
         return new self($suite, SecretUtility::requireStrongBase32($secret));

@@ -2,9 +2,16 @@
 
 declare(strict_types=1);
 
+use Infocyph\OTP\GenericOtp;
+use Infocyph\OTP\GridOTP;
+use Infocyph\OTP\HOTP;
+use Infocyph\OTP\MobileOTP;
+use Infocyph\OTP\OCRA;
+use Infocyph\OTP\Passkey;
 use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 use Infocyph\OTP\Support\ProvisioningUriParser;
+use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\TOTP;
 
 
@@ -49,5 +56,50 @@ test('recovery-code generation debug output redacts every plaintext code', funct
     expect($debug['plainCodes'])->toBe('[redacted]');
     foreach ($result->plainCodes as $plainCode) {
         expect(serialize($debug))->not->toContain($plainCode);
+    }
+});
+
+
+test('service diagnostic output redacts credentials and collaborator object graphs', function () {
+    $cache = CacheLayerState::memory();
+    $base32Secret = TOTP::generateSecret();
+    $ocraKey = 'ocra-key-sentinel-1234567890';
+    $genericKey = 'generic-key-sentinel-1234567890';
+    $gridSecret = 'ABCDEFGH';
+    $mobileSecret = '0123456789abcdef';
+    $mobilePin = '9876';
+    $recoveryKey = 'recovery-key-sentinel-1234567890';
+
+    $services = [
+        [new HOTP($base32Secret), [$base32Secret]],
+        [new TOTP($base32Secret), [$base32Secret]],
+        [new OCRA('OCRA-1:HOTP-SHA1-6:QN08', $ocraKey), [$ocraKey]],
+        [new GenericOtp($cache, $genericKey), [$genericKey]],
+        [new GridOTP($cache, $gridSecret), [$gridSecret]],
+        [new MobileOTP($mobileSecret, $mobilePin), [$mobileSecret, $mobilePin]],
+        [new RecoveryCodes(new InMemoryRecoveryCodeStore(), $recoveryKey), [$recoveryKey]],
+    ];
+
+    foreach ($services as [$service, $sentinels]) {
+        ob_start();
+        var_dump($service);
+        $dump = (string) ob_get_clean();
+        $printed = print_r($service, true);
+
+        foreach ($sentinels as $sentinel) {
+            expect($dump)->not->toContain($sentinel)
+                ->and($printed)->not->toContain($sentinel);
+        }
+    }
+
+    if (Passkey::isAvailable()) {
+        $passkey = new Passkey($cache, 'example.com', ['https://example.com']);
+        ob_start();
+        var_dump($passkey);
+        $dump = (string) ob_get_clean();
+        $printed = print_r($passkey, true);
+
+        expect($dump)->not->toContain('authenticationStateLock')
+            ->and($printed)->not->toContain('authenticationStateLock');
     }
 });

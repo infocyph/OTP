@@ -50,6 +50,18 @@ final readonly class TOTP
         $this->algorithm = AlgorithmValidator::normalize($algorithm);
     }
 
+    /** @return array{secret:string,binarySecret:string,digits:int,period:int,algorithm:string} */
+    public function __debugInfo(): array
+    {
+        return [
+            'secret' => '[redacted]',
+            'binarySecret' => '[redacted]',
+            'digits' => $this->digits,
+            'period' => $this->period,
+            'algorithm' => $this->algorithm,
+        ];
+    }
+
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);

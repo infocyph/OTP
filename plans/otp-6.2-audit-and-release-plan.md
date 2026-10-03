@@ -218,6 +218,23 @@ Acceptance must exercise framework → OTP and framework → another library →
 
 ## Implementation sequence and release gates
 
+### Implementation tracker
+
+| Batch | Scope | Implementation | Focused QA | Status |
+| --- | --- | --- | --- | --- |
+| 1 | F1 diagnostic redaction | In progress | Pending | In progress |
+| 2 | F3 strict protocol validation | Pending | Pending | Pending |
+| 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Pending | Pending | Pending |
+| 4 | F4 GridOTP entropy policy and migration | Pending | Pending | Pending |
+| 5 | F6 stale-owner/fencing review and state compatibility coverage | Pending | Pending | Pending |
+| 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Pending | Pending | Pending |
+| 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | Pending | Pending | Pending |
+| 8 | Performance baseline and minimal optional Runwire integration | Pending | Pending | Pending |
+| 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
+| 10 | Documentation, migration/rollback, full release acceptance | Pending | Pending | Pending |
+
+Tracker rule: update this table in the same branch as implementation. A batch is complete only after its scoped implementation and focused QA are both complete; final release gates remain separate.
+
 ### Workstream A — hardening and state safety
 
 1. Add failing regressions for F1–F3 and realistic WebAuthn fixtures; fix within existing owners.
