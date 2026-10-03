@@ -602,6 +602,7 @@ function runConcurrentVerificationWorker(
 
         $binding = 'worker-' . $worker . '-' . ($sequence % 128);
         $sequence++;
+
         try {
             $code = $otp->generate($binding);
             if (!$otp->verify($binding, $code)) {
