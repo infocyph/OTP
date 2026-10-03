@@ -181,6 +181,69 @@ function percentile(array $values, float $percentile): ?float
 }
 
 /**
+ * @param array<string, mixed> $metadata
+ * @param list<float> $rpms
+ * @param list<float> $latencies
+ * @param array{average_percent:?float,peak_percent:?float} $cpu
+ * @param array{average_mb:?float,peak_mb:?float,growth_mb:?float} $memory
+ * @return array<string, mixed>
+ */
+function buildWorkloadResult(
+    string $name,
+    string $type,
+    array $metadata,
+    int $repetitions,
+    int $warmupOperations,
+    float $durationSeconds,
+    int $attempted,
+    int $successful,
+    int $failed,
+    array $rpms,
+    array $latencies,
+    array $cpu,
+    array $memory,
+    float $stabilityLimit,
+    string $unstableStatus,
+): array {
+    $rpmMedian = median($rpms);
+    $spread = $rpmMedian > 0.0
+        ? ((max($rpms) - min($rpms)) / $rpmMedian) * 100
+        : 100.0;
+
+    return [
+        'name' => $name,
+        'type' => $type,
+        'metadata' => $metadata,
+        'repetitions' => $repetitions,
+        'warmup_operations' => $warmupOperations,
+        'duration_seconds' => $durationSeconds,
+        'concurrency' => 1,
+        'result' => [
+            'attempted_operations' => $attempted,
+            'successful_operations' => $successful,
+            'failed_operations' => $failed,
+            'timeouts' => 0,
+            'successful_rpm' => round($rpmMedian, 5),
+            'error_rate' => $attempted === 0 ? 0.0 : $failed / $attempted,
+            'latency_ms' => [
+                'minimum' => $latencies === [] ? null : min($latencies),
+                'average' => $latencies === [] ? null : array_sum($latencies) / count($latencies),
+                'p50' => percentile($latencies, 50),
+                'p95' => percentile($latencies, 95),
+                'p99' => percentile($latencies, 99),
+                'maximum' => $latencies === [] ? null : max($latencies),
+            ],
+            'cpu' => $cpu,
+            'memory' => $memory,
+            'stability' => [
+                'status' => $spread <= $stabilityLimit ? 'stable' : $unstableStatus,
+                'spread_percent' => round($spread, 5),
+            ],
+        ],
+    ];
+}
+
+/**
  * @return array<string, mixed>
  */
 function runSustainedWorkload(float $duration, int $repetitions): array
@@ -190,7 +253,6 @@ function runSustainedWorkload(float $duration, int $repetitions): array
     $attempted = 0;
     $successful = 0;
     $failed = 0;
-    $timeouts = 0;
     $cpuSeconds = 0.0;
     $wallSeconds = 0.0;
     $memoryStarts = [];
@@ -262,17 +324,12 @@ function runSustainedWorkload(float $duration, int $repetitions): array
         throw new RuntimeException('Representative benchmark recorded failed operations.');
     }
 
-    $rpmMedian = median($rpms);
-    $spread = $rpmMedian > 0.0
-        ? ((max($rpms) - min($rpms)) / $rpmMedian) * 100
-        : 100.0;
-    $latencyAverage = $latencies === [] ? null : array_sum($latencies) / count($latencies);
-    $p99 = percentile($latencies, 99);
     $memoryGrowth = 0.0;
     foreach ($memoryStarts as $index => $startMemory) {
         $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
     }
     $peakMemory = $memoryPeaks === [] ? null : max($memoryPeaks);
+    $p99 = percentile($latencies, 99);
 
     if ($p99 !== null && $p99 > MAX_P99_LATENCY_MS) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute p99 latency budget.');
@@ -284,10 +341,10 @@ function runSustainedWorkload(float $duration, int $repetitions): array
         throw new RuntimeException('Sustained benchmark exceeded the absolute memory-growth budget.');
     }
 
-    return [
-        'name' => 'generic-otp-generate-no-context',
-        'type' => 'persistent-worker',
-        'metadata' => [
+    return buildWorkloadResult(
+        name: 'generic-otp-generate-no-context',
+        type: 'persistent-worker',
+        metadata: [
             'operation' => 'GenericOtp::generate on one reused service instance',
             'backend' => 'CacheLayer memory authoritative state',
             'runwire_context' => 'absent',
@@ -300,44 +357,29 @@ function runSustainedWorkload(float $duration, int $repetitions): array
             'peak_memory_budget_mb' => MAX_PEAK_MEMORY_MB,
             'memory_growth_budget_mb' => MAX_MEMORY_GROWTH_MB,
         ],
-        'repetitions' => $repetitions,
-        'warmup_operations' => WARMUP_OPERATIONS,
-        'duration_seconds' => $duration * $repetitions,
-        'concurrency' => 1,
-        'result' => [
-            'attempted_operations' => $attempted,
-            'successful_operations' => $successful,
-            'failed_operations' => $failed,
-            'timeouts' => $timeouts,
-            'successful_rpm' => round($rpmMedian, 5),
-            'error_rate' => $attempted === 0 ? 0.0 : $failed / $attempted,
-            'latency_ms' => [
-                'minimum' => $latencies === [] ? null : min($latencies),
-                'average' => $latencyAverage,
-                'p50' => percentile($latencies, 50),
-                'p95' => percentile($latencies, 95),
-                'p99' => $p99,
-                'maximum' => $latencies === [] ? null : max($latencies),
-            ],
-            'cpu' => [
-                'average_percent' => $wallSeconds > 0.0 ? ($cpuSeconds / $wallSeconds) * 100 : null,
-                'peak_percent' => null,
-            ],
-            'memory' => [
-                'average_mb' => ($memoryStarts === [] || $memoryEnds === [])
-                    ? null
-                    : (array_sum($memoryStarts) + array_sum($memoryEnds)) / (count($memoryStarts) * 2),
-                'peak_mb' => $peakMemory,
-                'growth_mb' => $memoryGrowth,
-            ],
-            'stability' => [
-                'status' => $spread <= STABILITY_SPREAD_PERCENT ? 'stable' : 'unstable',
-                'spread_percent' => round($spread, 5),
-            ],
+        repetitions: $repetitions,
+        warmupOperations: WARMUP_OPERATIONS,
+        durationSeconds: $duration * $repetitions,
+        attempted: $attempted,
+        successful: $successful,
+        failed: $failed,
+        rpms: $rpms,
+        latencies: $latencies,
+        cpu: [
+            'average_percent' => $wallSeconds > 0.0 ? ($cpuSeconds / $wallSeconds) * 100 : null,
+            'peak_percent' => null,
         ],
-    ];
+        memory: [
+            'average_mb' => ($memoryStarts === [] || $memoryEnds === [])
+                ? null
+                : (array_sum($memoryStarts) + array_sum($memoryEnds)) / (count($memoryStarts) * 2),
+            'peak_mb' => $peakMemory,
+            'growth_mb' => $memoryGrowth,
+        ],
+        stabilityLimit: STABILITY_SPREAD_PERCENT,
+        unstableStatus: 'unstable',
+    );
 }
-
 
 /**
  * @return array<string, mixed>
@@ -379,55 +421,36 @@ function runColdStartWorkload(string $autoload, int $repetitions): array
         throw new RuntimeException('Cold-start benchmark recorded failed operations.');
     }
 
-    $rpmMedian = median($rpms);
-    $spread = $rpmMedian > 0.0
-        ? ((max($rpms) - min($rpms)) / $rpmMedian) * 100
-        : 100.0;
-
-    return [
-        'name' => 'generic-otp-php-process-cold-start',
-        'type' => 'custom',
-        'metadata' => [
+    return buildWorkloadResult(
+        name: 'generic-otp-php-process-cold-start',
+        type: 'custom',
+        metadata: [
             'operation' => 'fresh PHP process + Composer autoload + CacheLayer + GenericOtp::generate',
             'backend' => 'CacheLayer memory authoritative state',
             'runwire_context' => 'absent',
             'operations_per_repetition' => COLD_START_OPERATIONS,
             'stability_spread_limit_percent' => COLD_START_STABILITY_SPREAD_PERCENT,
         ],
-        'repetitions' => $repetitions,
-        'warmup_operations' => $warmupOperations,
-        'duration_seconds' => $wallSeconds,
-        'concurrency' => 1,
-        'result' => [
-            'attempted_operations' => $attempted,
-            'successful_operations' => $successful,
-            'failed_operations' => $failed,
-            'timeouts' => 0,
-            'successful_rpm' => round($rpmMedian, 5),
-            'error_rate' => 0.0,
-            'latency_ms' => [
-                'minimum' => min($latencies),
-                'average' => array_sum($latencies) / count($latencies),
-                'p50' => percentile($latencies, 50),
-                'p95' => percentile($latencies, 95),
-                'p99' => percentile($latencies, 99),
-                'maximum' => max($latencies),
-            ],
-            'cpu' => [
-                'average_percent' => null,
-                'peak_percent' => null,
-            ],
-            'memory' => [
-                'average_mb' => null,
-                'peak_mb' => null,
-                'growth_mb' => null,
-            ],
-            'stability' => [
-                'status' => $spread <= COLD_START_STABILITY_SPREAD_PERCENT ? 'stable' : 'unverified',
-                'spread_percent' => round($spread, 5),
-            ],
+        repetitions: $repetitions,
+        warmupOperations: $warmupOperations,
+        durationSeconds: $wallSeconds,
+        attempted: $attempted,
+        successful: $successful,
+        failed: $failed,
+        rpms: $rpms,
+        latencies: $latencies,
+        cpu: [
+            'average_percent' => null,
+            'peak_percent' => null,
         ],
-    ];
+        memory: [
+            'average_mb' => null,
+            'peak_mb' => null,
+            'growth_mb' => null,
+        ],
+        stabilityLimit: COLD_START_STABILITY_SPREAD_PERCENT,
+        unstableStatus: 'unverified',
+    );
 }
 
 function runColdStartOperation(string $autoload): bool
