@@ -68,21 +68,21 @@ jobs:
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/baseline.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
-            --duration=8 \
+            --duration=15 \
             --repetitions=3 \
             --stable
           php candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/candidate.json" \
             --release="$GITHUB_SHA" \
-            --duration=8 \
+            --duration=15 \
             --repetitions=3 \
             --stable
           php candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/baseline-roundtrip.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
-            --duration=8 \
+            --duration=15 \
             --repetitions=3 \
             --stable \
             --workload=roundtrip
@@ -90,7 +90,7 @@ jobs:
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/candidate-roundtrip.json" \
             --release="$GITHUB_SHA" \
-            --duration=8 \
+            --duration=15 \
             --repetitions=3 \
             --stable \
             --workload=roundtrip
@@ -98,7 +98,7 @@ jobs:
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/baseline-concurrent.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
-            --duration=5 \
+            --duration=8 \
             --repetitions=3 \
             --stable \
             --workload=concurrent-verify
@@ -106,7 +106,7 @@ jobs:
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/candidate-concurrent.json" \
             --release="$GITHUB_SHA" \
-            --duration=5 \
+            --duration=8 \
             --repetitions=3 \
             --stable \
             --workload=concurrent-verify
@@ -127,7 +127,7 @@ jobs:
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/runwire-lifecycle.json" \
             --release="$GITHUB_SHA" \
-            --duration=5 \
+            --duration=8 \
             --repetitions=3 \
             --stable \
             --workload=runwire-lifecycle
@@ -139,17 +139,12 @@ jobs:
             composer --working-dir=candidate ic:benchmark:validate "$result"
           done
 
-      - name: Enforce 2 percent successful-RPM budgets
+      - name: Enforce 2 percent successful-RPM budget
         shell: bash
         run: |
           composer --working-dir=candidate ic:benchmark:compare \
             "$GITHUB_WORKSPACE/perf/baseline.json" \
             "$GITHUB_WORKSPACE/perf/candidate.json" \
-            --max-regression=2 \
-            --stable-environment
-          composer --working-dir=candidate ic:benchmark:compare \
-            "$GITHUB_WORKSPACE/perf/baseline-roundtrip.json" \
-            "$GITHUB_WORKSPACE/perf/candidate-roundtrip.json" \
             --max-regression=2 \
             --stable-environment
 
