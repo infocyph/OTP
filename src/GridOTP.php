@@ -31,10 +31,14 @@ final readonly class GridOTP
         private int $challengeSize = 6,
         private int $ttlSeconds = 120,
         private int $maxAttempts = 3,
+        private bool $enforceDiversity = false,
     ) {
         self::assertSecret($secret);
-        if ($challengeSize < 6 || $challengeSize > 10 || $challengeSize > strlen($secret)) {
-            throw new InvalidArgumentException('GridOTP challenge size must be between 6 and 10 and not exceed the secret length.');
+        self::assertChallengeSize($challengeSize, strlen($secret));
+        if ($enforceDiversity && self::uniqueSymbolCount($secret) < $challengeSize) {
+            throw new InvalidArgumentException(
+                'GridOTP diversity enforcement requires at least one distinct secret symbol per challenge position.',
+            );
         }
         if ($ttlSeconds < 1 || $ttlSeconds > self::MAX_TTL_SECONDS) {
             throw new InvalidArgumentException('GridOTP challenge TTL must be between 1 and 900 seconds.');
@@ -45,7 +49,7 @@ final readonly class GridOTP
         CacheLock::assertLockSafe($cache);
     }
 
-    /** @return array{cache:string,secret:string,challengeSize:int,ttlSeconds:int,maxAttempts:int} */
+    /** @return array{cache:string,secret:string,challengeSize:int,ttlSeconds:int,maxAttempts:int,enforceDiversity:bool} */
     public function __debugInfo(): array
     {
         return [
@@ -54,6 +58,7 @@ final readonly class GridOTP
             'challengeSize' => $this->challengeSize,
             'ttlSeconds' => $this->ttlSeconds,
             'maxAttempts' => $this->maxAttempts,
+            'enforceDiversity' => $this->enforceDiversity,
         ];
     }
 
@@ -62,14 +67,22 @@ final readonly class GridOTP
         if ($length < 8 || $length > 32) {
             throw new InvalidArgumentException('GridOTP generated secrets must contain between 8 and 32 symbols.');
         }
-        $alphabet = GridChallenge::SECRET_ALPHABET;
-        $bytes = random_bytes($length);
-        $secret = '';
-        for ($index = 0; $index < $length; $index++) {
-            $secret .= $alphabet[ord($bytes[$index]) & 31];
+        $alphabet = str_split(GridChallenge::SECRET_ALPHABET);
+        $requiredDiversity = min(10, $length);
+        $symbols = array_slice(self::shuffleSecure($alphabet), 0, $requiredDiversity);
+        for ($index = $requiredDiversity; $index < $length; $index++) {
+            $symbols[] = $alphabet[random_int(0, count($alphabet) - 1)];
         }
 
-        return $secret;
+        return implode('', self::shuffleSecure($symbols));
+    }
+
+    public static function hasSufficientDiversity(string $secret, int $challengeSize = 6): bool
+    {
+        self::assertSecret($secret);
+        self::assertChallengeSize($challengeSize, strlen($secret));
+
+        return self::uniqueSymbolCount($secret) >= $challengeSize;
     }
 
     public static function respond(
@@ -111,7 +124,7 @@ final readonly class GridOTP
                     $challenge = new GridChallenge(
                         $id,
                         self::randomGrid(),
-                        self::randomPositions(strlen($this->secret), $this->challengeSize),
+                        self::randomPositions($this->secret, $this->challengeSize),
                         strlen($this->secret),
                         $issuedAt,
                         $issuedAt + $this->ttlSeconds,
@@ -179,6 +192,15 @@ final readonly class GridOTP
         );
     }
 
+    private static function assertChallengeSize(int $challengeSize, int $secretLength): void
+    {
+        if ($challengeSize < 6 || $challengeSize > 10 || $challengeSize > $secretLength) {
+            throw new InvalidArgumentException(
+                'GridOTP challenge size must be between 6 and 10 and not exceed the secret length.',
+            );
+        }
+    }
+
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -226,11 +248,25 @@ final readonly class GridOTP
     }
 
     /** @return list<int> */
-    private static function randomPositions(int $secretLength, int $challengeSize): array
+    private static function randomPositions(string $secret, int $challengeSize): array
     {
-        $positions = self::shuffleSecure(range(1, $secretLength));
+        $positionsBySymbol = [];
+        $secretLength = strlen($secret);
+        for ($index = 0; $index < $secretLength; $index++) {
+            $positionsBySymbol[$secret[$index]][] = $index + 1;
+        }
+        if (count($positionsBySymbol) < $challengeSize) {
+            return array_slice(self::shuffleSecure(range(1, $secretLength)), 0, $challengeSize);
+        }
 
-        return array_slice($positions, 0, $challengeSize);
+        $symbols = array_slice(self::shuffleSecure(array_keys($positionsBySymbol)), 0, $challengeSize);
+        $positions = [];
+        foreach ($symbols as $symbol) {
+            $candidates = $positionsBySymbol[$symbol];
+            $positions[] = $candidates[random_int(0, count($candidates) - 1)];
+        }
+
+        return $positions;
     }
 
     /**
@@ -251,6 +287,11 @@ final readonly class GridOTP
     private static function stateKey(string $factorId, string $challengeId): string
     {
         return hash('sha256', "infocyph:otp:gridotp:state:v1\0" . $factorId . "\0" . $challengeId);
+    }
+
+    private static function uniqueSymbolCount(string $secret): int
+    {
+        return count(array_unique(str_split($secret)));
     }
 
     private function deleteLocked(string $stateKey, LockProviderInterface $locks, LockHandle $handle): void

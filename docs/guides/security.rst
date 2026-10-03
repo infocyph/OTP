@@ -247,16 +247,35 @@ Passkey/WebAuthn. Browsers/authenticators participate in enforcing RP-ID/origin
 relationships that a generic AOTP library cannot reproduce solely from a signed
 challenge.
 
-GridOTP observation model
--------------------------
+GridOTP observation and guessing model
+--------------------------------------
 
 GridOTP changes both requested positions and the balanced symbol-to-digit map on
 every challenge. One captured response cannot authenticate a later challenge and
-does not directly reveal the enrolled secret. However, an observer who repeatedly
-captures full grids, positions, and responses can intersect candidate sets and
-recover secret symbols over time. Treat GridOTP as one knowledge factor. It is
-not shoulder-surfing proof and is not a replacement for standards-based passkeys
-where those are usable.
+does not directly reveal the enrolled secret. However, response length does not
+guarantee independent guessing entropy. A repeated-symbol secret can collapse a
+six-position response to one repeated mapped digit; with the balanced grid and a
+uniform unknown-symbol prior, the largest label bucket is 4 of 32 symbols.
+
+Library-generated 6.2 secrets contain enough distinct symbols for every
+supported challenge size. When an enrolled secret has sufficient diversity,
+challenge selection uses distinct secret symbols. Existing weak factors remain
+accepted by default for migration compatibility; applications can inventory them
+with ``GridOTP::hasSufficientDiversity()`` and enable ``enforceDiversity`` after
+re-enrollment. Never silently regenerate an enrolled GridOTP secret during an
+upgrade.
+
+Even with distinct secret symbols, grid-label collisions remain. Under an
+idealized uniformly unknown distinct-symbol model, the maximum exact-response
+probability is about 1 in 503,440 for six positions and 1 in 2.23 billion for ten
+positions. Those model-specific figures are not guarantees for human/imported
+secrets and do not replace strict attempt and endpoint/account/device rate
+limits.
+
+An observer who repeatedly captures full grids, positions, and responses can
+still intersect candidate sets and recover secret symbols over time. Treat
+GridOTP as one knowledge factor. It is not shoulder-surfing proof and is not a
+replacement for standards-based passkeys where those are usable.
 
 Passkeys
 --------

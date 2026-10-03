@@ -120,6 +120,8 @@ Required work:
 
 Acceptance: the release accurately describes the risk, tests it, and provides a concrete migration path; any enforced policy must meet a documented guessing budget. This is a custom-protocol review item, not a claim that GridOTP is equivalent to WebAuthn.
 
+Implementation decision (2026-10-03): keep existing factors compatible in 6.2 while making the secure path explicit. Generated secrets guarantee enough distinct symbols for every supported challenge size; challenge selection uses distinct secret symbols whenever the enrolled secret permits it. ``GridOTP::hasSufficientDiversity()`` supports inventory, and trailing ``enforceDiversity`` provides opt-in enforcement for new/re-enrolled factors. Existing insufficient-diversity factors continue through the legacy position-selection path until re-enrollment; they are not silently regenerated or locked out.
+
 ### F5 — P1 release gate: skipped tests and dependency hygiene
 
 Locations: `tests/AOTPTest.php:231`, `tests/GridOTPTest.php:117`, `tests/RedisConcurrencyTest.php:14`, `.github/workflows/security-standards.yml`, Composer development dependency tree.
@@ -224,8 +226,8 @@ Acceptance must exercise framework → OTP and framework → another library →
 | --- | --- | --- | --- | --- |
 | 1 | F1 diagnostic redaction | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
 | 2 | F3 strict protocol validation | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
-| 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Complete | Running (PR #51) | In progress |
-| 4 | F4 GridOTP entropy policy and migration | Pending | Pending | Pending |
+| 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Complete | Complete (Pest/Pint/analyzers; full gate retains Batch 6 F5 skip findings) | Complete |
+| 4 | F4 GridOTP entropy policy and migration | Complete | Running (PR #51) | In progress |
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Pending | Pending | Pending |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Pending | Pending | Pending |
 | 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | Pending | Pending | Pending |
