@@ -87,6 +87,54 @@ test('malformed passkey responses do not consume a ceremony', function () {
         ->toThrow(InvalidArgumentException::class);
 });
 
+test('embedded malformed WebAuthn JSON and CBOR remain non-consuming malformed results', function () {
+    $cache = CacheLayerState::memory();
+    $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 60);
+    $ceremony = $service->beginRegistration(
+        'embedded-malformed',
+        'user-handle',
+        'alice@example.com',
+        'Alice',
+        now: 100,
+    );
+    $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0embedded-malformed\0" . $ceremony->id);
+    $validAttestationObject = 'o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVkBZ5YE6oKCTpikraFLRGLQ1zqOxGkTDakbGTB0WSKfdKNZRQAAAABgKLAXsdRMArSzr82vyWuyACBaxUSBWmUWEuRF3rzJbcoAjJUn3RmxA4cWOcvvViKtJqQBAwM5AQAgWQEAv5VUWjpRGBvp2zawiX2JKC9WSDvVxlLfqNqU1EYsdN6iNg16FFF/0EHkt7tJz9wkwC3Cx5vYFyblUw7UF5m8qS579OcGRjvb6MHj+MQFuOKCoowBMY/VjuF+TT14deKMuWtShT2MCab1gtfnkuGAlEcu2CASvAwtbEPKZ2JkaouWWaJ3hDOYTXWYgCgtM5DqqnN9JUZjXrgmAfQC82SYh6ZAV+MQ2s4RG2jP/dvEt235oFSIkr3JEqhStQvJ+CFmjVk67oFtofcISax44CynCd2Lr89inWU1B0JwSB1oyuLPq5HCQuSmFed/piGjVfFgCbN0tCXJkAGufkDXE3J4xSFDAQAB';
+    $payloads = [
+        json_encode([
+            'id' => 'YQ',
+            'rawId' => 'YQ',
+            'type' => 'public-key',
+            'response' => [
+                'clientDataJSON' => 'bm90LWpzb24',
+                'attestationObject' => $validAttestationObject,
+            ],
+        ], JSON_THROW_ON_ERROR),
+        json_encode([
+            'id' => 'YQ',
+            'rawId' => 'YQ',
+            'type' => 'public-key',
+            'response' => [
+                'clientDataJSON' => 'eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoieCIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5jb20ifQ',
+                'attestationObject' => 'YQ',
+            ],
+        ], JSON_THROW_ON_ERROR),
+    ];
+
+    foreach ($payloads as $payload) {
+        $result = $service->finishRegistration(
+            'embedded-malformed',
+            $ceremony->id,
+            $payload,
+            101,
+        );
+
+        expect($result->reason)->toBe(VerificationReason::Malformed);
+        $state = $cache->get($stateKey);
+        expect($state)->toBeArray()
+            ->and($state['consumed'] ?? null)->toBeFalse();
+    }
+});
+
 test('consumed passkey ceremony state reports replay before parsing another response', function () {
     $cache = CacheLayerState::memory();
     $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 60);
