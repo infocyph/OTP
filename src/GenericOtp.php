@@ -57,7 +57,8 @@ final readonly class GenericOtp
         ];
     }
 
-    public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool {
+    public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
+    {
         self::assertBinding($binding);
         CacheLock::checkpoint($runwire);
         $stateKey = self::stateKey($binding);
