@@ -8,7 +8,7 @@ use Infocyph\OTP\GenericOtp;
 
 const COLD_START_OPERATIONS = 30;
 const COLD_START_STABILITY_SPREAD_PERCENT = 10.0;
-const CONCURRENT_STABILITY_SPREAD_PERCENT = 15.0;
+const CONCURRENT_STABILITY_SPREAD_PERCENT = 5.0;
 const CONCURRENT_WARMUP_OPERATIONS = 50;
 const CONCURRENT_WORKERS = 4;
 const DEFAULT_DURATION_SECONDS = 8.0;
@@ -16,7 +16,7 @@ const DEFAULT_REPETITIONS = 3;
 const MAX_MEMORY_GROWTH_MB = 8.0;
 const MAX_P99_LATENCY_MS = 1.0;
 const MAX_PEAK_MEMORY_MB = 64.0;
-const RUNWIRE_STABILITY_SPREAD_PERCENT = 10.0;
+const RUNWIRE_STABILITY_SPREAD_PERCENT = 5.0;
 const RUNWIRE_WARMUP_OPERATIONS = 500;
 const STABILITY_SPREAD_PERCENT = 3.0;
 const WARMUP_OPERATIONS = 5_000;
@@ -258,20 +258,32 @@ function buildWorkloadResult(
  */
 function runSustainedWorkload(float $duration, int $repetitions): array
 {
-    return runMemoryTimedWorkload(
+    return runTimedWorkload(
         $duration,
         $repetitions,
         'generic-otp-generate-no-context',
-        'GenericOtp::generate on one reused service instance',
-        static function (GenericOtp $otp): callable {
+        [
+            'operation' => 'GenericOtp::generate on one reused service instance',
+            'backend' => 'CacheLayer memory authoritative state',
+            'runwire_context' => 'absent',
+            'queue' => 'none',
+            'backend_connections' => 0,
+        ],
+        WARMUP_OPERATIONS,
+        STABILITY_SPREAD_PERCENT,
+        100,
+        static function (int $repetition): callable {
+            $cache = Cache::memory('otp-release-generate-' . $repetition, benchmarkCacheOptions());
+            $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
+
             return static function () use ($otp): void {
                 $code = $otp->generate('release-gate');
-
                 if (strlen($code) !== 6 || !ctype_digit($code)) {
                     throw new RuntimeException('Generic OTP benchmark produced an invalid code.');
                 }
             };
         },
+        true,
     );
 }
 
@@ -280,12 +292,24 @@ function runSustainedWorkload(float $duration, int $repetitions): array
  */
 function runRoundTripWorkload(float $duration, int $repetitions): array
 {
-    return runMemoryTimedWorkload(
+    return runTimedWorkload(
         $duration,
         $repetitions,
         'generic-otp-request-roundtrip',
-        'GenericOtp::generate + successful verify on one reused service instance',
-        static function (GenericOtp $otp): callable {
+        [
+            'operation' => 'GenericOtp::generate + successful verify on one reused service instance',
+            'backend' => 'CacheLayer memory authoritative state',
+            'runwire_context' => 'absent',
+            'queue' => 'none',
+            'backend_connections' => 0,
+        ],
+        WARMUP_OPERATIONS,
+        STABILITY_SPREAD_PERCENT,
+        100,
+        static function (int $repetition): callable {
+            $cache = Cache::memory('otp-release-roundtrip-' . $repetition, benchmarkCacheOptions());
+            $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
+
             return static function () use ($otp): void {
                 $code = $otp->generate('release-gate-roundtrip');
                 if (!$otp->verify('release-gate-roundtrip', $code)) {
@@ -297,15 +321,18 @@ function runRoundTripWorkload(float $duration, int $repetitions): array
 }
 
 /**
- * @param callable(GenericOtp): callable(): void $operationFactory
  * @return array<string, mixed>
  */
-function runMemoryTimedWorkload(
+function runTimedWorkload(
     float $duration,
     int $repetitions,
     string $name,
-    string $operationDescription,
+    array $metadata,
+    int $warmupOperations,
+    float $stabilityLimit,
+    int $sampleInterval,
     callable $operationFactory,
+    bool $enforceAbsoluteBudgets = false,
 ): array {
     $rpms = [];
     $latencies = [];
@@ -319,14 +346,8 @@ function runMemoryTimedWorkload(
     $memoryPeaks = [];
 
     for ($repetition = 0; $repetition < $repetitions; $repetition++) {
-        $cache = Cache::memory(
-            'otp-release-gate-' . $name . '-' . $repetition,
-            benchmarkCacheOptions(),
-        );
-        $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
-        $operation = $operationFactory($otp);
-
-        for ($index = 0; $index < WARMUP_OPERATIONS; $index++) {
+        $operation = $operationFactory($repetition);
+        for ($index = 0; $index < $warmupOperations; $index++) {
             $operation();
         }
 
@@ -351,15 +372,13 @@ function runMemoryTimedWorkload(
             }
             $attempted++;
 
-            $after = hrtime(true);
-            if ($attempted % 100 === 0) {
-                $latencies[] = ($after - $before) / 1_000_000;
+            if ($attempted % $sampleInterval === 0) {
+                $latencies[] = (hrtime(true) - $before) / 1_000_000;
             }
         }
 
-        $end = hrtime(true);
+        $elapsed = (hrtime(true) - $start) / 1_000_000_000;
         $usageAfter = getrusage();
-        $elapsed = ($end - $start) / 1_000_000_000;
         $wallSeconds += $elapsed;
         $cpuSeconds += max(0.0, cpuSeconds($usageAfter) - cpuSeconds($usageBefore));
         $memoryStarts[] = $memoryStart / 1_048_576;
@@ -379,35 +398,32 @@ function runMemoryTimedWorkload(
     $peakMemory = $memoryPeaks === [] ? null : max($memoryPeaks);
     $p99 = percentile($latencies, 99);
 
-    if ($p99 !== null && $p99 > MAX_P99_LATENCY_MS) {
+    if ($enforceAbsoluteBudgets && $p99 !== null && $p99 > MAX_P99_LATENCY_MS) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute p99 latency budget.');
     }
-    if ($peakMemory !== null && $peakMemory > MAX_PEAK_MEMORY_MB) {
+    if ($enforceAbsoluteBudgets && $peakMemory !== null && $peakMemory > MAX_PEAK_MEMORY_MB) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute peak-memory budget.');
     }
-    if ($memoryGrowth > MAX_MEMORY_GROWTH_MB) {
+    if ($enforceAbsoluteBudgets && $memoryGrowth > MAX_MEMORY_GROWTH_MB) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute memory-growth budget.');
+    }
+
+    $metadata['duration_per_repetition_seconds'] = $duration;
+    $metadata['soak_duration_seconds'] = $wallSeconds;
+    $metadata['stability_spread_limit_percent'] = $stabilityLimit;
+    if ($enforceAbsoluteBudgets) {
+        $metadata['p99_latency_budget_ms'] = MAX_P99_LATENCY_MS;
+        $metadata['peak_memory_budget_mb'] = MAX_PEAK_MEMORY_MB;
+        $metadata['memory_growth_budget_mb'] = MAX_MEMORY_GROWTH_MB;
     }
 
     return buildWorkloadResult(
         name: $name,
         type: 'persistent-worker',
-        metadata: [
-            'operation' => $operationDescription,
-            'backend' => 'CacheLayer memory authoritative state',
-            'runwire_context' => 'absent',
-            'queue' => 'none',
-            'backend_connections' => 0,
-            'duration_per_repetition_seconds' => $duration,
-            'soak_duration_seconds' => $duration * $repetitions,
-            'stability_spread_limit_percent' => STABILITY_SPREAD_PERCENT,
-            'p99_latency_budget_ms' => MAX_P99_LATENCY_MS,
-            'peak_memory_budget_mb' => MAX_PEAK_MEMORY_MB,
-            'memory_growth_budget_mb' => MAX_MEMORY_GROWTH_MB,
-        ],
+        metadata: $metadata,
         repetitions: $repetitions,
-        warmupOperations: WARMUP_OPERATIONS,
-        durationSeconds: $duration * $repetitions,
+        warmupOperations: $warmupOperations,
+        durationSeconds: $wallSeconds,
         attempted: $attempted,
         successful: $successful,
         failed: $failed,
@@ -424,7 +440,7 @@ function runMemoryTimedWorkload(
             'peak_mb' => $peakMemory,
             'growth_mb' => $memoryGrowth,
         ],
-        stabilityLimit: STABILITY_SPREAD_PERCENT,
+        stabilityLimit: $stabilityLimit,
         unstableStatus: 'unstable',
     );
 }
@@ -613,14 +629,17 @@ function runConcurrentVerificationWorker(
 
 function cleanupConcurrentBenchmark(string $database, string $barrier): void
 {
-    @unlink($barrier . '.go');
+    $paths = [$barrier . '.go', $database, $database . '-shm', $database . '-wal'];
     for ($worker = 0; $worker < CONCURRENT_WORKERS; $worker++) {
-        @unlink($barrier . '.ready.' . $worker);
-        @unlink($barrier . '.result.' . $worker);
+        $paths[] = $barrier . '.ready.' . $worker;
+        $paths[] = $barrier . '.result.' . $worker;
     }
-    @unlink($database);
-    @unlink($database . '-shm');
-    @unlink($database . '-wal');
+
+    foreach ($paths as $path) {
+        if (is_file($path) && !unlink($path)) {
+            throw new RuntimeException('Unable to remove concurrent benchmark temporary state.');
+        }
+    }
 }
 
 /**
@@ -641,162 +660,86 @@ function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
         }
     }
 
-    $rpms = [];
-    $latencies = [];
-    $attempted = 0;
-    $successful = 0;
-    $failed = 0;
-    $wallSeconds = 0.0;
-    $memoryStarts = [];
-    $memoryEnds = [];
-    $memoryPeaks = [];
-
-    for ($repetition = 0; $repetition < $repetitions; $repetition++) {
-        $capabilities = new \Infocyph\Runwire\RuntimeCapabilities(
-            driver: \Infocyph\Runwire\Runtime\Enum\RuntimeDriver::NATIVE,
-            persistentProcess: true,
-            persistentApplication: true,
-            hostOwnsEventLoop: true,
-            runwireLoopAvailable: true,
-            supportsRunwireCoroutines: true,
-            supportsHttp1: true,
-        );
-        $runtime = \Infocyph\Runwire\RuntimeContext::fromCapabilities(
-            $capabilities,
-            'otp-release',
-            generation: $repetition + 1,
-            concurrent: true,
-        );
-        $coroutines = new \Infocyph\Runwire\Coroutine\CoroutineRuntime();
-        $cache = Cache::memory('otp-release-runwire-' . $repetition, benchmarkCacheOptions());
-        $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
-        $sequence = 0;
-
-        $operation = static function () use ($runtime, $coroutines, $otp, &$sequence): void {
-            $request = \Infocyph\Runwire\RequestContext::create(
-                $runtime,
-                requestId: 'otp-release-' . $sequence,
-            );
-            $binding = 'runwire-lifecycle-' . ($sequence % 64);
-            $sequence++;
-
-            try {
-                $accepted = $coroutines->runRequest(
-                    $request,
-                    static function (\Infocyph\Runwire\Coroutine\CoroutineScope $scope) use (
-                        $runtime,
-                        $request,
-                        $otp,
-                        $binding,
-                    ): bool {
-                        $execution = new \Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext(
-                            $runtime,
-                            $request,
-                            $scope,
-                        );
-                        $code = $otp->generate($binding, $execution);
-
-                        return $otp->verify($binding, $code, $execution);
-                    },
-                );
-                if (!$accepted) {
-                    throw new RuntimeException('Runwire lifecycle benchmark rejected a generated OTP.');
-                }
-            } finally {
-                $request->complete();
-            }
-
-            $diagnostics = $coroutines->diagnostics();
-            if (
-                $diagnostics->activeTasks !== 0
-                || $diagnostics->requestScopesActive !== 0
-                || $diagnostics->backgroundTasksActive !== 0
-            ) {
-                throw new RuntimeException('Runwire lifecycle benchmark leaked coroutine/request state.');
-            }
-        };
-
-        for ($index = 0; $index < RUNWIRE_WARMUP_OPERATIONS; $index++) {
-            $operation();
-        }
-
-        $memoryStart = memory_get_usage(true);
-        $start = hrtime(true);
-        $deadline = $start + (int) round($duration * 1_000_000_000);
-        $repSuccessful = 0;
-
-        while (true) {
-            $before = hrtime(true);
-            if ($before >= $deadline) {
-                break;
-            }
-
-            try {
-                $operation();
-                $successful++;
-                $repSuccessful++;
-            } catch (Throwable) {
-                $failed++;
-            }
-            $attempted++;
-
-            if ($attempted % 20 === 0) {
-                $latencies[] = (hrtime(true) - $before) / 1_000_000;
-            }
-        }
-
-        $elapsed = (hrtime(true) - $start) / 1_000_000_000;
-        $wallSeconds += $elapsed;
-        $rpms[] = $elapsed > 0.0 ? ($repSuccessful / $elapsed) * 60 : 0.0;
-        $memoryStarts[] = $memoryStart / 1_048_576;
-        $memoryEnds[] = memory_get_usage(true) / 1_048_576;
-        $memoryPeaks[] = memory_get_peak_usage(true) / 1_048_576;
-    }
-
-    if ($failed !== 0) {
-        throw new RuntimeException('Runwire lifecycle benchmark recorded failed operations.');
-    }
-
-    $memoryGrowth = 0.0;
-    foreach ($memoryStarts as $index => $startMemory) {
-        $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
-    }
-
-    return buildWorkloadResult(
-        name: 'generic-otp-runwire-request-lifecycle',
-        type: 'persistent-worker',
-        metadata: [
+    return runTimedWorkload(
+        $duration,
+        $repetitions,
+        'generic-otp-runwire-request-lifecycle',
+        [
             'operation' => 'persistent Runwire runtime + fresh RequestContext/scope + GenericOtp generate/verify + cleanup',
             'backend' => 'CacheLayer memory authoritative state',
             'runwire_context' => 'explicit request and coroutine scope',
             'queue' => 'Runwire coroutine scheduler',
             'backend_connections' => 0,
-            'duration_per_repetition_seconds' => $duration,
-            'soak_duration_seconds' => $wallSeconds,
-            'stability_spread_limit_percent' => RUNWIRE_STABILITY_SPREAD_PERCENT,
             'cleanup_assertion' => 'zero active tasks, request scopes, and background tasks after every request',
         ],
-        repetitions: $repetitions,
-        warmupOperations: RUNWIRE_WARMUP_OPERATIONS,
-        durationSeconds: $wallSeconds,
-        attempted: $attempted,
-        successful: $successful,
-        failed: $failed,
-        rpms: $rpms,
-        latencies: $latencies,
-        cpu: [
-            'average_percent' => null,
-            'peak_percent' => null,
-        ],
-        memory: [
-            'average_mb' => ($memoryStarts === [] || $memoryEnds === [])
-                ? null
-                : (array_sum($memoryStarts) + array_sum($memoryEnds)) / (count($memoryStarts) * 2),
-            'peak_mb' => $memoryPeaks === [] ? null : max($memoryPeaks),
-            'growth_mb' => $memoryGrowth,
-        ],
-        stabilityLimit: RUNWIRE_STABILITY_SPREAD_PERCENT,
-        unstableStatus: 'unstable',
+        RUNWIRE_WARMUP_OPERATIONS,
+        RUNWIRE_STABILITY_SPREAD_PERCENT,
+        20,
+        static function (int $repetition): callable {
+            $capabilities = new \Infocyph\Runwire\RuntimeCapabilities(
+                driver: \Infocyph\Runwire\Runtime\Enum\RuntimeDriver::NATIVE,
+                persistentProcess: true,
+                persistentApplication: true,
+                hostOwnsEventLoop: true,
+                runwireLoopAvailable: true,
+                supportsRunwireCoroutines: true,
+                supportsHttp1: true,
+            );
+            $runtime = \Infocyph\Runwire\RuntimeContext::fromCapabilities(
+                $capabilities,
+                'otp-release',
+                generation: $repetition + 1,
+                concurrent: true,
+            );
+            $coroutines = new \Infocyph\Runwire\Coroutine\CoroutineRuntime();
+            $cache = Cache::memory('otp-release-runwire-' . $repetition, benchmarkCacheOptions());
+            $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
+            $sequence = 0;
+
+            return static function () use ($runtime, $coroutines, $otp, &$sequence): void {
+                $request = \Infocyph\Runwire\RequestContext::create(
+                    $runtime,
+                    requestId: 'otp-release-' . $sequence,
+                );
+                $binding = 'runwire-lifecycle-' . ($sequence % 64);
+                $sequence++;
+
+                try {
+                    $accepted = $coroutines->runRequest(
+                        $request,
+                        static function (\Infocyph\Runwire\Coroutine\CoroutineScope $scope) use (
+                            $runtime,
+                            $request,
+                            $otp,
+                            $binding,
+                        ): bool {
+                            $execution = new \Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext(
+                                $runtime,
+                                $request,
+                                $scope,
+                            );
+                            $code = $otp->generate($binding, $execution);
+
+                            return $otp->verify($binding, $code, $execution);
+                        },
+                    );
+                    if (!$accepted) {
+                        throw new RuntimeException('Runwire lifecycle benchmark rejected a generated OTP.');
+                    }
+                } finally {
+                    $request->complete();
+                }
+
+                $diagnostics = $coroutines->diagnostics();
+                if (
+                    $diagnostics->activeTasks !== 0
+                    || $diagnostics->requestScopesActive !== 0
+                    || $diagnostics->backgroundTasksActive !== 0
+                ) {
+                    throw new RuntimeException('Runwire lifecycle benchmark leaked coroutine/request state.');
+                }
+            };
+        },
     );
 }
 
