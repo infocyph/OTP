@@ -52,19 +52,23 @@ final class CacheLock
     {
         self::assertAuthenticationStateSafe($cache);
         $atomic = self::atomicCapability($cache);
+        if ($atomic !== null) {
+            return $atomic;
+        }
+
         $locks = $cache->authenticationStateLock();
-        if ($atomic === null && $locks === null) {
+        if ($locks === null) {
             throw new InvalidArgumentException(
                 'Authentication state caches must provide an atomic or coordinated lock capability.',
             );
         }
-        if ($atomic === null && $locks !== null && self::lockRequiresAtomic($locks)) {
+        if (self::lockRequiresAtomic($locks)) {
             throw new InvalidArgumentException(
                 'Lease-based authentication state locks require a backend atomic capability.',
             );
         }
 
-        return $atomic;
+        return null;
     }
 
     public static function consumeOnce(
