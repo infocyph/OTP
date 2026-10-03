@@ -278,19 +278,19 @@ test('OCRA strict protocol fields reject trailing and control separators', funct
         ->toThrow(InvalidArgumentException::class);
 
     $cases = [
-        [new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32), '12345678'],
-        [new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32), 'ABCD1234'],
-        [new OCRA('OCRA-1:HOTP-SHA256-8:QH08', OCRA_KEY_32), 'A1B2C3D4'],
+        [new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32), '12345678', '9'],
+        [new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32), 'ABCD1234', 'Z'],
+        [new OCRA('OCRA-1:HOTP-SHA256-8:QH08', OCRA_KEY_32), 'A1B2C3D4', 'F'],
     ];
     $suffixes = ["\n", "\r\n", "\0", "\u{2028}"];
 
-    foreach ($cases as [$ocra, $challenge]) {
+    foreach ($cases as [$ocra, $challenge, $validCharacter]) {
         foreach ($suffixes as $suffix) {
             expect(fn () => $ocra->generate($challenge . $suffix))
                 ->toThrow(InvalidArgumentException::class);
         }
 
-        expect(fn () => $ocra->generate($challenge . 'X'))
+        expect(fn () => $ocra->generate($challenge . $validCharacter))
             ->toThrow(InvalidArgumentException::class);
     }
 });

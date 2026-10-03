@@ -239,8 +239,9 @@ test('generated recovery codes from supported custom alphabets consume exactly o
     int $length,
 ) {
     $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
+    $binding = 'custom-alphabet-' . hash('sha256', $alphabet);
     $generated = $codes->generate(
-        'custom-alphabet-' . md5($alphabet),
+        $binding,
         count: 3,
         length: $length,
         groupSize: 0,
@@ -248,18 +249,8 @@ test('generated recovery codes from supported custom alphabets consume exactly o
     );
 
     foreach ($generated->plainCodes as $plainCode) {
-        $binding = 'consume-' . hash('sha256', $alphabet . $plainCode);
-        $single = $codes->generate(
-            $binding,
-            count: 1,
-            length: $length,
-            groupSize: 0,
-            characterSet: $alphabet,
-        );
-        $code = $single->plainCodes[0];
-
-        expect($codes->consume($binding, "\n " . strtolower($code) . " \r\n")->consumed)->toBeTrue()
-            ->and($codes->consume($binding, $code)->consumed)->toBeFalse();
+        expect($codes->consume($binding, "\n " . strtolower($plainCode) . " \r\n")->consumed)->toBeTrue()
+            ->and($codes->consume($binding, $plainCode)->consumed)->toBeFalse();
     }
 })->with([
     'binary alphabet' => ['AB', 40],
