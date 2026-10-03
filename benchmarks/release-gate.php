@@ -351,40 +351,17 @@ function runTimedWorkload(
             $operation();
         }
 
-        $usageBefore = getrusage();
-        $memoryStart = memory_get_usage(true);
-        $start = hrtime(true);
-        $deadline = $start + (int) round($duration * 1_000_000_000);
-        $repSuccessful = 0;
-
-        while (true) {
-            $before = hrtime(true);
-            if ($before >= $deadline) {
-                break;
-            }
-
-            try {
-                $operation();
-                $repSuccessful++;
-                $successful++;
-            } catch (Throwable) {
-                $failed++;
-            }
-            $attempted++;
-
-            if ($attempted % $sampleInterval === 0) {
-                $latencies[] = (hrtime(true) - $before) / 1_000_000;
-            }
-        }
-
-        $elapsed = (hrtime(true) - $start) / 1_000_000_000;
-        $usageAfter = getrusage();
-        $wallSeconds += $elapsed;
-        $cpuSeconds += max(0.0, cpuSeconds($usageAfter) - cpuSeconds($usageBefore));
-        $memoryStarts[] = $memoryStart / 1_048_576;
-        $memoryEnds[] = memory_get_usage(true) / 1_048_576;
-        $memoryPeaks[] = memory_get_peak_usage(true) / 1_048_576;
-        $rpms[] = $elapsed > 0.0 ? ($repSuccessful / $elapsed) * 60 : 0.0;
+        $measurement = measureOperation($operation, $duration, $sampleInterval);
+        $attempted += $measurement['attempted'];
+        $successful += $measurement['successful'];
+        $failed += $measurement['failed'];
+        $latencies = [...$latencies, ...$measurement['latencies']];
+        $wallSeconds += $measurement['elapsed'];
+        $cpuSeconds += $measurement['cpu_seconds'];
+        $memoryStarts[] = $measurement['memory_start_mb'];
+        $memoryEnds[] = $measurement['memory_end_mb'];
+        $memoryPeaks[] = $measurement['memory_peak_mb'];
+        $rpms[] = $measurement['successful_rpm'];
     }
 
     if ($failed !== 0) {
@@ -588,42 +565,20 @@ function runConcurrentVerificationWorker(
         usleep(500);
     }
 
-    $deadline = hrtime(true) + (int) round($duration * 1_000_000_000);
-    $attempted = 0;
-    $successful = 0;
-    $failed = 0;
-    $latencies = [];
-
-    while (true) {
-        $before = hrtime(true);
-        if ($before >= $deadline) {
-            break;
-        }
-
+    $operation = static function () use ($otp, $worker, &$sequence): void {
         $binding = 'worker-' . $worker . '-' . ($sequence % 128);
         $sequence++;
-
-        try {
-            $code = $otp->generate($binding);
-            if (!$otp->verify($binding, $code)) {
-                throw new RuntimeException('Concurrent GenericOtp verification was rejected.');
-            }
-            $successful++;
-        } catch (Throwable) {
-            $failed++;
+        $code = $otp->generate($binding);
+        if (!$otp->verify($binding, $code)) {
+            throw new RuntimeException('Concurrent GenericOtp verification was rejected.');
         }
-        $attempted++;
-
-        if ($attempted % 20 === 0) {
-            $latencies[] = (hrtime(true) - $before) / 1_000_000;
-        }
-    }
-
+    };
+    $measurement = measureOperation($operation, $duration, 20);
     $payload = json_encode([
-        'attempted' => $attempted,
-        'successful' => $successful,
-        'failed' => $failed,
-        'latencies' => $latencies,
+        'attempted' => $measurement['attempted'],
+        'successful' => $measurement['successful'],
+        'failed' => $measurement['failed'],
+        'latencies' => $measurement['latencies'],
     ], JSON_THROW_ON_ERROR);
     file_put_contents($barrier . '.result.' . $worker, $payload);
 }
@@ -742,6 +697,67 @@ function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
             };
         },
     );
+}
+
+/**
+ * @return array{
+ *     attempted:int,
+ *     successful:int,
+ *     failed:int,
+ *     latencies:list<float>,
+ *     elapsed:float,
+ *     cpu_seconds:float,
+ *     memory_start_mb:float,
+ *     memory_end_mb:float,
+ *     memory_peak_mb:float,
+ *     successful_rpm:float
+ * }
+ */
+function measureOperation(callable $operation, float $duration, int $sampleInterval): array
+{
+    $attempted = 0;
+    $successful = 0;
+    $failed = 0;
+    $latencies = [];
+    $usageBefore = getrusage();
+    $memoryStart = memory_get_usage(true);
+    $start = hrtime(true);
+    $deadline = $start + (int) round($duration * 1_000_000_000);
+
+    while (true) {
+        $before = hrtime(true);
+        if ($before >= $deadline) {
+            break;
+        }
+
+        try {
+            $operation();
+            $successful++;
+        } catch (Throwable) {
+            $failed++;
+        }
+        $attempted++;
+
+        if ($attempted % $sampleInterval === 0) {
+            $latencies[] = (hrtime(true) - $before) / 1_000_000;
+        }
+    }
+
+    $elapsed = (hrtime(true) - $start) / 1_000_000_000;
+    $usageAfter = getrusage();
+
+    return [
+        'attempted' => $attempted,
+        'successful' => $successful,
+        'failed' => $failed,
+        'latencies' => $latencies,
+        'elapsed' => $elapsed,
+        'cpu_seconds' => max(0.0, cpuSeconds($usageAfter) - cpuSeconds($usageBefore)),
+        'memory_start_mb' => $memoryStart / 1_048_576,
+        'memory_end_mb' => memory_get_usage(true) / 1_048_576,
+        'memory_peak_mb' => memory_get_peak_usage(true) / 1_048_576,
+        'successful_rpm' => $elapsed > 0.0 ? ($successful / $elapsed) * 60 : 0.0,
+    ];
 }
 
 function benchmarkCacheOptions(): CacheOptions
