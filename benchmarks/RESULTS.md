@@ -1,5 +1,41 @@
 # OTP benchmark results
 
+## OTP 7.0 / final sustained release gate
+
+Run #222 on 2026-10-03 added the release-decision performance gate that the
+earlier PHPBench snapshots intentionally did not provide. Baseline and candidate
+used production `--no-dev` dependency sets on the same PHP 8.5 GitHub Actions
+runner, with the same environment fingerprint. The normal-path workload reuses
+one `GenericOtp` service and authoritative CacheLayer memory backend, omits a
+Runwire context, warms 5,000 operations, then runs three sustained 8-second
+trials. Each result records median successful RPM, sampled p50/p95/p99,
+errors/timeouts, CPU, memory, queue/backend metadata, and stability spread.
+
+| Measurement | Pre-Runwire baseline | OTP 7.0 candidate |
+| --- | ---: | ---: |
+| Median successful RPM | 1,452,458.78 | 1,434,179.15 |
+| Three-trial RPM spread | 0.19% | 0.24% |
+| RPM regression | — | **1.26%** |
+| Maximum allowed regression | — | **2.00%** |
+
+The PHPForge result contract passed for both documents and
+`ic:benchmark:compare --max-regression=2 --stable-environment` passed. The
+producer also enforces an absolute normal-path p99 ceiling of 1 ms, peak memory
+below 64 MB, and worker-memory growth below 8 MB; exceeding any of those limits
+fails the workload before comparison. Queue growth is not applicable to this
+single-worker component workload and backend connections are zero.
+
+A separate candidate-only cold-start workload launches fresh PHP processes,
+loads Composer, constructs CacheLayer/GenericOtp, and generates a validated code.
+Three repetitions of 30 measured process starts produced 1,228.20 successful RPM
+with 0.23% spread. Its benchmark-result contract passed independently and is not
+mixed into the sustained-RPM regression calculation.
+
+The uploaded release-gate JSON artifacts remain the detailed record for
+p50/p95/p99, CPU, memory, operation counts, errors/timeouts, and environment
+metadata. The existing PHPBench sections below remain path-attribution evidence;
+they are not used as the 2% release regression gate.
+
 ## OTP 7.0 / Runwire cooperative contention snapshot
 
 Batch 9 adds a synthetic one-miss lock provider exercised through a real
@@ -39,8 +75,9 @@ scope.
 | Passkey begin registration, no context | 2,376 µs | 1,379 µs |
 
 These CI measurements are single-iteration attribution snapshots and vary
-materially between runners; they do not satisfy the plan's stable-host 2% RPM
-regression budget. Within the same final jobs, the supplied Generic OTP context
+materially between runners; by themselves they do not satisfy the plan's
+sustained 2% RPM regression budget. That limitation is superseded by the final
+sustained release gate recorded above. Within the same final jobs, the supplied Generic OTP context
 measured 140 vs 141 µs on PHP 8.4 and 66 vs 60 µs on PHP 8.5, with roughly
 0.5 KiB additional reported peak memory. Treat those values as evidence that the
 path is benchmarked, not as a performance gain or regression conclusion.

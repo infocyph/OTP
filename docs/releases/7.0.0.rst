@@ -17,11 +17,15 @@ Highlights
 * improves GridOTP enrollment diversity while keeping existing weak factors
   migration-compatible;
 * preserves exact-one-winner replay behavior and monotonic state under
-  concurrency/fault injection;
+  concurrency/fault injection, including terminal atomic tombstones that cannot
+  be reopened by a stale caller timestamp;
+* normalizes malformed embedded WebAuthn client JSON/CBOR into the documented
+  non-consuming malformed-input result boundary;
 * adds optional passed-instance Runwire 2.1+ cancellation/deadline/cooperative
-  lock-wait integration without making Runwire a runtime dependency; and
-* records pre/post and cooperative-contention benchmark evidence without
-  claiming gains from noisy single-iteration CI measurements.
+  lock-wait integration, including cancellation checks immediately before atomic
+  commits, without making Runwire a runtime dependency; and
+* enforces a paired sustained production-dependency performance gate instead of
+  using noisy single-iteration PHPBench snapshots as a release comparison.
 
 Breaking dependency change
 --------------------------
@@ -59,6 +63,12 @@ Release gates
 
 The release candidate is required to pass the repository PHPForge matrix on the
 exact final revision, including PHP 8.4/8.5, lowest/stable dependencies, static
-analysis, live Redis/SQLite tests, clean ``--no-dev`` install, benchmark smoke,
-and zero skipped required tests. The tag must be created only after those gates
-are green.
+analysis, live Redis/SQLite tests, clean ``--no-dev`` install, representative
+benchmark-result validation, and zero skipped required tests.
+
+The separate release-performance job compares a production ``--no-dev``
+pre-Runwire baseline and candidate on the same runner. It requires three warmed
+sustained trials, matching stable-environment fingerprints, no more than 2%
+median successful-RPM regression, and the configured absolute p99/memory
+ceilings. Fresh PHP-process cold start is recorded and validated separately.
+The tag must be created only after those gates are green.
