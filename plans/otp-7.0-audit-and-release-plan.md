@@ -1,6 +1,6 @@
 # OTP audit, hardening, and optional Runwire integration plan
 
-Date: 2026-10-03. Status: implementation and release-acceptance work complete; tag/publication remains contingent on exact-head CI and the manual release decision.
+Date: 2026-10-03. Status: implementation is complete, but release acceptance remains open for representative performance evidence and exact-head CI.
 
 ## Decision
 
@@ -233,16 +233,16 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | Complete | Complete (CacheLayer 4.0 resolved; 4 QA lanes, analyzers, clean install, Redis/SQLite, benchmarks green) | Complete |
 | 8 | Performance baseline and minimal optional Runwire integration | Complete | Complete (4 QA lanes, analyzers, no-dev clean install, benchmarks green; pre/post snapshots recorded) | Complete |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Complete | Complete (real CoroutineRuntime scopes, cancellation/commit/isolation tests, cooperative contention benchmark, full matrix green) | Complete |
-| 10 | Documentation, migration/rollback, full release acceptance | Complete | Complete (reopened blockers resolved; sustained 2% RPM gate + cold-start evidence added; full PHPForge matrix green on code candidate) | Complete |
+| 10 | Documentation, migration/rollback, full release acceptance | Complete | In progress (Passkey terminal-state regression resolved; component RPM/cold-start gate passes, but representative host-request throughput, concurrent verification, and persistent Runwire lifecycle performance remain open) | In progress |
 
 Tracker rule: update this table in the same branch as implementation. A batch is complete only after its scoped implementation and focused QA are both complete; final release gates remain separate.
 
 Final reopened-blocker closure (2026-10-03):
 
-- Atomic GenericOtp tombstones now carry `remainingAttempts = 0`, and GridOTP terminal tombstones set `consumed = true`; terminal state is invalid independent of a caller's stale timestamp. Deterministic atomic probes cover delayed duplicate verification and exhausted GridOTP challenges.
+- Atomic GenericOtp tombstones now carry `remainingAttempts = 0`, GridOTP terminal tombstones set `consumed = true`, and expired Passkey ceremonies atomically persist `consumed = true` before tombstoning. Terminal state is invalid independent of a caller's stale timestamp. Deterministic atomic probes cover delayed duplicate verification, exhausted GridOTP challenges, and stale-time Passkey registration after expiry.
 - Runwire cancellation is checked again immediately before atomic `setIfAbsent`/CAS mutations. Existing coverage still proves that cancellation raised *during* a successful commit does not reclassify the committed result.
 - Passkey's untrusted credential parsing boundary now normalizes the dependency's documented `JsonException` and `InvalidArgumentException` parse failures, in addition to the previously handled serializer/data/type failures. Malformed embedded client JSON/CBOR remains non-consuming.
-- Release performance is no longer inferred from one-shot PHPBench output. CI validates representative PHPForge result documents and a paired same-runner production `--no-dev` baseline/candidate gate. Run #222 measured 1,452,458.78 → 1,434,179.15 median successful RPM (**1.26% regression**, maximum 2%), with 0.19%/0.24% three-trial spreads. It also validates a separate fresh-process cold-start result and enforces p99 < 1 ms, peak memory < 64 MB, and memory growth < 8 MB for the sustained workload.
+- The paired production `--no-dev` component gate is valid evidence for the isolated `GenericOtp::generate()` memory-backend path only. It passes the 2% median-RPM budget and separate cold-start validation, but it does **not** establish representative host-request throughput, concurrent verification behavior, persistent Runwire lifecycle performance, or the full performance acceptance required below. Those release-acceptance items remain open.
 
 
 Known upstream development warning: current stable `phpbench/phpbench` 1.7.0 still requires abandoned `doctrine/annotations:^2.0`. The final Composer audit exits 0 with no security advisory; the abandonment notice remains visible as a transitive development-tool warning and is not suppressed or treated as an OTP runtime dependency.
@@ -292,7 +292,9 @@ Known upstream development warning: current stable `phpbench/phpbench` 1.7.0 sti
 - Before a new public type is added, record its ownership/invariants, reuse alternatives, public compatibility, call overhead, and expected benefit. Keep other fixes as private methods in their current owners. Existing cohesive files are not split merely for their line count.
 - Measure first call, warm calls, accepted/rejected/malformed/expired/replayed input, contention, backend failure, and cancellation. Include complete success assertions in benchmark workloads.
 - Compare normal execution, Runwire installed but unused, missing capability, and cooperative contention under equivalent workloads.
-- For the release gate, run baseline and candidate on the same host/environment fingerprint with at least three warmed sustained trials per selected concurrency level; record median successful RPM plus p50/p95/p99, errors/timeouts, CPU, steady/peak memory, queue/backend metadata, and stability spread. The implemented normal-path gate uses three 8-second trials as a persistent-worker soak and records fresh-process cold start separately.
+- Current evidence limitation: the automated paired gate exercises repeated `GenericOtp::generate()` calls against CacheLayer memory at concurrency one. Treat it as a component regression guard, not representative application acceptance.
+- **Open release-acceptance evidence:** representative host-request throughput with realistic request setup/teardown; concurrent verification at selected concurrency levels; and persistent Runwire request/scope lifecycle operation under sustained load, including cleanup/isolation assertions and equivalent normal/missing-capability comparisons.
+- For release acceptance, run baseline and candidate on the same host/environment fingerprint with at least three warmed sustained trials per selected concurrency level; record median successful RPM plus p50/p95/p99, errors/timeouts, CPU, steady/peak memory, queue/backend metadata, and stability spread. The existing three 8-second component trials and fresh-process cold-start result remain useful sub-gates, but do not replace the open representative host/concurrency/Runwire lifecycle measurements.
 - Enforced normal-path budgets are at most 2% median RPM loss, zero incorrect acceptance/unexpected benchmark errors, p99 below 1 ms, peak memory below 64 MB, and worker-memory growth below 8 MB for the representative component workload. The comparison is valid only when PHPForge validates both result documents and their stable environment fingerprints match.
 - A performance difference within measurement noise is not a gain. If optional runtime work adds complexity without a demonstrated capability/lifecycle or throughput benefit, reduce or defer it. Never remove security checks or loosen budgets to manufacture a passing result.
 
