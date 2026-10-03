@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
+use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\Runwire\Exception\CancelledException;
@@ -85,4 +86,19 @@ test('Runwire runtime contexts are process bound for OTP state operations', func
         $execution,
     ))->toThrow(LogicException::class, 'different process')
         ->and($cache->get('runwire-stale-state'))->toBeNull();
+});
+
+
+test('stateful OTP APIs forward the supplied Runwire execution context', function () {
+    $cache = CacheLayerState::memory();
+    $runtime = RuntimeContext::standalone();
+    $request = RequestContext::create($runtime);
+    $request->cancel(CancellationReason::HOST_CANCELLED);
+    $execution = new RunwireExecutionContext($runtime, $request);
+    $otp = new GenericOtp($cache, str_repeat('r', 32));
+
+    expect(fn () => $otp->generate('runwire-api', runwire: $execution))
+        ->toThrow(CancelledException::class);
+
+    expect($otp->generate('runwire-api'))->toMatch('/\\A\\d{6}\\z/D');
 });
