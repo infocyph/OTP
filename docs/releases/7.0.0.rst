@@ -24,8 +24,8 @@ Highlights
 * adds optional passed-instance Runwire 2.1+ cancellation/deadline/cooperative
   lock-wait integration, including cancellation checks immediately before atomic
   commits, without making Runwire a runtime dependency; and
-* enforces a paired sustained production-dependency performance gate instead of
-  using noisy single-iteration PHPBench snapshots as a release comparison.
+* adds a paired sustained production-dependency component regression gate instead
+  of using noisy single-iteration PHPBench snapshots as a release comparison.
 
 Breaking dependency change
 --------------------------
@@ -66,9 +66,12 @@ exact final revision, including PHP 8.4/8.5, lowest/stable dependencies, static
 analysis, live Redis/SQLite tests, clean ``--no-dev`` install, representative
 benchmark-result validation, and zero skipped required tests.
 
-The separate release-performance job compares a production ``--no-dev``
+The separate component-performance job compares a production ``--no-dev``
 pre-Runwire baseline and candidate on the same runner. It requires three warmed
 sustained trials, matching stable-environment fingerprints, no more than 2%
 median successful-RPM regression, and the configured absolute p99/memory
 ceilings. Fresh PHP-process cold start is recorded and validated separately.
-The tag must be created only after those gates are green.
+This is a component regression guard, not complete release-performance evidence:
+representative host-request throughput, concurrent verification, and sustained
+persistent Runwire lifecycle measurements remain required by the release plan.
+The tag must be created only after those acceptance items and exact-head gates are green.
