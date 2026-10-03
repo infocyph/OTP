@@ -328,7 +328,6 @@ final class CacheLock
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
             self::checkpoint($runwire);
-            self::checkpoint($runwire);
             if ($atomic->setIfAbsent($stateKey, 1, $ttl)) {
                 return true;
             }
@@ -446,7 +445,6 @@ final class CacheLock
         ?RunwireExecutionContext $runwire,
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            self::checkpoint($runwire);
             self::checkpoint($runwire);
             if ($atomic->setIfAbsent($stateKey, 0, $ttl)) {
                 return true;
