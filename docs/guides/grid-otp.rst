@@ -56,7 +56,7 @@ supplied secrets receive the same minimum policy:
        enforceDiversity: true,
    );
 
-``enforceDiversity`` is deliberately ``false`` by default in 6.2 so an upgrade
+``enforceDiversity`` is deliberately ``false`` by default in 7.0 so an upgrade
 does not silently lock out an already-enrolled weak factor. New deployments
 should enable it after enrollment and migration policy is in place.
 
@@ -64,8 +64,9 @@ Complete authentication flow
 ----------------------------
 
 ``$stateCache`` below is the shared authentication-state CacheLayer described in
-:doc:`storage`. GridOTP always requires the coordinated lock because attempts,
-expiry, integrity, and consumption are one multi-field state transition.
+:doc:`storage`. GridOTP transitions the complete challenge record atomically:
+CacheLayer whole-record CAS is preferred when available, with the coordinated
+lock used as the fallback.
 
 The verifier loads the enrolled secret and issues a challenge:
 
@@ -156,9 +157,10 @@ decrements attempts without extending expiration. Once the last allowed attempt
 is consumed, the state is deleted and the challenge cannot be reused.
 
 Success leaves a consumed marker until the original expiration so subsequent
-valid requests are reported as replay. The entire mutation runs under the
-configured CacheLayer coordinated lock; GridOTP intentionally does not split the
-attempt counter and replay marker into separate atomic operations.
+valid requests are reported as replay. The entire record is transitioned as one
+serializable unit through whole-record CAS or the coordinated lock fallback;
+GridOTP never splits the attempt counter and replay marker into independent
+writes.
 
 Security position
 -----------------
@@ -174,7 +176,7 @@ times. With the balanced 32-symbol grid and a uniform prior over that unknown
 symbol, the most likely digit has probability ``4/32 = 1/8``. Application/user
 choice can make the real prior worse, so this is not a security guarantee.
 
-When the enrolled secret contains enough distinct symbols, GridOTP 6.2 chooses
+When the enrolled secret contains enough distinct symbols, GridOTP 7.0 chooses
 challenge positions whose secret symbols are distinct. The decimal grid still
 maps multiple symbols to the same label, so response digits are not guaranteed
 to be distinct. Under an idealized model of uniformly unknown distinct secret

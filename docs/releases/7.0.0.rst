@@ -1,0 +1,64 @@
+OTP 7.0.0
+=========
+
+OTP 7.0.0 is the consolidated security, state-safety, dependency, and runtime
+integration release following 6.1.
+
+Highlights
+----------
+
+* raises the required CacheLayer line to 4.x and validates PHP 8.4/8.5,
+  lowest/stable dependencies, Redis/SQLite contention, and clean production
+  installation;
+* hardens secret-bearing diagnostic output, strict OCRA/recovery validation, and
+  Passkey malformed-input/successful-ceremony coverage;
+* adds fenced whole-record atomic transitions for GenericOtp, GridOTP, and
+  Passkey ceremony state where CacheLayer provides atomics;
+* improves GridOTP enrollment diversity while keeping existing weak factors
+  migration-compatible;
+* preserves exact-one-winner replay behavior and monotonic state under
+  concurrency/fault injection;
+* adds optional passed-instance Runwire 2.1+ cancellation/deadline/cooperative
+  lock-wait integration without making Runwire a runtime dependency; and
+* records pre/post and cooperative-contention benchmark evidence without
+  claiming gains from noisy single-iteration CI measurements.
+
+Breaking dependency change
+--------------------------
+
+OTP 7.0 requires CacheLayer ``^4.0``. CacheLayer 3.x and 4.x signed
+authentication-state envelopes are not a supported mixed-version boundary.
+Drain old workers before cutover and follow :doc:`../getting-started/migration`
+for state/rollback rules.
+
+Public compatibility
+--------------------
+
+HOTP/TOTP/OCRA result contracts and OTP v1 key domains remain stable. The major
+version is driven by the CacheLayer 4 dependency/storage boundary and the need to
+make that migration explicit rather than silently widening a minor release.
+
+Runwire
+-------
+
+Runwire remains optional. When installed, hosts may forward CacheLayer's
+``RunwireExecutionContext`` as the trailing ``runwire`` argument on stateful
+OTP operations. OTP does not own the runtime, workers, event loop, or host scope.
+Omitting the argument keeps the synchronous path.
+
+GridOTP
+-------
+
+Generated secrets now guarantee enough distinct symbols for every supported
+challenge size. ``GridOTP::hasSufficientDiversity()`` supports inventory and
+``enforceDiversity`` provides opt-in enforcement for new/re-enrolled factors.
+Existing weak factors are not silently regenerated or locked out.
+
+Release gates
+-------------
+
+The release candidate is required to pass the repository PHPForge matrix on the
+exact final revision, including PHP 8.4/8.5, lowest/stable dependencies, static
+analysis, live Redis/SQLite tests, clean ``--no-dev`` install, benchmark smoke,
+and zero skipped required tests. The tag must be created only after those gates
+are green.

@@ -168,7 +168,7 @@ Tagged CacheLayer 4.0 exposes `RunwireIntegration::bind/share/release` and `Runw
 
 ### Passed-instance public contract
 
-Proposed API, not implemented:
+Implemented contract (Batch 8):
 
 - Reuse CacheLayer 4.0's existing `Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext`; do not add an OTP-specific wrapper. It already carries the exact supplied `RuntimeContext`, optional current `RequestContext`, and optional host-owned `CoroutineScope`.
 - OTP validates request/runtime identity again at the state boundary, rejects completed/stale-process contexts, and consumes the existing request/scope cancellation/deadline objects. It does not recreate Runwire scheduler, token, deadline, metrics, or lifecycle abstractions.
@@ -177,7 +177,7 @@ Proposed API, not implemented:
 - Keep secret-only arithmetic/provisioning APIs unchanged. Recovery stores already own their mutation implementation; do not change their interface just for symmetry. Add cancellation around a recovery operation only if the active integration contract needs it, never by wrapping it in background work.
 - Never store a request/scope in a process-wide singleton or a long-lived factor object. Construct a short-lived integration instance per request/task and forward the same object through intermediate libraries.
 
-Illustrative future use (names above are proposed):
+Usage:
 
 ```php
 $execution = new \Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext(
@@ -203,7 +203,7 @@ The host supplies these objects from its active lifecycle. OTP must not manufact
 | Mismatched/completed/stale context | Explicit configuration/lifecycle failure, not silent context substitution |
 | Selected operation throws or may have committed | Propagate; never repeat via synchronous fallback or report an ordinary mismatch |
 
-Implementation stays in `Support/CacheLock.php` plus the justified optional integration boundary:
+Implementation stays in the existing state owner (`Support/CacheLock.php`) plus the internal `Support/RunwireState.php` lifecycle/polling helper:
 
 1. Check cancellation/deadline before beginning state-changing work. Respect both supplied request and scope cancellation; never cancel or close the host's scope yourself.
 2. For lock contention, either consume a proven instance-based cooperative facility from CacheLayer, or repeatedly call the existing provider with zero wait, then use the supplied scope's `sleep()` between attempts. Preserve the original one-second maximum wait, include acquisition time in that budget, and use a monotonic deadline capped by the host's remaining budget.
@@ -233,7 +233,7 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | Complete | Complete (CacheLayer 4.0 resolved; 4 QA lanes, analyzers, clean install, Redis/SQLite, benchmarks green) | Complete |
 | 8 | Performance baseline and minimal optional Runwire integration | Complete | Complete (4 QA lanes, analyzers, no-dev clean install, benchmarks green; pre/post snapshots recorded) | Complete |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Complete | Complete (real CoroutineRuntime scopes, cancellation/commit/isolation tests, cooperative contention benchmark, full matrix green) | Complete |
-| 10 | Documentation, migration/rollback, full release acceptance | In progress | Pending | In progress |
+| 10 | Documentation, migration/rollback, full release acceptance | Complete | Running (7.0 docs/release notes/plan rename complete; exact-revision release acceptance pending) | In progress |
 
 Tracker rule: update this table in the same branch as implementation. A batch is complete only after its scoped implementation and focused QA are both complete; final release gates remain separate.
 
@@ -290,7 +290,7 @@ Known upstream release blocker: current stable `phpbench/phpbench` 1.7.0 still r
 
 ## Rollback and completion
 
-Deploy an immutable tested release. Keep existing state keys and formats unless a separate migration is explicitly required. Roll back optional Runwire behavior by omitting the integration instance; OTP must not stop the host runtime. Verify previously issued codes, counters, and pending challenges behave safely across mixed versions and rollback.
+Deploy an immutable tested release. OTP v1 key domains remain stable, but CacheLayer 4.0 changes signed-record identity binding; CacheLayer 3.x and 4.x signed authentication-state envelopes are not a supported mixed-version boundary. Drain old writers before cutover, expire/invalidate short-lived challenge state, and rotate factor generations when no-TTL state cannot be carried safely. Roll back optional Runwire behavior by omitting the integration instance; OTP must not stop the host runtime. A rollback to a CacheLayer 3.x application likewise requires a coordinated stop/cutover rather than assuming 4.x-written state is readable.
 
 Completion requires resolved findings or explicitly documented migration blockers, passing required matrices without suppressed findings/skips, verified consumer examples, realistic performance evidence for runtime claims, and final-revision CI. This audit is a plan for that work, not release approval.
 

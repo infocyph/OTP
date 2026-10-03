@@ -47,6 +47,18 @@ OTP keeps `web-auth/webauthn-lib` under `require-dev` + `suggest` as well.
 `Passkey::isAvailable()` reports whether it is loaded. OTP's Passkey integration
 does **not** require `ext-sodium`.
 
+Runwire integration is also optional. Applications that already own a Runwire
+2.1+ request/coroutine lifecycle may install it explicitly:
+
+```bash
+composer require infocyph/runwire:^2.1
+```
+
+Pass the existing CacheLayer `RunwireExecutionContext` to stateful OTP
+operations when cooperative cancellation/deadline handling is useful. OTP does
+not discover, start, bind, or stop a Runwire runtime, and ordinary calls remain
+fully synchronous when no context is supplied.
+
 ## Quickstart
 
 Full usage guides, API references, security guidance, and deployment scenarios
@@ -119,10 +131,11 @@ $code = $otp->generate('login-challenge-123');
 $valid = $otp->verify('login-challenge-123', $submittedCode);
 ```
 
-Generic OTP deliberately remains lock-based because issue/replace, consumption,
-failed-attempt decrement, expiry, and deletion form one multi-field state
-machine. A successful verification consumes the challenge; a mismatch decrements
-attempts without extending expiry. See
+Generic OTP updates its complete multi-field record as one serializable
+transition. CacheLayer 4.0 whole-record CAS is used when the backend exposes a
+safe atomic capability; otherwise OTP uses the cache's coordinated lock
+fallback. A successful verification consumes the challenge; a mismatch
+decrements attempts without extending expiry. See
 [Generic OTP documentation](https://docs.infocyph.com/projects/OTP/en/latest/guides/generic-otp.html).
 
 ### OCRA
@@ -331,10 +344,10 @@ keys, or moving-factor generations rotate.
 
 For Generic OTP, GridOTP, AOTP, Passkey ceremonies, MobileOTP replay, and
 replay-aware HOTP/TOTP/OCRA, configure one shared, fail-closed,
-payload-integrity protected, authoritative CacheLayer backend. Generic OTP,
-GridOTP, and Passkey ceremonies additionally require a coordinated lock because
-their state transitions are multi-field. Recovery-code and passkey credential
-persistence remain application-owned. Backend/configuration failures propagate
+payload-integrity protected, authoritative CacheLayer backend. Multi-field
+Generic OTP, GridOTP, and Passkey ceremony records use whole-record atomic CAS
+when available and a coordinated lock fallback otherwise. Recovery-code and
+passkey credential persistence remain application-owned. Backend/configuration failures propagate
 and fail closed. See the
 [security guide](https://docs.infocyph.com/projects/OTP/en/latest/guides/security.html),
 [storage guide](https://docs.infocyph.com/projects/OTP/en/latest/guides/storage.html),

@@ -119,11 +119,11 @@ atomics require the coordinated lock fallback. Atomic capability selection is
 not runtime failover: once an atomic mutation is selected, an exception
 propagates and is never retried through a lock after an unknown commit outcome.
 
-``GenericOtp`` and ``GridOTP`` remain lock-based because issuance/replacement,
-attempt counts, expiry, integrity, consumption, and deletion are multi-field
-state machines. ``Passkey`` also requires a coordinated lock because its stored
-ceremony type/options/user binding/expiry/consumed marker must transition as one
-unit.
+``GenericOtp``, ``GridOTP``, and ``Passkey`` also mutate multi-field records
+as one serializable transition. OTP uses CacheLayer 4.0 whole-record CAS when the
+backend exposes a safe atomic capability and otherwise uses the coordinated lock
+fallback. It never falls back after an atomic operation has been selected and
+may have committed.
 
 AOTP first reserves an issued challenge and then atomically consumes that exact
 reservation after signature verification. Signature validity is checked before a
@@ -257,7 +257,7 @@ guarantee independent guessing entropy. A repeated-symbol secret can collapse a
 six-position response to one repeated mapped digit; with the balanced grid and a
 uniform unknown-symbol prior, the largest label bucket is 4 of 32 symbols.
 
-Library-generated 6.2 secrets contain enough distinct symbols for every
+Library-generated 7.0 secrets contain enough distinct symbols for every
 supported challenge size. When an enrolled secret has sufficient diversity,
 challenge selection uses distinct secret symbols. Existing weak factors remain
 accepted by default for migration compatibility; applications can inventory them
