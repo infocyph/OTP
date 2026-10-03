@@ -228,8 +228,8 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 2 | F3 strict protocol validation | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
 | 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Complete | Complete (Pest/Pint/analyzers; full gate retains Batch 6 F5 skip findings) | Complete |
 | 4 | F4 GridOTP entropy policy and migration | Complete | Complete (GridOTP regressions green; full gate retains Batch 6 F5 skip findings) | Complete |
-| 5 | F6 stale-owner/fencing review and state compatibility coverage | In progress | Running (fenced transition stabilization + compatibility coverage) | In progress |
-| 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Pending | Pending | Pending |
+| 5 | F6 stale-owner/fencing review and state compatibility coverage | Complete | Complete (fenced CAS regressions, v1 state keys, Pest/Pint green; Redis acceptance continues in Batch 6) | Complete |
+| 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | In progress | Pending | In progress |
 | 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | Pending | Pending | Pending |
 | 8 | Performance baseline and minimal optional Runwire integration | Pending | Pending | Pending |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
