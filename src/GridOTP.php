@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
@@ -102,7 +103,11 @@ final readonly class GridOTP
         return $response;
     }
 
-    public function issue(string $factorId, ?int $now = null): GridChallenge
+    public function issue(
+        string $factorId,
+        ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
+    ): GridChallenge
     {
         self::assertFactorId($factorId);
         for ($attempt = 0; $attempt < self::ISSUE_ATTEMPTS; $attempt++) {
@@ -113,6 +118,7 @@ final readonly class GridOTP
                 self::lockKey($factorId, $id),
                 'GridOTP challenge',
                 fn(mixed $stored): array => $this->issueState($stored, $id, $now),
+                $runwire,
             );
             if ($challenge !== null) {
                 return $challenge;
@@ -128,8 +134,9 @@ final readonly class GridOTP
         #[\SensitiveParameter]
         string $response,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): bool {
-        return $this->verifyWithResult($factorId, $challenge, $response, $now)->matched;
+        return $this->verifyWithResult($factorId, $challenge, $response, $now, $runwire)->matched;
     }
 
     public function verifyWithResult(
@@ -138,6 +145,7 @@ final readonly class GridOTP
         #[\SensitiveParameter]
         string $response,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): VerificationResult {
         self::assertFactorId($factorId);
         if (strlen($response) !== count($challenge->positions) || !ctype_digit($response)) {
@@ -154,6 +162,7 @@ final readonly class GridOTP
             self::lockKey($factorId, $challenge->id),
             'GridOTP challenge',
             fn(mixed $stored): array => $this->verifyState($stored, $challenge, $response, $now),
+            $runwire,
         );
     }
 
