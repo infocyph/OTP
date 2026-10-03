@@ -227,8 +227,8 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 1 | F1 diagnostic redaction | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
 | 2 | F3 strict protocol validation | Complete | Complete (Pest; full gate retains Batch 6 F5 skip findings) | Complete |
 | 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Complete | Complete (Pest/Pint/analyzers; full gate retains Batch 6 F5 skip findings) | Complete |
-| 4 | F4 GridOTP entropy policy and migration | Complete | Running (PR #51) | In progress |
-| 5 | F6 stale-owner/fencing review and state compatibility coverage | Pending | Pending | Pending |
+| 4 | F4 GridOTP entropy policy and migration | Complete | Complete (GridOTP regressions green; full gate retains Batch 6 F5 skip findings) | Complete |
+| 5 | F6 stale-owner/fencing review and state compatibility coverage | In progress | Running (fenced transition stabilization + compatibility coverage) | In progress |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Pending | Pending | Pending |
 | 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | Pending | Pending | Pending |
 | 8 | Performance baseline and minimal optional Runwire integration | Pending | Pending | Pending |
