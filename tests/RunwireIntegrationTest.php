@@ -456,11 +456,15 @@ test('atomic whole-record transition checks Runwire cancellation again after the
         'cancelled-transition',
         'unused-lock',
         'test',
-        static fn(mixed $current): array => [
-            'result' => true,
-            'replacement' => ['v' => 1, 'remaining' => 1],
-            'ttl' => 30,
-        ],
+        static function (mixed $current): array {
+            unset($current);
+
+            return [
+                'result' => true,
+                'replacement' => ['v' => 1, 'remaining' => 1],
+                'ttl' => 30,
+            ];
+        },
         $execution,
     ))->toThrow(CancelledException::class);
 });
