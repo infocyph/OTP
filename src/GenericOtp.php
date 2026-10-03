@@ -7,6 +7,7 @@ namespace Infocyph\OTP;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Support\CacheLock;
 use InvalidArgumentException;
 use RuntimeException;
@@ -56,9 +57,10 @@ final readonly class GenericOtp
         ];
     }
 
-    public function delete(string $binding): bool
+    public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
     {
         self::assertBinding($binding);
+        CacheLock::checkpoint($runwire);
         $stateKey = self::stateKey($binding);
         if (($atomic = CacheLock::stateAtomic($this->cache)) !== null) {
             $atomic->getAndDelete($stateKey);
@@ -76,10 +78,10 @@ final readonly class GenericOtp
             }
 
             return true;
-        });
+        }, $runwire);
     }
 
-    public function generate(string $binding): string
+    public function generate(string $binding, ?RunwireExecutionContext $runwire = null): string
     {
         self::assertBinding($binding);
         $otp = self::randomDigits($this->digits);
@@ -107,12 +109,18 @@ final readonly class GenericOtp
                     'failure' => 'Unable to store generic OTP state.',
                 ];
             },
+            $runwire,
         );
 
         return $otp;
     }
 
-    public function verify(string $binding, #[\SensitiveParameter] string $otp): bool
+    public function verify(
+        string $binding,
+        #[\SensitiveParameter]
+        string $otp,
+        ?RunwireExecutionContext $runwire = null,
+    ): bool
     {
         self::assertBinding($binding);
         if (strlen($otp) !== $this->digits || !ctype_digit($otp)) {
@@ -128,6 +136,7 @@ final readonly class GenericOtp
             self::lockKey($binding),
             'generic OTP',
             fn(mixed $stored): array => $this->verifyState($stored, $candidateDigest, $now),
+            $runwire,
         );
     }
 
