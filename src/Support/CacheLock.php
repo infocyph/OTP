@@ -141,7 +141,7 @@ final class CacheLock
         return $locks === null || self::lockRequiresAtomic($locks) ? $atomic : null;
     }
 
-    /**
+        /**
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
@@ -152,28 +152,8 @@ final class CacheLock
         callable $operation,
     ): mixed {
         self::assertLockSafe($cache);
-        $locks = $cache->authenticationStateLock()
-            ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
-        $handle = $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
-            ?? throw new RuntimeException('Unable to acquire the OTP state lock.');
 
-        try {
-            $result = $operation($locks, $handle);
-        } catch (Throwable $failure) {
-            try {
-                $locks->release($handle);
-            } catch (Throwable) {
-            }
-
-            throw $failure;
-        }
-
-        try {
-            $locks->release($handle);
-        } catch (Throwable) {
-        }
-
-        return $result;
+        return self::synchronizedKnownSafe($cache, $key, $operation);
     }
 
     /**
@@ -199,7 +179,7 @@ final class CacheLock
             return self::transitionAtomically($cache, $atomic, $stateKey, $stateName, $transition);
         }
 
-        return self::synchronized(
+        return self::synchronizedKnownSafe(
             $cache,
             $lockKey,
             function (LockProviderInterface $locks, LockHandle $handle) use (
@@ -267,7 +247,7 @@ final class CacheLock
         ?int $ttl,
         string $stateName,
     ): bool {
-        return self::synchronized(
+        return self::synchronizedKnownSafe(
             $cache,
             $lockKey,
             function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $value, $ttl, $stateName): bool {
@@ -306,10 +286,7 @@ final class CacheLock
         return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
     }
 
-    private static function lockRequiresAtomic(LockProviderInterface $locks): bool
-    {
-        return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
-    }
+
 
     private static function consumeOnceAtomically(
         AuthenticationStateCacheInterface $cache,
@@ -341,7 +318,7 @@ final class CacheLock
         int $ttl,
         string $stateName,
     ): bool {
-        return self::synchronized(
+        return self::synchronizedKnownSafe(
             $cache,
             $lockKey,
             function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
@@ -392,7 +369,7 @@ final class CacheLock
         int $ttl,
         string $stateName,
     ): bool {
-        return self::synchronized(
+        return self::synchronizedKnownSafe(
             $cache,
             $lockKey,
             function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
@@ -413,7 +390,99 @@ final class CacheLock
         );
     }
 
+    
+
+    private static function lockRequiresAtomic(LockProviderInterface $locks): bool
+    {
+        return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
+    }
+
+    private static function reserveOnceAtomically(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            if ($atomic->setIfAbsent($stateKey, 0, $ttl)) {
+                return true;
+            }
+            $current = $cache->get($stateKey);
+            if ($current === 0 || $current === 1) {
+                return false;
+            }
+            if ($current !== null) {
+                throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
+            }
+        }
+
+        throw new RuntimeException('Unable to reserve ' . $stateName . ' after atomic contention.');
+    }
+
+    private static function reserveOnceWithLock(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        int $ttl,
+        string $stateName,
+    ): bool {
+        return self::synchronizedKnownSafe(
+            $cache,
+            $lockKey,
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
+                $current = $cache->get($stateKey);
+                if ($current === 0 || $current === 1) {
+                    return false;
+                }
+                if ($current !== null) {
+                    throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
+                }
+                self::ensureOwned($locks, $handle);
+                if (!$cache->set($stateKey, 0, $ttl)) {
+                    throw new RuntimeException('Unable to reserve ' . $stateName . '.');
+                }
+
+                return true;
+            },
+        );
+    }
+
     /**
+     * @template T
+     * @param callable(LockProviderInterface, LockHandle): T $operation
+     * @return T
+     */
+    private static function synchronizedKnownSafe(
+        AuthenticationStateCacheInterface $cache,
+        string $key,
+        callable $operation,
+    ): mixed {
+        $locks = $cache->authenticationStateLock()
+            ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
+        $handle = $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
+            ?? throw new RuntimeException('Unable to acquire the OTP state lock.');
+
+        try {
+            $result = $operation($locks, $handle);
+        } catch (Throwable $failure) {
+            try {
+                $locks->release($handle);
+            } catch (Throwable) {
+            }
+
+            throw $failure;
+        }
+
+        try {
+            $locks->release($handle);
+        } catch (Throwable) {
+        }
+
+        return $result;
+    }
+
+/**
      * @template T
      * @param callable(mixed): array{
      *     result:T,
@@ -451,56 +520,5 @@ final class CacheLock
         }
 
         throw new RuntimeException('Unable to transition ' . $stateName . ' state after atomic contention.');
-    }
-
-    private static function reserveOnceAtomically(
-        AuthenticationStateCacheInterface $cache,
-        AtomicCacheInterface $atomic,
-        string $stateKey,
-        int $ttl,
-        string $stateName,
-    ): bool {
-        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            if ($atomic->setIfAbsent($stateKey, 0, $ttl)) {
-                return true;
-            }
-            $current = $cache->get($stateKey);
-            if ($current === 0 || $current === 1) {
-                return false;
-            }
-            if ($current !== null) {
-                throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
-            }
-        }
-
-        throw new RuntimeException('Unable to reserve ' . $stateName . ' after atomic contention.');
-    }
-
-    private static function reserveOnceWithLock(
-        AuthenticationStateCacheInterface $cache,
-        string $stateKey,
-        string $lockKey,
-        int $ttl,
-        string $stateName,
-    ): bool {
-        return self::synchronized(
-            $cache,
-            $lockKey,
-            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName): bool {
-                $current = $cache->get($stateKey);
-                if ($current === 0 || $current === 1) {
-                    return false;
-                }
-                if ($current !== null) {
-                    throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
-                }
-                self::ensureOwned($locks, $handle);
-                if (!$cache->set($stateKey, 0, $ttl)) {
-                    throw new RuntimeException('Unable to reserve ' . $stateName . '.');
-                }
-
-                return true;
-            },
-        );
     }
 }
