@@ -222,8 +222,10 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         'pAEDAzkBACBZAQDwn2Ee7V+9GNDn2iCU2plQnIVmZG/vOiXSHb9TQzC5806bGzLV918+1SLFhMhlX5jua2rdXt65nYw9Eln7mbmVxLBDmEm2wod6wP2HinC9HPsYwr75tMRakLMNFfH4Xx4lEsjulRmv68yl/N8XH64X8LKe2GBxjqcuJR+c3LbW4D5dWt/1pGL8fS1UbO3abA/d3IeEsP8RpEz5eVo6qBhb4r0VTo2NMeq75saBHIj4whqo6qsRqRvBmK2d9NAecBFFRIQ31NUtEQZPqXOzkbXGehDi7c3YJPBkTW9kMqcosob9Vlru+vVab+1PnFRdqaklR1UtmhrWte/wB61Hm3xdIUMBAAE=',
         true,
     );
-    expect($credentialId)->toBeString()
-        ->and($publicKey)->toBeString();
+    $aaguid = base64_decode('YCiwF7HUTAK0s6/Nr8lrsg==', true);
+    if (!is_string($credentialId) || !is_string($publicKey) || !is_string($aaguid)) {
+        throw new RuntimeException('Invalid embedded WebAuthn assertion fixture.');
+    }
 
     $record = CredentialRecord::create(
         $credentialId,
@@ -231,7 +233,7 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         [],
         'none',
         EmptyTrustPath::create(),
-        Uuid::fromBinary(base64_decode('YCiwF7HUTAK0s6/Nr8lrsg==', true)),
+        Uuid::fromBinary($aaguid),
         $publicKey,
         $userHandle,
         0,
