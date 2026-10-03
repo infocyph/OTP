@@ -334,59 +334,7 @@ function runTimedWorkload(
     callable $operationFactory,
     bool $enforceAbsoluteBudgets = false,
 ): array {
-    $rpms = [];
-    $latencies = [];
-    $attempted = 0;
-    $successful = 0;
-    $failed = 0;
-    $cpuSeconds = 0.0;
-    $wallSeconds = 0.0;
-    $memoryStarts = [];
-    $memoryEnds = [];
-    $memoryPeaks = [];
-
-    for ($repetition = 0; $repetition < $repetitions; $repetition++) {
-        $operation = $operationFactory($repetition);
-        for ($index = 0; $index < $warmupOperations; $index++) {
-            $operation();
-        }
-
-        $measurement = measureOperation($operation, $duration, $sampleInterval);
-        $attempted += $measurement['attempted'];
-        $successful += $measurement['successful'];
-        $failed += $measurement['failed'];
-        $latencies = [...$latencies, ...$measurement['latencies']];
-        $wallSeconds += $measurement['elapsed'];
-        $cpuSeconds += $measurement['cpu_seconds'];
-        $memoryStarts[] = $measurement['memory_start_mb'];
-        $memoryEnds[] = $measurement['memory_end_mb'];
-        $memoryPeaks[] = $measurement['memory_peak_mb'];
-        $rpms[] = $measurement['successful_rpm'];
-    }
-
-    if ($failed !== 0) {
-        throw new RuntimeException('Representative benchmark recorded failed operations.');
-    }
-
-    $memoryGrowth = 0.0;
-    foreach ($memoryStarts as $index => $startMemory) {
-        $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
-    }
-    $peakMemory = $memoryPeaks === [] ? null : max($memoryPeaks);
-    $p99 = percentile($latencies, 99);
-
-    if ($enforceAbsoluteBudgets && $p99 !== null && $p99 > MAX_P99_LATENCY_MS) {
-        throw new RuntimeException('Sustained benchmark exceeded the absolute p99 latency budget.');
-    }
-    if ($enforceAbsoluteBudgets && $peakMemory !== null && $peakMemory > MAX_PEAK_MEMORY_MB) {
-        throw new RuntimeException('Sustained benchmark exceeded the absolute peak-memory budget.');
-    }
-    if ($enforceAbsoluteBudgets && $memoryGrowth > MAX_MEMORY_GROWTH_MB) {
-        throw new RuntimeException('Sustained benchmark exceeded the absolute memory-growth budget.');
-    }
-
     $metadata['duration_per_repetition_seconds'] = $duration;
-    $metadata['soak_duration_seconds'] = $wallSeconds;
     $metadata['stability_spread_limit_percent'] = $stabilityLimit;
     if ($enforceAbsoluteBudgets) {
         $metadata['p99_latency_budget_ms'] = MAX_P99_LATENCY_MS;
@@ -394,9 +342,114 @@ function runTimedWorkload(
         $metadata['memory_growth_budget_mb'] = MAX_MEMORY_GROWTH_MB;
     }
 
+    $workload = runRepeatedWorkload(
+        $repetitions,
+        $name,
+        'persistent-worker',
+        $metadata,
+        $warmupOperations,
+        $stabilityLimit,
+        static function (int $repetition) use (
+            $duration,
+            $sampleInterval,
+            $operationFactory,
+            $warmupOperations,
+        ): array {
+            $operation = $operationFactory($repetition);
+            for ($index = 0; $index < $warmupOperations; $index++) {
+                $operation();
+            }
+
+            return measureOperation($operation, $duration, $sampleInterval);
+        },
+    );
+
+    if (!$enforceAbsoluteBudgets) {
+        return $workload;
+    }
+
+    $p99 = $workload['result']['latency_ms']['p99'] ?? null;
+    $peakMemory = $workload['result']['memory']['peak_mb'] ?? null;
+    $memoryGrowth = $workload['result']['memory']['growth_mb'] ?? null;
+    if (is_float($p99) && $p99 > MAX_P99_LATENCY_MS) {
+        throw new RuntimeException('Sustained benchmark exceeded the absolute p99 latency budget.');
+    }
+    if (is_float($peakMemory) && $peakMemory > MAX_PEAK_MEMORY_MB) {
+        throw new RuntimeException('Sustained benchmark exceeded the absolute peak-memory budget.');
+    }
+    if (is_float($memoryGrowth) && $memoryGrowth > MAX_MEMORY_GROWTH_MB) {
+        throw new RuntimeException('Sustained benchmark exceeded the absolute memory-growth budget.');
+    }
+
+    return $workload;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function runRepeatedWorkload(
+    int $repetitions,
+    string $name,
+    string $type,
+    array $metadata,
+    int $warmupOperations,
+    float $stabilityLimit,
+    callable $repetitionOperation,
+    string $unstableStatus = 'unstable',
+    int $concurrency = 1,
+): array {
+    $rpms = [];
+    $latencies = [];
+    $attempted = 0;
+    $successful = 0;
+    $failed = 0;
+    $wallSeconds = 0.0;
+    $cpuSeconds = 0.0;
+    $cpuMeasured = false;
+    $memoryStarts = [];
+    $memoryEnds = [];
+    $memoryPeaks = [];
+
+    for ($repetition = 0; $repetition < $repetitions; $repetition++) {
+        $measurement = $repetitionOperation($repetition);
+        $attempted += $measurement['attempted'];
+        $successful += $measurement['successful'];
+        $failed += $measurement['failed'];
+        $wallSeconds += $measurement['elapsed'];
+        $rpms[] = $measurement['successful_rpm'];
+        $latencies = [...$latencies, ...$measurement['latencies']];
+
+        if (is_float($measurement['cpu_seconds'])) {
+            $cpuSeconds += $measurement['cpu_seconds'];
+            $cpuMeasured = true;
+        }
+        if (is_float($measurement['memory_start_mb'])) {
+            $memoryStarts[] = $measurement['memory_start_mb'];
+        }
+        if (is_float($measurement['memory_end_mb'])) {
+            $memoryEnds[] = $measurement['memory_end_mb'];
+        }
+        if (is_float($measurement['memory_peak_mb'])) {
+            $memoryPeaks[] = $measurement['memory_peak_mb'];
+        }
+    }
+
+    if ($failed !== 0) {
+        throw new RuntimeException('Representative benchmark recorded failed operations.');
+    }
+
+    $memoryGrowth = null;
+    if ($memoryStarts !== [] && count($memoryStarts) === count($memoryEnds)) {
+        $memoryGrowth = 0.0;
+        foreach ($memoryStarts as $index => $startMemory) {
+            $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
+        }
+    }
+    $metadata['soak_duration_seconds'] = $wallSeconds;
+
     return buildWorkloadResult(
         name: $name,
-        type: 'persistent-worker',
+        type: $type,
         metadata: $metadata,
         repetitions: $repetitions,
         warmupOperations: $warmupOperations,
@@ -407,18 +460,19 @@ function runTimedWorkload(
         rpms: $rpms,
         latencies: $latencies,
         cpu: [
-            'average_percent' => $wallSeconds > 0.0 ? ($cpuSeconds / $wallSeconds) * 100 : null,
+            'average_percent' => $cpuMeasured && $wallSeconds > 0.0 ? ($cpuSeconds / $wallSeconds) * 100 : null,
             'peak_percent' => null,
         ],
         memory: [
             'average_mb' => ($memoryStarts === [] || $memoryEnds === [])
                 ? null
                 : (array_sum($memoryStarts) + array_sum($memoryEnds)) / (count($memoryStarts) * 2),
-            'peak_mb' => $peakMemory,
+            'peak_mb' => $memoryPeaks === [] ? null : max($memoryPeaks),
             'growth_mb' => $memoryGrowth,
         ],
         stabilityLimit: $stabilityLimit,
-        unstableStatus: 'unstable',
+        unstableStatus: $unstableStatus,
+        concurrency: $concurrency,
     );
 }
 
@@ -431,112 +485,96 @@ function runConcurrentVerificationWorkload(float $duration, int $repetitions): a
         throw new RuntimeException('Concurrent verification benchmark requires pcntl, posix, and pdo_sqlite.');
     }
 
-    $rpms = [];
-    $latencies = [];
-    $attempted = 0;
-    $successful = 0;
-    $failed = 0;
-    $wallSeconds = 0.0;
-
-    for ($repetition = 0; $repetition < $repetitions; $repetition++) {
-        $database = sys_get_temp_dir() . '/otp-release-concurrent-' . bin2hex(random_bytes(8)) . '.sqlite';
-        $barrier = sys_get_temp_dir() . '/otp-release-barrier-' . bin2hex(random_bytes(8));
-        $namespace = 'otp-release-concurrent-' . $repetition;
-        $initializer = Cache::sqlite($namespace, $database, benchmarkCacheOptions());
-        $initializer->set('ready', true, 60);
-        unset($initializer);
-
-        $children = [];
-        for ($worker = 0; $worker < CONCURRENT_WORKERS; $worker++) {
-            $pid = pcntl_fork();
-            if ($pid === -1) {
-                throw new RuntimeException('Unable to fork concurrent verification benchmark worker.');
-            }
-            if ($pid === 0) {
-                runConcurrentVerificationWorker($database, $namespace, $barrier, $worker, $duration);
-                exit(0);
-            }
-            $children[$worker] = $pid;
-        }
-
-        $readyDeadline = microtime(true) + 15.0;
-        for ($worker = 0; $worker < CONCURRENT_WORKERS; $worker++) {
-            while (!is_file($barrier . '.ready.' . $worker)) {
-                if (microtime(true) >= $readyDeadline) {
-                    throw new RuntimeException('Concurrent verification worker did not reach the start barrier.');
-                }
-                usleep(1_000);
-            }
-        }
-
-        $start = hrtime(true);
-        file_put_contents($barrier . '.go', '1');
-
-        $repSuccessful = 0;
-        foreach ($children as $worker => $pid) {
-            pcntl_waitpid($pid, $status);
-            if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
-                throw new RuntimeException('Concurrent verification worker exited unsuccessfully.');
-            }
-
-            $payload = file_get_contents($barrier . '.result.' . $worker);
-            if (!is_string($payload)) {
-                throw new RuntimeException('Concurrent verification worker returned no benchmark result.');
-            }
-            $result = json_decode($payload, true, 32, JSON_THROW_ON_ERROR);
-            $attempted += (int) ($result['attempted'] ?? 0);
-            $successful += (int) ($result['successful'] ?? 0);
-            $repSuccessful += (int) ($result['successful'] ?? 0);
-            $failed += (int) ($result['failed'] ?? 0);
-            foreach (($result['latencies'] ?? []) as $latency) {
-                if (is_float($latency) || is_int($latency)) {
-                    $latencies[] = (float) $latency;
-                }
-            }
-        }
-
-        $elapsed = (hrtime(true) - $start) / 1_000_000_000;
-        $wallSeconds += $elapsed;
-        $rpms[] = $elapsed > 0.0 ? ($repSuccessful / $elapsed) * 60 : 0.0;
-        cleanupConcurrentBenchmark($database, $barrier);
-    }
-
-    if ($failed !== 0) {
-        throw new RuntimeException('Concurrent verification benchmark recorded failed operations.');
-    }
-
-    return buildWorkloadResult(
-        name: 'generic-otp-concurrent-verification',
-        type: 'persistent-worker',
-        metadata: [
+    return runRepeatedWorkload(
+        $repetitions,
+        'generic-otp-concurrent-verification',
+        'persistent-worker',
+        [
             'operation' => 'four persistent workers performing GenericOtp::generate + verify',
             'backend' => 'CacheLayer SQLite authoritative state',
             'runwire_context' => 'absent',
             'queue' => 'process start barrier only',
             'backend_connections' => CONCURRENT_WORKERS,
             'duration_per_repetition_seconds' => $duration,
-            'soak_duration_seconds' => $wallSeconds,
             'stability_spread_limit_percent' => CONCURRENT_STABILITY_SPREAD_PERCENT,
         ],
-        repetitions: $repetitions,
-        warmupOperations: CONCURRENT_WARMUP_OPERATIONS * CONCURRENT_WORKERS,
-        durationSeconds: $wallSeconds,
-        attempted: $attempted,
-        successful: $successful,
-        failed: $failed,
-        rpms: $rpms,
-        latencies: $latencies,
-        cpu: [
-            'average_percent' => null,
-            'peak_percent' => null,
-        ],
-        memory: [
-            'average_mb' => null,
-            'peak_mb' => null,
-            'growth_mb' => null,
-        ],
-        stabilityLimit: CONCURRENT_STABILITY_SPREAD_PERCENT,
-        unstableStatus: 'unstable',
+        CONCURRENT_WARMUP_OPERATIONS * CONCURRENT_WORKERS,
+        CONCURRENT_STABILITY_SPREAD_PERCENT,
+        static function (int $repetition) use ($duration): array {
+            $database = sys_get_temp_dir() . '/otp-release-concurrent-' . bin2hex(random_bytes(8)) . '.sqlite';
+            $barrier = sys_get_temp_dir() . '/otp-release-barrier-' . bin2hex(random_bytes(8));
+            $namespace = 'otp-release-concurrent-' . $repetition;
+            $initializer = Cache::sqlite($namespace, $database, benchmarkCacheOptions());
+            $initializer->set('ready', true, 60);
+            unset($initializer);
+
+            $children = [];
+            for ($worker = 0; $worker < CONCURRENT_WORKERS; $worker++) {
+                $pid = pcntl_fork();
+                if ($pid === -1) {
+                    throw new RuntimeException('Unable to fork concurrent verification benchmark worker.');
+                }
+                if ($pid === 0) {
+                    runConcurrentVerificationWorker($database, $namespace, $barrier, $worker, $duration);
+                    exit(0);
+                }
+                $children[$worker] = $pid;
+            }
+
+            $readyDeadline = microtime(true) + 15.0;
+            for ($worker = 0; $worker < CONCURRENT_WORKERS; $worker++) {
+                while (!is_file($barrier . '.ready.' . $worker)) {
+                    if (microtime(true) >= $readyDeadline) {
+                        throw new RuntimeException('Concurrent verification worker did not reach the start barrier.');
+                    }
+                    usleep(1_000);
+                }
+            }
+
+            $start = hrtime(true);
+            file_put_contents($barrier . '.go', '1');
+            $attempted = 0;
+            $successful = 0;
+            $failed = 0;
+            $latencies = [];
+
+            foreach ($children as $worker => $pid) {
+                pcntl_waitpid($pid, $status);
+                if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+                    throw new RuntimeException('Concurrent verification worker exited unsuccessfully.');
+                }
+
+                $payload = file_get_contents($barrier . '.result.' . $worker);
+                if (!is_string($payload)) {
+                    throw new RuntimeException('Concurrent verification worker returned no benchmark result.');
+                }
+                $result = json_decode($payload, true, 32, JSON_THROW_ON_ERROR);
+                $attempted += (int) ($result['attempted'] ?? 0);
+                $successful += (int) ($result['successful'] ?? 0);
+                $failed += (int) ($result['failed'] ?? 0);
+                foreach (($result['latencies'] ?? []) as $latency) {
+                    if (is_float($latency) || is_int($latency)) {
+                        $latencies[] = (float) $latency;
+                    }
+                }
+            }
+
+            $elapsed = (hrtime(true) - $start) / 1_000_000_000;
+            cleanupConcurrentBenchmark($database, $barrier);
+
+            return [
+                'attempted' => $attempted,
+                'successful' => $successful,
+                'failed' => $failed,
+                'latencies' => $latencies,
+                'elapsed' => $elapsed,
+                'cpu_seconds' => null,
+                'memory_start_mb' => null,
+                'memory_end_mb' => null,
+                'memory_peak_mb' => null,
+                'successful_rpm' => $elapsed > 0.0 ? ($successful / $elapsed) * 60 : 0.0,
+            ];
+        },
         concurrency: CONCURRENT_WORKERS,
     );
 }
@@ -775,69 +813,55 @@ function benchmarkCacheOptions(): CacheOptions
  */
 function runColdStartWorkload(string $autoload, int $repetitions): array
 {
-    $rpms = [];
-    $latencies = [];
-    $attempted = 0;
-    $successful = 0;
-    $failed = 0;
-    $wallSeconds = 0.0;
     $warmupOperations = 3;
 
-    for ($repetition = 0; $repetition < $repetitions; $repetition++) {
-        for ($index = 0; $index < $warmupOperations; $index++) {
-            runColdStartOperation($autoload);
-        }
-
-        $start = hrtime(true);
-        $repSuccessful = 0;
-        for ($index = 0; $index < COLD_START_OPERATIONS; $index++) {
-            $before = hrtime(true);
-            if (runColdStartOperation($autoload)) {
-                $repSuccessful++;
-                $successful++;
-            } else {
-                $failed++;
-            }
-            $attempted++;
-            $latencies[] = (hrtime(true) - $before) / 1_000_000;
-        }
-        $elapsed = (hrtime(true) - $start) / 1_000_000_000;
-        $wallSeconds += $elapsed;
-        $rpms[] = $elapsed > 0.0 ? ($repSuccessful / $elapsed) * 60 : 0.0;
-    }
-
-    if ($failed !== 0) {
-        throw new RuntimeException('Cold-start benchmark recorded failed operations.');
-    }
-
-    return buildWorkloadResult(
-        name: 'generic-otp-php-process-cold-start',
-        type: 'custom',
-        metadata: [
+    return runRepeatedWorkload(
+        $repetitions,
+        'generic-otp-php-process-cold-start',
+        'custom',
+        [
             'operation' => 'fresh PHP process + Composer autoload + CacheLayer + GenericOtp::generate',
             'backend' => 'CacheLayer memory authoritative state',
             'runwire_context' => 'absent',
             'operations_per_repetition' => COLD_START_OPERATIONS,
             'stability_spread_limit_percent' => COLD_START_STABILITY_SPREAD_PERCENT,
         ],
-        repetitions: $repetitions,
-        warmupOperations: $warmupOperations,
-        durationSeconds: $wallSeconds,
-        attempted: $attempted,
-        successful: $successful,
-        failed: $failed,
-        rpms: $rpms,
-        latencies: $latencies,
-        cpu: [
-            'average_percent' => null,
-            'peak_percent' => null,
-        ],
-        memory: [
-            'average_mb' => null,
-            'peak_mb' => null,
-            'growth_mb' => null,
-        ],
-        stabilityLimit: COLD_START_STABILITY_SPREAD_PERCENT,
+        $warmupOperations,
+        COLD_START_STABILITY_SPREAD_PERCENT,
+        static function (int $repetition) use ($autoload, $warmupOperations): array {
+            unset($repetition);
+            for ($index = 0; $index < $warmupOperations; $index++) {
+                runColdStartOperation($autoload);
+            }
+
+            $start = hrtime(true);
+            $successful = 0;
+            $failed = 0;
+            $latencies = [];
+            for ($index = 0; $index < COLD_START_OPERATIONS; $index++) {
+                $before = hrtime(true);
+                if (runColdStartOperation($autoload)) {
+                    $successful++;
+                } else {
+                    $failed++;
+                }
+                $latencies[] = (hrtime(true) - $before) / 1_000_000;
+            }
+            $elapsed = (hrtime(true) - $start) / 1_000_000_000;
+
+            return [
+                'attempted' => COLD_START_OPERATIONS,
+                'successful' => $successful,
+                'failed' => $failed,
+                'latencies' => $latencies,
+                'elapsed' => $elapsed,
+                'cpu_seconds' => null,
+                'memory_start_mb' => null,
+                'memory_end_mb' => null,
+                'memory_peak_mb' => null,
+                'successful_rpm' => $elapsed > 0.0 ? ($successful / $elapsed) * 60 : 0.0,
+            ];
+        },
         unstableStatus: 'unverified',
     );
 }
