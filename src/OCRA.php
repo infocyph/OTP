@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Support\LabelHelper;
@@ -282,6 +283,7 @@ final readonly class OCRA
         ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
         ?int $replayTtl = null,
+        ?RunwireExecutionContext $runwire = null,
     ): VerificationResult {
         return $this->verifyChallenge(
             $otp,
@@ -294,6 +296,7 @@ final readonly class OCRA
             $cache,
             $factorId,
             $replayTtl,
+            runwire: $runwire,
         );
     }
 
@@ -370,11 +373,12 @@ final readonly class OCRA
         AuthenticationStateCacheInterface $cache,
         string $factorId,
         int $counter,
+        ?RunwireExecutionContext $runwire,
     ): bool {
         $stateKey = hash('sha256', "infocyph:otp:ocra:counter:v1\0" . $factorId);
         $lockKey = hash('sha256', "infocyph:otp:ocra:counter-lock:v1\0" . $factorId);
 
-        return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'OCRA counter');
+        return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'OCRA counter', $runwire);
     }
 
     private function assertChallenge(string $challenge, bool $composite = false): void
@@ -518,11 +522,12 @@ final readonly class OCRA
         string $factorId,
         string $message,
         int $ttl,
+        ?RunwireExecutionContext $runwire,
     ): bool {
         $stateKey = hash('sha256', "infocyph:otp:ocra:message:v1\0" . $factorId . "\0" . $message);
         $lockKey = hash('sha256', "infocyph:otp:ocra:message-lock:v1\0" . $factorId . "\0" . $message);
 
-        return CacheLock::consumeOnce($cache, $stateKey, $lockKey, $ttl, 'OCRA replay');
+        return CacheLock::consumeOnce($cache, $stateKey, $lockKey, $ttl, 'OCRA replay', $runwire);
     }
 
     private function encodeChallenge(string $challenge): string
@@ -606,12 +611,13 @@ final readonly class OCRA
         int $counter,
         string $message,
         ?int $ttl,
+        ?RunwireExecutionContext $runwire,
     ): bool {
         if ($this->suite->counterEnabled) {
-            return !$this->advanceCounter($cache, $factorId, $counter);
+            return !$this->advanceCounter($cache, $factorId, $counter, $runwire);
         }
 
-        return !$this->consumeMessage($cache, $factorId, $message, $ttl ?? 0);
+        return !$this->consumeMessage($cache, $factorId, $message, $ttl ?? 0, $runwire);
     }
 
     /**
@@ -704,6 +710,7 @@ final readonly class OCRA
         ?AuthenticationStateCacheInterface $cache = null,
         ?string $factorId = null,
         ?int $replayTtl = null,
+        ?RunwireExecutionContext $runwire = null,
         bool $composite = false,
     ): VerificationResult {
         $window = $timeWindow ?? new VerificationWindow();
@@ -720,7 +727,7 @@ final readonly class OCRA
         if (
             $cache !== null
             && $factorId !== null
-            && $this->isReplay($cache, $factorId, $counter ?? 0, $match['message'], $replayTtl)
+            && $this->isReplay($cache, $factorId, $counter ?? 0, $match['message'], $replayTtl, $runwire)
         ) {
             return VerificationResult::replay(matchedCounter: $counter, driftOffset: $match['offset']);
         }
