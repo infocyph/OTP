@@ -230,8 +230,8 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 4 | F4 GridOTP entropy policy and migration | Complete | Complete (GridOTP regressions green; full gate retains Batch 6 F5 skip findings) | Complete |
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Complete | Complete (fenced CAS regressions, v1 state keys, Pest/Pint green; Redis acceptance continues in Batch 6) | Complete |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Complete | Complete (4 QA lanes, live Redis/SQLite, zero skips, analyzers/clean install/benchmarks green) | Complete |
-| 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | In progress | Running (^4.0 floor + full matrix) | In progress |
-| 8 | Performance baseline and minimal optional Runwire integration | Pending | Pending | Pending |
+| 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | Complete | Complete (CacheLayer 4.0 resolved; 4 QA lanes, analyzers, clean install, Redis/SQLite, benchmarks green) | Complete |
+| 8 | Performance baseline and minimal optional Runwire integration | In progress | Pending | In progress |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
 | 10 | Documentation, migration/rollback, full release acceptance | Pending | Pending | Pending |
 
