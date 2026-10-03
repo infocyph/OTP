@@ -4,9 +4,9 @@ Date: 2026-10-03. Status: audit complete; implementation and release gates pendi
 
 ## Decision
 
-Deliver **one consolidated release, targeting 6.2.0**, containing security/correctness hardening, tested CacheLayer 4 compatibility, optional explicitly passed Runwire 2.1 context, documentation, and all required verification. Implementation can proceed in ordered workstreams, but they share one release candidate, changelog, acceptance decision, and tag. Do not publish an intermediate hardening release.
+Deliver **one consolidated release, targeting 7.0.0**, containing security/correctness hardening, a direct CacheLayer 4.0 dependency floor, optional explicitly passed Runwire 2.1 context, documentation, and all required verification. Implementation can proceed in ordered workstreams, but they share one release candidate, changelog, acceptance decision, and tag. Do not publish an intermediate hardening release.
 
-Keep PHP `^8.4` / 64-bit requirements. Prefer widening CacheLayer to `^3.3 || ^4.0` only after testing both dependency lines. Keep Runwire optional. A major release is not justified merely because CacheLayer has a new major version. If implementation requires removing a supported dependency line, breaking public contracts or stored-state compatibility, or enforcing an incompatible GridOTP policy, revise this same consolidated candidate to **7.0.0** with migration guidance rather than splitting the work into successive releases.
+Keep PHP `^8.4` / 64-bit requirements. Raise CacheLayer directly to `^4.0`; OTP 7.0 does not support CacheLayer 3.x. Keep Runwire optional. This dependency-floor break is carried by the same consolidated **7.0.0** candidate with explicit CacheLayer 3.x → 4.x migration and rollback guidance rather than a split release.
 
 This document follows `vendor/infocyph/phpforge/resources/engineering-principles.md`: security and protocol correctness first; smallest changes in existing owners; explicit lifecycle and persistence ownership; no speculative framework layers; measured performance; no weakened quality gates. No production code or Composer dependencies were changed during this audit.
 
@@ -120,7 +120,7 @@ Required work:
 
 Acceptance: the release accurately describes the risk, tests it, and provides a concrete migration path; any enforced policy must meet a documented guessing budget. This is a custom-protocol review item, not a claim that GridOTP is equivalent to WebAuthn.
 
-Implementation decision (2026-10-03): keep existing factors compatible in 6.2 while making the secure path explicit. Generated secrets guarantee enough distinct symbols for every supported challenge size; challenge selection uses distinct secret symbols whenever the enrolled secret permits it. ``GridOTP::hasSufficientDiversity()`` supports inventory, and trailing ``enforceDiversity`` provides opt-in enforcement for new/re-enrolled factors. Existing insufficient-diversity factors continue through the legacy position-selection path until re-enrollment; they are not silently regenerated or locked out.
+Implementation decision (2026-10-03): keep existing factors compatible in 7.0 while making the secure path explicit. Generated secrets guarantee enough distinct symbols for every supported challenge size; challenge selection uses distinct secret symbols whenever the enrolled secret permits it. ``GridOTP::hasSufficientDiversity()`` supports inventory, and trailing ``enforceDiversity`` provides opt-in enforcement for new/re-enrolled factors. Existing insufficient-diversity factors continue through the legacy position-selection path until re-enrollment; they are not silently regenerated or locked out.
 
 ### F5 — P1 release gate: skipped tests and dependency hygiene
 
@@ -151,14 +151,14 @@ Required acceptance work:
 
 ## CacheLayer 4.0 adoption
 
-The public authentication-state and atomic interfaces inspected in installed 3.4 and tagged 4.0 are identical. That supports testing a widened dependency range; it does not substitute for testing the declared 3.3 minimum or behavioral differences.
+The public authentication-state and atomic interfaces inspected in installed 3.4 and tagged 4.0 are source-compatible for OTP's current use, but CacheLayer 4.0 intentionally changes signed-record identity binding and other storage behavior. OTP therefore moves directly to CacheLayer `^4.0`; 3.x is not a supported runtime line for OTP 7.0.
 
-1. Create clean isolated consumer/test installations for CacheLayer 3.3 lowest, current 3.x stable, 4.0 minimum, and current supported 4.x stable on PHP 8.4/8.5.
+1. Create clean isolated consumer/test installations for CacheLayer 4.0 minimum and current supported 4.x stable on PHP 8.4/8.5.
 2. Exercise memory, SQLite, live Redis, and the advertised coordinated-lock fallback. Cover initialization, CAS, consuming claims, monotonic state, TTL, corruption, backend failures, and unknown outcomes.
-3. Verify the optional Runwire package can be absent with CacheLayer 4.0 and normal OTP calls still work.
-4. Only then widen `require` to `^3.3 || ^4.0`, update installation/storage docs, and add explicit CI lanes. A global `prefer-lowest`/`prefer-stable` pair alone will not exercise every supported dependency major/minimum.
+3. Verify the optional Runwire package can be absent with CacheLayer 4.x and normal OTP calls still work.
+4. Require `infocyph/cachelayer:^4.0` and validate the lower-bound and current 4.x dependency sets explicitly. OTP 7.0 must not resolve CacheLayer 3.x.
 5. Keep authentication state on authoritative direct backends. Do not switch it to tiered, Node/Cluster invalidation caches, process memoization, or fail-open storage to obtain runtime features.
-6. Preserve state key domains and encodings. Verify mixed-version workers and rollback against live state before claiming zero-migration compatibility.
+6. Preserve OTP state key domains and encodings, but do not claim CacheLayer 3.x signed records are directly readable by 4.0. Document a coordinated cutover for live authentication state, including durable monotonic replay/counter state, and treat mixed CacheLayer 3.x/4.x workers as unsupported during migration unless a tested bridge is provided.
 
 ## Runwire 2.1: useful, but narrowly scoped
 
@@ -230,7 +230,7 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 4 | F4 GridOTP entropy policy and migration | Complete | Complete (GridOTP regressions green; full gate retains Batch 6 F5 skip findings) | Complete |
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Complete | Complete (fenced CAS regressions, v1 state keys, Pest/Pint green; Redis acceptance continues in Batch 6) | Complete |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Complete | Complete (4 QA lanes, live Redis/SQLite, zero skips, analyzers/clean install/benchmarks green) | Complete |
-| 7 | CacheLayer 3.3/3.x/4.0/4.x compatibility and constraint widening | In progress | Pending | In progress |
+| 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | In progress | Running (^4.0 floor + full matrix) | In progress |
 | 8 | Performance baseline and minimal optional Runwire integration | Pending | Pending | Pending |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
 | 10 | Documentation, migration/rollback, full release acceptance | Pending | Pending | Pending |
@@ -249,7 +249,7 @@ Known upstream release blocker: current stable `phpbench/phpbench` 1.7.0 still r
 
 ### Workstream B — dependency and runtime integration
 
-1. Prove CacheLayer compatibility in clean installations and widen the range.
+1. Prove CacheLayer 4.0/current-4.x compatibility in clean installations and enforce the `^4.0` floor.
 2. Record a representative baseline before adding the optional Runwire path.
 3. Implement the smallest passed-instance contract and capability use above, preserving default behavior and state formats.
 4. Add consumer examples for both call-chain shapes, normal PHP-FPM/CLI, and a persistent host. Document worker-local resource creation after fork.
@@ -258,7 +258,7 @@ Known upstream release blocker: current stable `phpbench/phpbench` 1.7.0 still r
 ### One combined release candidate
 
 1. Complete both workstreams and consolidate their code, dependency constraints, tests, documentation, examples, migration/rollback instructions, and release notes into one candidate.
-2. Confirm 6.2.0 is compatible with the existing public and stored-state contracts. If required changes break those contracts, use 7.0.0 for this same candidate and document the migration.
+2. Confirm 7.0.0 preserves OTP public protocol/result contracts while documenting the intentional CacheLayer 4.0 dependency and signed-state migration break.
 3. Run the installed PHPForge workflow on the combined candidate: doctor/config checks, sequential `ic:process`, `ic:tests:details`, then `ic:tests` or `ic:release:guard`; inspect all generated edits. Run Composer audit/validation, compatibility/deprecation checks, and the complete acceptance matrix below.
 4. Require passing local verification and CI on the exact final revision, including security regressions, all supported dependency lanes, optional-package absence, Runwire lifecycle behavior, and representative performance evidence. Earlier workstream runs do not replace combined-candidate validation.
 5. Publish one immutable release and one tag only after every required gate is satisfied. An unresolved required finding, migration, or verification blocker holds the whole release; it does not trigger an intermediate publication.
@@ -268,7 +268,7 @@ Known upstream release blocker: current stable `phpbench/phpbench` 1.7.0 still r
 | Axis | Required evidence |
 | --- | --- |
 | PHP | Real PHP 8.4 and 8.5; actual extension/platform checks; next intended runtime compatibility/deprecation check when available |
-| Dependencies | Lowest and stable sets; explicit CacheLayer 3.3/3.x/4.0/4.x lanes; supported WebAuthn 5.3 minimum/current; Runwire 2.1/current supported 2.x |
+| Dependencies | Lowest and stable sets with CacheLayer 4.0 minimum/current supported 4.x only; supported WebAuthn 5.3 minimum/current; Runwire 2.1/current supported 2.x |
 | Optionality | Clean no-dev consumer without Runwire/WebAuthn; clear unavailable-feature behavior; full integration jobs with each installed |
 | State backends | Memory as unit evidence, SQLite contention, live Redis contention, advertised lock fallback; no skipped required cases |
 | Authentication | RFC vectors; valid/malformed/expired/replayed input; exact-one-winner races; monotonic high/low races; corrupt state; key rotation; unknown commits; stale leases |

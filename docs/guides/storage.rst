@@ -4,8 +4,8 @@ CacheLayer state and durable persistence
 OTP uses ``infocyph/cachelayer`` for package-owned authentication state.
 Recovery codes and Passkey credential records deliberately remain durable
 application data rather than authentication cache. For adapter-specific
-connection, TLS, cluster, and deployment options, consult the `CacheLayer 3.3
-documentation <https://github.com/infocyph/CacheLayer/tree/3.3>`_.
+connection, TLS, cluster, and deployment options, consult the `CacheLayer 4.0
+documentation <https://github.com/infocyph/CacheLayer/tree/4.0>`_.
 
 Required CacheLayer policy
 --------------------------
@@ -45,7 +45,7 @@ Every stateful operation receives one CacheLayer
 fail-closed, payload-integrity protected, and backed by one authoritative direct
 backend.
 
-TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 3.3 native atomics where
+TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 4.0 native atomics where
 their scalar transition maps safely to conditional mutation. If native atomics
 are not available, those paths use the lock provider returned by
 ``authenticationStateLock()``.
@@ -84,7 +84,7 @@ Redis example
 Use a primary/authoritative Redis connection. Replicas with lag are unsafe for
 verification reads. Configure memory so authentication keys are not evicted.
 HOTP and counter-OCRA state has no TTL and must survive restarts and failover.
-CacheLayer 3.3 Redis/Valkey adapters expose native atomic replay operations, so
+CacheLayer 4.0 Redis/Valkey adapters expose native atomic replay operations, so
 eligible scalar transitions use that path without acquiring replay locks.
 
 PDO example

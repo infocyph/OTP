@@ -113,7 +113,7 @@ payload-integrity protected, authoritative CacheLayer backend for package-owned
 authentication state. Tiered/non-authoritative or fail-open authentication state
 is rejected.
 
-TOTP, HOTP, OCRA, MobileOTP, and AOTP prefer CacheLayer 3.3 native atomic state
+TOTP, HOTP, OCRA, MobileOTP, and AOTP prefer CacheLayer 4.0 native atomic state
 where their transition maps cleanly to CAS/set-if-absent. Backends without native
 atomics require the coordinated lock fallback. Atomic capability selection is
 not runtime failover: once an atomic mutation is selected, an exception

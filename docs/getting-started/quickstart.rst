@@ -71,7 +71,7 @@ Verify a login with replay protection
 -------------------------------------
 
 Production verification should use one shared, fail-closed,
-integrity-protected, authoritative CacheLayer backend. CacheLayer 3.3 exposes
+integrity-protected, authoritative CacheLayer backend. CacheLayer 4.0 exposes
 native atomics on capable backends and the corresponding coordinated lock on
 lock-backed fallbacks, so OTP receives one authentication-state configuration
 unit. This Redis example uses the native atomic path and rejects object/closure

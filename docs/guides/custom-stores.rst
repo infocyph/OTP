@@ -2,7 +2,7 @@ Custom durable stores
 =====================
 
 The package does not define custom store contracts for Generic OTP or protocol
-replay state. Select a CacheLayer 3.3 authentication-state adapter for those
+replay state. Select a CacheLayer 4.0 authentication-state adapter for those
 paths; HOTP/TOTP/OCRA use its native atomics when available or its coordinated
 lock fallback, while ``GenericOtp`` requires the coordinated lock. See
 :doc:`storage`. The only application persistence contract is

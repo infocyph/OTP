@@ -146,7 +146,7 @@ Replay protection
 -----------------
 
 Replay-aware verification advances the greatest accepted MobileOTP timestep
-through the same CacheLayer 3.3 monotonic state primitive used by TOTP. Native
+through the same CacheLayer 4.0 monotonic state primitive used by TOTP. Native
 atomics are preferred when the configured backend exposes them; otherwise the
 coordinated lock fallback is used. A timestep accepted once cannot be accepted
 again for the same factor generation, and an older timestep cannot overwrite a

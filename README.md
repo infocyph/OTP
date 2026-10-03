@@ -23,7 +23,7 @@ four uses `otpauth://` provisioning.
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
-- CacheLayer `^3.3`
+- CacheLayer `^4.0`
 - Composer
 
 ```bash
@@ -77,7 +77,7 @@ $result = $totp->verifyWithWindow(
 ```
 
 `$stateCache` must be fail-closed, payload-integrity protected, and authoritative.
-CacheLayer 3.3 native atomics are preferred when the backend exposes them;
+CacheLayer 4.0 native atomics are preferred when the backend exposes them;
 otherwise TOTP/HOTP/OCRA use the cache's coordinated lock fallback. A selected
 atomic backend failure propagates and is never retried through locks. `factorId`
 must identify one factor and secret/moving-factor generation, not merely a user.

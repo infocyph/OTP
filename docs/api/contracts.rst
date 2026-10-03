@@ -10,7 +10,7 @@ OTP state uses CacheLayer's public contracts directly:
 
 ``AuthenticationStateCacheInterface`` exposes the effective fail-open,
 payload-integrity, authoritative-read, and cache-owned lock capabilities.
-CacheLayer 3.3 caches may additionally implement ``AtomicCacheProviderInterface``
+CacheLayer 4.0 caches may additionally implement ``AtomicCacheProviderInterface``
 and return an ``AtomicCacheInterface`` for native conditional mutation. Generic
 OTP, HOTP, TOTP, and OCRA do not expose an OTP-specific cache, lock wrapper, or
 replay adapter.
