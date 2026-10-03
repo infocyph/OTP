@@ -5,9 +5,6 @@ declare(strict_types=1);
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\OTP\GenericOtp;
-use RuntimeException;
-use Throwable;
-
 const DEFAULT_DURATION_SECONDS = 8.0;
 const DEFAULT_REPETITIONS = 3;
 const STABILITY_SPREAD_PERCENT = 3.0;
