@@ -9,6 +9,8 @@ use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
+use Infocyph\CacheLayer\Cache\Lock\MemcachedLockProvider;
+use Infocyph\CacheLayer\Cache\Lock\RedisLockProvider;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
@@ -40,7 +42,7 @@ final class CacheLock
 
     public static function assertLockSafe(AuthenticationStateCacheInterface $cache): void
     {
-        self::assertAuthenticationStateSafe($cache);
+        self::assertSafe($cache);
         if ($cache->authenticationStateLock() === null) {
             throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
         }
@@ -49,10 +51,16 @@ final class CacheLock
     public static function assertSafe(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         self::assertAuthenticationStateSafe($cache);
-        $atomic = self::atomic($cache);
-        if ($atomic === null && $cache->authenticationStateLock() === null) {
+        $atomic = self::atomicCapability($cache);
+        $locks = $cache->authenticationStateLock();
+        if ($atomic === null && $locks === null) {
             throw new InvalidArgumentException(
                 'Authentication state caches must provide an atomic or coordinated lock capability.',
+            );
+        }
+        if ($atomic === null && $locks !== null && self::lockRequiresAtomic($locks)) {
+            throw new InvalidArgumentException(
+                'Lease-based authentication state locks require a backend atomic capability.',
             );
         }
 
@@ -117,6 +125,18 @@ final class CacheLock
         return self::reserveOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName);
     }
 
+    public static function stateAtomic(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
+    {
+        $atomic = self::assertSafe($cache);
+        if ($atomic === null) {
+            return null;
+        }
+
+        $locks = $cache->authenticationStateLock();
+
+        return $locks === null || self::lockRequiresAtomic($locks) ? $atomic : null;
+    }
+
     /**
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
@@ -150,6 +170,58 @@ final class CacheLock
         }
 
         return $result;
+    }
+
+    /**
+     * @template T
+     * @param callable(mixed): array{
+     *     result:T,
+     *     replacement?:mixed,
+     *     ttl?:int|null,
+     *     delete?:bool,
+     *     failure?:string
+     * } $transition
+     * @return T
+     */
+    public static function transition(
+        AuthenticationStateCacheInterface $cache,
+        string $stateKey,
+        string $lockKey,
+        string $stateName,
+        callable $transition,
+    ): mixed {
+        $atomic = self::stateAtomic($cache);
+        if ($atomic !== null) {
+            return self::transitionAtomically($cache, $atomic, $stateKey, $stateName, $transition);
+        }
+
+        return self::synchronized(
+            $cache,
+            $lockKey,
+            function (LockProviderInterface $locks, LockHandle $handle) use (
+                $cache,
+                $stateKey,
+                $stateName,
+                $transition,
+            ): mixed {
+                $decision = $transition($cache->get($stateKey));
+                if (!array_key_exists('replacement', $decision)) {
+                    return $decision['result'];
+                }
+
+                self::ensureOwned($locks, $handle);
+                $mutated = ($decision['delete'] ?? false)
+                    ? $cache->delete($stateKey)
+                    : $cache->set($stateKey, $decision['replacement'], $decision['ttl'] ?? null);
+                if (!$mutated) {
+                    throw new RuntimeException(
+                        $decision['failure'] ?? ('Unable to transition ' . $stateName . ' state.'),
+                    );
+                }
+
+                return $decision['result'];
+            },
+        );
     }
 
     private static function advanceAtomically(
@@ -225,9 +297,14 @@ final class CacheLock
         }
     }
 
-    private static function atomic(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
+    private static function atomicCapability(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
+    }
+
+    private static function lockRequiresAtomic(LockProviderInterface $locks): bool
+    {
+        return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
     }
 
     private static function consumeOnceAtomically(
@@ -330,6 +407,46 @@ final class CacheLock
                 return true;
             },
         );
+    }
+
+    /**
+     * @template T
+     * @param callable(mixed): array{
+     *     result:T,
+     *     replacement?:mixed,
+     *     ttl?:int|null,
+     *     delete?:bool,
+     *     failure?:string
+     * } $transition
+     * @return T
+     */
+    private static function transitionAtomically(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        string $stateName,
+        callable $transition,
+    ): mixed {
+        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            $current = $cache->get($stateKey);
+            $decision = $transition($current);
+            if (!array_key_exists('replacement', $decision)) {
+                return $decision['result'];
+            }
+
+            $ttl = $decision['ttl'] ?? null;
+            if ($ttl !== null && $ttl < 1) {
+                throw new RuntimeException('Atomic authentication state transitions require a positive TTL.');
+            }
+            $mutated = $current === null
+                ? $atomic->setIfAbsent($stateKey, $decision['replacement'], $ttl)
+                : $atomic->compareAndSet($stateKey, $current, $decision['replacement'], $ttl);
+            if ($mutated) {
+                return $decision['result'];
+            }
+        }
+
+        throw new RuntimeException('Unable to transition ' . $stateName . ' state after atomic contention.');
     }
 
     private static function reserveOnceAtomically(
