@@ -156,7 +156,11 @@ test('cooperative Runwire lock contention uses zero-wait acquisition and leaves 
             return CacheLock::synchronized(
                 $cache,
                 'cooperative-lock',
-                static fn(LockProviderInterface $locks, LockHandle $handle): string => 'acquired',
+                static function (LockProviderInterface $locks, LockHandle $handle): string {
+                    unset($locks, $handle);
+
+                    return 'acquired';
+                },
                 $execution,
             );
         },
@@ -205,7 +209,11 @@ test('request cancellation interrupts cooperative lock waiting', function () {
             CacheLock::synchronized(
                 $cache,
                 'cancelled-lock',
-                static fn(LockProviderInterface $locks, LockHandle $handle): bool => true,
+                static function (LockProviderInterface $locks, LockHandle $handle): bool {
+                    unset($locks, $handle);
+
+                    return true;
+                },
                 $execution,
             );
         },
@@ -247,7 +255,11 @@ test('cancellation after lock acquisition prevents the following state mutation 
         'mutation-state',
         'mutation-lock',
         'test',
-        static fn(mixed $stored): array => ['result' => true, 'replacement' => 1],
+        static function (mixed $stored): array {
+            unset($stored);
+
+            return ['result' => true, 'replacement' => 1];
+        },
         $execution,
     ))->toThrow(CancelledException::class);
 });
@@ -313,7 +325,11 @@ test('missing coroutine capability preserves the ordinary lock-provider wait con
             return CacheLock::synchronized(
                 $cache,
                 'blocking-lock',
-                static fn(LockProviderInterface $locks, LockHandle $handle): string => 'blocking',
+                static function (LockProviderInterface $locks, LockHandle $handle): string {
+                    unset($locks, $handle);
+
+                    return 'blocking';
+                },
                 $execution,
             );
         },
