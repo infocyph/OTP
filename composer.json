@@ -38,10 +38,12 @@
     "require-dev": {
         "ext-sodium": "*",
         "infocyph/phpforge": "dev-main@dev",
+        "infocyph/runwire": "^2.1",
         "web-auth/webauthn-lib": "^5.3"
     },
     "suggest": {
         "ext-sodium": "Required to use the optional AOTP Ed25519 integration.",
+        "infocyph/runwire": "Optional cooperative cancellation, deadlines, and lock waiting for stateful OTP operations.",
         "web-auth/webauthn-lib": "Required to use the optional Passkey/WebAuthn integration."
     },
     "minimum-stability": "stable",
