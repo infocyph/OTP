@@ -1,5 +1,33 @@
 # OTP benchmark results
 
+## OTP 7.0 / optional Runwire Batch 8 snapshot
+
+Recorded on 2026-10-03 from the exact green Batch 8 revision on the same GitHub
+Actions class as the pre-Runwire snapshot. Runwire 2.1 was installed for
+development coverage. Existing benchmark subjects did not supply a Runwire
+context; ``benchGenericOtpGenerateWithRunwire`` supplied the shared
+``RunwireExecutionContext`` with a standalone runtime/request and no coroutine
+scope.
+
+| Subject | PHP 8.4 | PHP 8.5 |
+| --- | ---: | ---: |
+| Generic OTP generate, no context | 141 µs | 60 µs |
+| Generic OTP generate, supplied context | 140 µs | 66 µs |
+| Generic OTP verify, no context | 141 µs | 76 µs |
+| GridOTP round trip, no context | 499 µs | 277 µs |
+| OTP atomic monotonic advance, no context | 460 µs | 280 µs |
+| OTP lock-fallback monotonic advance, no context | 625 µs | 386 µs |
+| Passkey begin authentication, no context | 1,796 µs | 1,029 µs |
+| Passkey begin registration, no context | 2,376 µs | 1,379 µs |
+
+These CI measurements are single-iteration attribution snapshots and vary
+materially between runners; they do not satisfy the plan's stable-host 2% RPM
+regression budget. Within the same final jobs, the supplied Generic OTP context
+measured 140 vs 141 µs on PHP 8.4 and 66 vs 60 µs on PHP 8.5, with roughly
+0.5 KiB additional reported peak memory. Treat those values as evidence that the
+path is benchmarked, not as a performance gain or regression conclusion.
+Cooperative contention and persistent-runtime measurements belong to Batch 9.
+
 ## OTP 7.0 / CacheLayer 4.0 pre-Runwire baseline
 
 Recorded on 2026-10-03 from the green Batch 7 GitHub Actions benchmark lanes on

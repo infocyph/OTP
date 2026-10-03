@@ -231,8 +231,8 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Complete | Complete (fenced CAS regressions, v1 state keys, Pest/Pint green; Redis acceptance continues in Batch 6) | Complete |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Complete | Complete (4 QA lanes, live Redis/SQLite, zero skips, analyzers/clean install/benchmarks green) | Complete |
 | 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | Complete | Complete (CacheLayer 4.0 resolved; 4 QA lanes, analyzers, clean install, Redis/SQLite, benchmarks green) | Complete |
-| 8 | Performance baseline and minimal optional Runwire integration | Complete | Running (pre-Runwire baseline recorded; optional context path + public forwarding under PR #51 QA) | In progress |
-| 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
+| 8 | Performance baseline and minimal optional Runwire integration | Complete | Complete (4 QA lanes, analyzers, no-dev clean install, benchmarks green; pre/post snapshots recorded) | Complete |
+| 9 | Runwire lifecycle, concurrency, and consumer coverage | In progress | Pending | In progress |
 | 10 | Documentation, migration/rollback, full release acceptance | Pending | Pending | Pending |
 
 Tracker rule: update this table in the same branch as implementation. A batch is complete only after its scoped implementation and focused QA are both complete; final release gates remain separate.
