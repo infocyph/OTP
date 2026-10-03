@@ -222,7 +222,7 @@ Acceptance must exercise framework → OTP and framework → another library →
 
 | Batch | Scope | Implementation | Focused QA | Status |
 | --- | --- | --- | --- | --- |
-| 1 | F1 diagnostic redaction | In progress | Pending | In progress |
+| 1 | F1 diagnostic redaction | Complete | Running (PR #51) | In progress |
 | 2 | F3 strict protocol validation | Pending | Pending | Pending |
 | 3 | F2 Passkey malformed-input boundary and real ceremony fixtures | Pending | Pending | Pending |
 | 4 | F4 GridOTP entropy policy and migration | Pending | Pending | Pending |
