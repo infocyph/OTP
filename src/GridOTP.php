@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
-use Infocyph\CacheLayer\Cache\Lock\LockHandle;
-use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
@@ -46,7 +44,7 @@ final readonly class GridOTP
         if ($maxAttempts < 1 || $maxAttempts > 10) {
             throw new InvalidArgumentException('GridOTP max attempts must be between 1 and 10.');
         }
-        CacheLock::assertLockSafe($cache);
+        CacheLock::assertSafe($cache);
     }
 
     /** @return array{cache:string,secret:string,challengeSize:int,ttlSeconds:int,maxAttempts:int,enforceDiversity:bool} */
@@ -109,40 +107,12 @@ final readonly class GridOTP
         self::assertFactorId($factorId);
         for ($attempt = 0; $attempt < self::ISSUE_ATTEMPTS; $attempt++) {
             $id = Base64Url::encode(random_bytes(16));
-            $stateKey = self::stateKey($factorId, $id);
-            $challenge = CacheLock::synchronized(
+            $challenge = CacheLock::transition(
                 $this->cache,
+                self::stateKey($factorId, $id),
                 self::lockKey($factorId, $id),
-                function (LockProviderInterface $locks, LockHandle $handle) use ($id, $stateKey, $now): ?GridChallenge {
-                    if ($this->cache->get($stateKey) !== null) {
-                        return null;
-                    }
-                    $issuedAt = $now ?? time();
-                    if ($issuedAt < 0 || $issuedAt > PHP_INT_MAX - $this->ttlSeconds) {
-                        throw new InvalidArgumentException('GridOTP challenge expiration exceeds the supported timestamp range.');
-                    }
-                    $challenge = new GridChallenge(
-                        $id,
-                        self::randomGrid(),
-                        self::randomPositions($this->secret, $this->challengeSize),
-                        strlen($this->secret),
-                        $issuedAt,
-                        $issuedAt + $this->ttlSeconds,
-                    );
-                    $state = [
-                        'v' => self::STATE_VERSION,
-                        'digest' => hash('sha256', $challenge->canonicalPayload()),
-                        'remainingAttempts' => $this->maxAttempts,
-                        'expiresAt' => $challenge->expiresAt,
-                        'consumed' => false,
-                    ];
-                    CacheLock::ensureOwned($locks, $handle);
-                    if (!$this->cache->set($stateKey, $state, $this->ttlSeconds)) {
-                        throw new RuntimeException('Unable to store GridOTP challenge state.');
-                    }
-
-                    return $challenge;
-                },
+                'GridOTP challenge',
+                fn(mixed $stored): array => $this->issueState($stored, $id, $now),
             );
             if ($challenge !== null) {
                 return $challenge;
@@ -178,17 +148,12 @@ final readonly class GridOTP
             throw new InvalidArgumentException('GridOTP verification timestamp must be non-negative.');
         }
 
-        return CacheLock::synchronized(
+        return CacheLock::transition(
             $this->cache,
+            self::stateKey($factorId, $challenge->id),
             self::lockKey($factorId, $challenge->id),
-            fn(LockProviderInterface $locks, LockHandle $handle): VerificationResult => $this->verifyLocked(
-                $factorId,
-                $challenge,
-                $response,
-                $now,
-                $locks,
-                $handle,
-            ),
+            'GridOTP challenge',
+            fn(mixed $stored): array => $this->verifyState($stored, $challenge, $response, $now),
         );
     }
 
@@ -294,14 +259,6 @@ final readonly class GridOTP
         return count(array_unique(str_split($secret)));
     }
 
-    private function deleteLocked(string $stateKey, LockProviderInterface $locks, LockHandle $handle): void
-    {
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->delete($stateKey)) {
-            throw new RuntimeException('Unable to delete GridOTP challenge state.');
-        }
-    }
-
     /** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
     private function requireState(mixed $state): array
     {
@@ -337,45 +294,79 @@ final readonly class GridOTP
         ];
     }
 
-    /** @param array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} $state */
-    private function storeLocked(
-        string $stateKey,
-        array $state,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): void {
-        $ttl = $state['expiresAt'] - $now;
-        if ($ttl < 1) {
-            throw new RuntimeException('GridOTP challenge state expired before mutation.');
+    /**
+     * @return array{
+     *     result:GridChallenge|null,
+     *     replacement?:array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool},
+     *     ttl?:int,
+     *     failure?:string
+     * }
+     */
+    private function issueState(mixed $stored, string $id, ?int $now): array
+    {
+        if ($stored !== null) {
+            return ['result' => null];
         }
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->set($stateKey, $state, $ttl)) {
-            throw new RuntimeException('Unable to update GridOTP challenge state.');
+
+        $issuedAt = $now ?? time();
+        if ($issuedAt < 0 || $issuedAt > PHP_INT_MAX - $this->ttlSeconds) {
+            throw new InvalidArgumentException('GridOTP challenge expiration exceeds the supported timestamp range.');
         }
+        $challenge = new GridChallenge(
+            $id,
+            self::randomGrid(),
+            self::randomPositions($this->secret, $this->challengeSize),
+            strlen($this->secret),
+            $issuedAt,
+            $issuedAt + $this->ttlSeconds,
+        );
+
+        return [
+            'result' => $challenge,
+            'replacement' => [
+                'v' => self::STATE_VERSION,
+                'digest' => hash('sha256', $challenge->canonicalPayload()),
+                'remainingAttempts' => $this->maxAttempts,
+                'expiresAt' => $challenge->expiresAt,
+                'consumed' => false,
+            ],
+            'ttl' => $this->ttlSeconds,
+            'failure' => 'Unable to store GridOTP challenge state.',
+        ];
     }
 
-    private function verifyLocked(
-        string $factorId,
+    /**
+     * @return array{
+     *     result:VerificationResult,
+     *     replacement?:array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool},
+     *     ttl?:int,
+     *     delete?:bool,
+     *     failure?:string
+     * }
+     */
+    private function verifyState(
+        mixed $stored,
         GridChallenge $challenge,
         string $response,
         int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): VerificationResult {
-        $stateKey = self::stateKey($factorId, $challenge->id);
-        $stored = $this->cache->get($stateKey);
+    ): array {
         if ($stored === null) {
-            return VerificationResult::mismatch();
+            return ['result' => VerificationResult::mismatch()];
         }
         $state = $this->requireState($stored);
         if ($state['expiresAt'] <= $now || $challenge->expiresAt <= $now) {
-            $this->deleteLocked($stateKey, $locks, $handle);
+            $state['expiresAt'] = $now;
 
-            return VerificationResult::mismatch();
+            return [
+                'result' => VerificationResult::mismatch(),
+                'replacement' => $state,
+                'ttl' => 1,
+                'delete' => true,
+                'failure' => 'Unable to delete GridOTP challenge state.',
+            ];
         }
         if ($state['consumed']) {
-            return VerificationResult::replay();
+            return ['result' => VerificationResult::replay()];
         }
         if (
             $challenge->issuedAt > $now
@@ -383,26 +374,41 @@ final readonly class GridOTP
             || count($challenge->positions) !== $this->challengeSize
             || !hash_equals($state['digest'], hash('sha256', $challenge->canonicalPayload()))
         ) {
-            return VerificationResult::mismatch();
+            return ['result' => VerificationResult::mismatch()];
         }
 
-        $expected = self::respond($challenge, $this->secret);
-        if (hash_equals($expected, $response)) {
+        if (hash_equals(self::respond($challenge, $this->secret), $response)) {
             $state['consumed'] = true;
-            $this->storeLocked($stateKey, $state, $now, $locks, $handle);
 
-            return VerificationResult::success();
+            return [
+                'result' => VerificationResult::success(),
+                'replacement' => $state,
+                'ttl' => $state['expiresAt'] - $now,
+                'failure' => 'Unable to update GridOTP challenge state.',
+            ];
         }
 
         $remaining = $state['remainingAttempts'] - 1;
         if ($remaining === 0) {
-            $this->deleteLocked($stateKey, $locks, $handle);
+            $state['expiresAt'] = $now;
 
-            return VerificationResult::mismatch();
+            return [
+                'result' => VerificationResult::mismatch(),
+                'replacement' => $state,
+                'ttl' => 1,
+                'delete' => true,
+                'failure' => 'Unable to delete GridOTP challenge state.',
+            ];
         }
         $state['remainingAttempts'] = $remaining;
-        $this->storeLocked($stateKey, $state, $now, $locks, $handle);
 
-        return VerificationResult::mismatch();
+        return [
+            'result' => VerificationResult::mismatch(),
+            'replacement' => $state,
+            'ttl' => $state['expiresAt'] - $now,
+            'failure' => 'Unable to update GridOTP challenge state.',
+        ];
     }
+
 }
+
