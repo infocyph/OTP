@@ -254,4 +254,5 @@ final readonly class GenericOtp
             'ttl' => $state['expiresAt'] - $now,
             'failure' => 'Unable to update generic OTP state.',
         ];
-    }}
+    }
+}
