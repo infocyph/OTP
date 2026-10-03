@@ -259,41 +259,6 @@ final readonly class GridOTP
         return count(array_unique(str_split($secret)));
     }
 
-    /** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
-    private function requireState(mixed $state): array
-    {
-        if (!is_array($state) || count($state) !== 5) {
-            throw new RuntimeException('Invalid GridOTP challenge state in CacheLayer.');
-        }
-
-        $version = $state['v'] ?? null;
-        $digest = $state['digest'] ?? null;
-        $remainingAttempts = $state['remainingAttempts'] ?? null;
-        $expiresAt = $state['expiresAt'] ?? null;
-        $consumed = $state['consumed'] ?? null;
-        if (
-            $version !== self::STATE_VERSION
-            || !is_string($digest)
-            || preg_match('/\A[0-9a-f]{64}\z/D', $digest) !== 1
-            || !is_int($remainingAttempts)
-            || $remainingAttempts < 1
-            || $remainingAttempts > $this->maxAttempts
-            || !is_int($expiresAt)
-            || $expiresAt < 0
-            || !is_bool($consumed)
-        ) {
-            throw new RuntimeException('Invalid GridOTP challenge state in CacheLayer.');
-        }
-
-        return [
-            'v' => $version,
-            'digest' => $digest,
-            'remainingAttempts' => $remainingAttempts,
-            'expiresAt' => $expiresAt,
-            'consumed' => $consumed,
-        ];
-    }
-
     /**
      * @return array{
      *     result:GridChallenge|null,
@@ -334,6 +299,43 @@ final readonly class GridOTP
             'failure' => 'Unable to store GridOTP challenge state.',
         ];
     }
+
+/** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
+    private function requireState(mixed $state): array
+    {
+        if (!is_array($state) || count($state) !== 5) {
+            throw new RuntimeException('Invalid GridOTP challenge state in CacheLayer.');
+        }
+
+        $version = $state['v'] ?? null;
+        $digest = $state['digest'] ?? null;
+        $remainingAttempts = $state['remainingAttempts'] ?? null;
+        $expiresAt = $state['expiresAt'] ?? null;
+        $consumed = $state['consumed'] ?? null;
+        if (
+            $version !== self::STATE_VERSION
+            || !is_string($digest)
+            || preg_match('/\A[0-9a-f]{64}\z/D', $digest) !== 1
+            || !is_int($remainingAttempts)
+            || $remainingAttempts < 1
+            || $remainingAttempts > $this->maxAttempts
+            || !is_int($expiresAt)
+            || $expiresAt < 0
+            || !is_bool($consumed)
+        ) {
+            throw new RuntimeException('Invalid GridOTP challenge state in CacheLayer.');
+        }
+
+        return [
+            'v' => $version,
+            'digest' => $digest,
+            'remainingAttempts' => $remainingAttempts,
+            'expiresAt' => $expiresAt,
+            'consumed' => $consumed,
+        ];
+    }
+
+    
 
     /**
      * @return array{
@@ -411,4 +413,3 @@ final readonly class GridOTP
     }
 
 }
-
