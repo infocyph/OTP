@@ -383,3 +383,84 @@ test('interleaved request contexts remain isolated and OTP never binds the Cache
         ->and($result[2]->request)->toBe($liveRequest)
         ->and(RunwireIntegration::runtime())->toBeNull();
 });
+
+
+test('atomic monotonic advance checks Runwire cancellation again after the state read', function () {
+    $runtime = RuntimeContext::standalone();
+    $request = RequestContext::create($runtime);
+    $execution = new RunwireExecutionContext($runtime, $request);
+
+    $atomic = $this->createMock(AtomicCacheInterface::class);
+    $atomic->expects($this->never())->method('setIfAbsent');
+    $atomic->expects($this->never())->method('compareAndSet');
+
+    $cache = $this->createMockForIntersectionOfInterfaces([
+        AuthenticationStateCacheInterface::class,
+        AtomicCacheProviderInterface::class,
+    ]);
+    $cache->method('isFailOpen')->willReturn(false);
+    $cache->method('hasPayloadIntegrity')->willReturn(true);
+    $cache->method('isAuthoritative')->willReturn(true);
+    $cache->method('atomic')->willReturn($atomic);
+    $cache->method('authenticationStateLock')->willReturn(null);
+    $cache->expects($this->once())
+        ->method('get')
+        ->with('cancelled-advance')
+        ->willReturnCallback(function () use ($request): null {
+            $request->cancel(CancellationReason::HOST_CANCELLED);
+
+            return null;
+        });
+
+    expect(fn () => CacheLock::advance(
+        $cache,
+        'cancelled-advance',
+        'unused-lock',
+        1,
+        null,
+        'test',
+        $execution,
+    ))->toThrow(CancelledException::class);
+});
+
+test('atomic whole-record transition checks Runwire cancellation again after the state read', function () {
+    $runtime = RuntimeContext::standalone();
+    $request = RequestContext::create($runtime);
+    $execution = new RunwireExecutionContext($runtime, $request);
+    $stored = ['v' => 1, 'remaining' => 2];
+
+    $atomic = $this->createMock(AtomicCacheInterface::class);
+    $atomic->expects($this->never())->method('setIfAbsent');
+    $atomic->expects($this->never())->method('compareAndSet');
+
+    $cache = $this->createMockForIntersectionOfInterfaces([
+        AuthenticationStateCacheInterface::class,
+        AtomicCacheProviderInterface::class,
+    ]);
+    $cache->method('isFailOpen')->willReturn(false);
+    $cache->method('hasPayloadIntegrity')->willReturn(true);
+    $cache->method('isAuthoritative')->willReturn(true);
+    $cache->method('atomic')->willReturn($atomic);
+    $cache->method('authenticationStateLock')->willReturn(null);
+    $cache->expects($this->once())
+        ->method('get')
+        ->with('cancelled-transition')
+        ->willReturnCallback(function () use ($request, $stored): array {
+            $request->cancel(CancellationReason::HOST_CANCELLED);
+
+            return $stored;
+        });
+
+    expect(fn () => CacheLock::transition(
+        $cache,
+        'cancelled-transition',
+        'unused-lock',
+        'test',
+        static fn(mixed $current): array => [
+            'result' => true,
+            'replacement' => ['v' => 1, 'remaining' => 1],
+            'ttl' => 30,
+        ],
+        $execution,
+    ))->toThrow(CancelledException::class);
+});
