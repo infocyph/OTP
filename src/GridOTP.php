@@ -76,7 +76,8 @@ final readonly class GridOTP
         return implode('', self::shuffleSecure($symbols));
     }
 
-    public static function hasSufficientDiversity(string $secret, int $challengeSize = 6): bool {
+    public static function hasSufficientDiversity(string $secret, int $challengeSize = 6): bool
+    {
         self::assertSecret($secret);
         self::assertChallengeSize($challengeSize, strlen($secret));
 
