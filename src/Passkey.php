@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\PasskeyResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
@@ -102,11 +103,13 @@ final readonly class Passkey
         #[\SensitiveParameter]
         ?string $userHandle = null,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): PasskeyCeremony {
         self::assertBinding($binding);
         if ($userHandle !== null) {
             self::assertUserHandle($userHandle);
         }
+        CacheLock::checkpoint($runwire);
         $options = PublicKeyCredentialRequestOptions::create(
             challenge: random_bytes(32),
             rpId: $this->rpId,
@@ -121,6 +124,7 @@ final readonly class Passkey
             $this->serializeObject($options),
             $userHandle,
             $now,
+            $runwire,
         );
     }
 
@@ -133,11 +137,13 @@ final readonly class Passkey
         string $displayName,
         array $existingCredentialRecordsJson = [],
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): PasskeyCeremony {
         self::assertBinding($binding);
         self::assertUserHandle($userHandle);
         self::assertUserName($username, 'Passkey username');
         self::assertUserName($displayName, 'Passkey display name');
+        CacheLock::checkpoint($runwire);
         $options = PublicKeyCredentialCreationOptions::create(
             rp: PublicKeyCredentialRpEntity::create(id: $this->rpId),
             user: PublicKeyCredentialUserEntity::create($username, $userHandle, $displayName),
@@ -161,6 +167,7 @@ final readonly class Passkey
             $this->serializeObject($options),
             $userHandle,
             $now,
+            $runwire,
         );
     }
 
@@ -183,6 +190,7 @@ final readonly class Passkey
         #[\SensitiveParameter]
         string $credentialJson,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): PasskeyResult {
         self::assertBinding($binding);
         self::assertCeremonyId($ceremonyId);
@@ -204,6 +212,7 @@ final readonly class Passkey
                 $credentialJson,
                 $now,
             ),
+            $runwire,
         );
     }
 
@@ -213,6 +222,7 @@ final readonly class Passkey
         #[\SensitiveParameter]
         string $credentialJson,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): PasskeyResult {
         self::assertBinding($binding);
         self::assertCeremonyId($ceremonyId);
@@ -228,6 +238,7 @@ final readonly class Passkey
             self::lockKey($binding, $ceremonyId),
             'passkey ceremony',
             fn(mixed $stored): array => $this->finishRegistrationState($stored, $credentialJson, $now),
+            $runwire,
         );
     }
 
@@ -587,6 +598,7 @@ final readonly class Passkey
         string $optionsJson,
         ?string $userHandle,
         ?int $now,
+        ?RunwireExecutionContext $runwire,
     ): PasskeyCeremony {
         for ($attempt = 0; $attempt < self::CEREMONY_ATTEMPTS; $attempt++) {
             $ceremonyId = self::encode(random_bytes(16));
@@ -603,6 +615,7 @@ final readonly class Passkey
                     $userHandle,
                     $now,
                 ),
+                $runwire,
             );
             if ($ceremony !== null) {
                 return $ceremony;
