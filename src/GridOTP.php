@@ -363,6 +363,7 @@ final readonly class GridOTP
         }
         $state = $this->requireState($stored);
         if ($state['expiresAt'] <= $now || $challenge->expiresAt <= $now) {
+            $state['consumed'] = true;
             $state['expiresAt'] = $now;
 
             return [
@@ -398,6 +399,7 @@ final readonly class GridOTP
 
         $remaining = $state['remainingAttempts'] - 1;
         if ($remaining === 0) {
+            $state['consumed'] = true;
             $state['expiresAt'] = $now;
 
             return [
