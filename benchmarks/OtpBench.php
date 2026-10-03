@@ -27,9 +27,9 @@ use Infocyph\Runwire\RequestContext;
 use Infocyph\Runwire\Runtime\Enum\RuntimeDriver;
 use Infocyph\Runwire\RuntimeCapabilities;
 use Infocyph\Runwire\RuntimeContext;
-use RuntimeException;
 use PhpBench\Attributes\BeforeMethods;
 use PhpBench\Attributes\Revs;
+use RuntimeException;
 
 #[BeforeMethods('setUp')]
 final class OtpBench
@@ -38,11 +38,11 @@ final class OtpBench
 
     private LockProviderInterface $contendedLocks;
 
-    private CoroutineRuntime $coroutines;
-
     private RequestContext $cooperativeRequest;
 
     private RuntimeContext $cooperativeRuntime;
+
+    private CoroutineRuntime $coroutines;
 
     private string $genericCode;
 
