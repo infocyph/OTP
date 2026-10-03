@@ -446,6 +446,7 @@ function runRepeatedWorkload(
             $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
         }
     }
+
     return buildWorkloadResult(
         name: $name,
         type: $type,
