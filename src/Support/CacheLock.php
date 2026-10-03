@@ -478,7 +478,7 @@ final class CacheLock
         return $result;
     }
 
-/**
+    /**
      * @template T
      * @param callable(mixed): array{
      *     result:T,
