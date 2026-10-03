@@ -409,5 +409,4 @@ final readonly class GridOTP
             'failure' => 'Unable to update GridOTP challenge state.',
         ];
     }
-
 }
