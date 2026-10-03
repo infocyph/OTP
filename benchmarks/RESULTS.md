@@ -36,11 +36,13 @@ p50/p95/p99, CPU, memory, operation counts, errors/timeouts, and environment
 metadata. The existing PHPBench sections below remain path-attribution evidence;
 they are not used as the 2% release regression gate.
 
-This gate is intentionally **not** full release-performance acceptance. It runs
-`GenericOtp::generate()` repeatedly against CacheLayer memory at concurrency one.
-Representative host-request throughput, concurrent verification, and sustained
-persistent Runwire request/scope lifecycle measurements remain required before the
-performance acceptance in the release plan can be closed.
+The final release workflow supplements this component guard with three broader
+acceptance surfaces: a paired generate→verify round-trip workload, a four-worker
+SQLite concurrent verification workload, and a sustained persistent Runwire
+request/scope lifecycle workload. The Runwire workload creates and completes a
+fresh request context for every operation and asserts zero active tasks, request
+scopes, and background tasks after each request. Exact-head workflow artifacts are
+the authoritative performance record for release acceptance.
 
 ## OTP 7.0 / Runwire cooperative contention snapshot
 

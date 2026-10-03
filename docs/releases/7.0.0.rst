@@ -71,7 +71,7 @@ pre-Runwire baseline and candidate on the same runner. It requires three warmed
 sustained trials, matching stable-environment fingerprints, no more than 2%
 median successful-RPM regression, and the configured absolute p99/memory
 ceilings. Fresh PHP-process cold start is recorded and validated separately.
-This is a component regression guard, not complete release-performance evidence:
-representative host-request throughput, concurrent verification, and sustained
-persistent Runwire lifecycle measurements remain required by the release plan.
-The tag must be created only after those acceptance items and exact-head gates are green.
+The release workflow also exercises a paired generate/verify round trip, four-worker
+SQLite concurrent verification, and a sustained persistent Runwire request/scope
+lifecycle workload with cleanup assertions. The tag must be created only after
+those exact-head gates are green.
