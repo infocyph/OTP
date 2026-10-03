@@ -191,7 +191,7 @@ final readonly class GenericOtp
             || !is_string($state['digest'] ?? null)
             || preg_match('/\A[0-9a-f]{64}\z/D', $state['digest']) !== 1
             || !is_int($state['remainingAttempts'] ?? null)
-            || $state['remainingAttempts'] < 1
+            || $state['remainingAttempts'] < 0
             || $state['remainingAttempts'] > $this->maxAttempts
             || !is_int($state['expiresAt'] ?? null)
             || $state['expiresAt'] < 0
@@ -218,7 +218,11 @@ final readonly class GenericOtp
         }
 
         $state = $this->requireState($stored);
+        if ($state['remainingAttempts'] === 0) {
+            return ['result' => false];
+        }
         if ($state['expiresAt'] <= $now) {
+            $state['remainingAttempts'] = 0;
             $state['expiresAt'] = $now;
 
             return [
@@ -230,6 +234,7 @@ final readonly class GenericOtp
             ];
         }
         if (hash_equals($state['digest'], $candidateDigest)) {
+            $state['remainingAttempts'] = 0;
             $state['expiresAt'] = $now;
 
             return [
@@ -243,6 +248,7 @@ final readonly class GenericOtp
 
         $remaining = $state['remainingAttempts'] - 1;
         if ($remaining === 0) {
+            $state['remainingAttempts'] = 0;
             $state['expiresAt'] = $now;
 
             return [
