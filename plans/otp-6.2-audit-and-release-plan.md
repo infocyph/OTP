@@ -170,9 +170,9 @@ Tagged CacheLayer 4.0 exposes `RunwireIntegration::bind/share/release` and `Runw
 
 Proposed API, not implemented:
 
-- One optional `Infocyph\OTP\Integration\RunwireContext` instance carries the exact supplied `RuntimeContext`, optional current `RequestContext`, and optional host-owned `CoroutineScope`.
-- Its independent justification is validation of runtime identity, request lifecycle, process/generation binding, and capability/cancellation policy. Reuse the existing Runwire objects; do not recreate their scheduler, context, token, deadline, or metrics abstractions.
-- Before adding it, check whether a suitable existing Runwire public aggregate can provide all those guarantees. CacheLayer's aggregate currently only validates request/runtime identity; merely renaming that DTO would not justify another type.
+- Reuse CacheLayer 4.0's existing `Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext`; do not add an OTP-specific wrapper. It already carries the exact supplied `RuntimeContext`, optional current `RequestContext`, and optional host-owned `CoroutineScope`.
+- OTP validates request/runtime identity again at the state boundary, rejects completed/stale-process contexts, and consumes the existing request/scope cancellation/deadline objects. It does not recreate Runwire scheduler, token, deadline, metrics, or lifecycle abstractions.
+- This reuse keeps cross-library forwarding based on one shared object identity and avoids an otherwise redundant public type.
 - Pass this instance as a trailing optional named `runwire` parameter on operations that own state/I/O: GenericOtp generate/verify/delete; GridOTP issue/verify; Passkey begin/finish; AOTP issue/verify; and stateful HOTP/TOTP/OCRA/MobileOTP verification. Forward it through convenience methods to the one state owner.
 - Keep secret-only arithmetic/provisioning APIs unchanged. Recovery stores already own their mutation implementation; do not change their interface just for symmetry. Add cancellation around a recovery operation only if the active integration contract needs it, never by wrapping it in background work.
 - Never store a request/scope in a process-wide singleton or a long-lived factor object. Construct a short-lived integration instance per request/task and forward the same object through intermediate libraries.
@@ -180,7 +180,7 @@ Proposed API, not implemented:
 Illustrative future use (names above are proposed):
 
 ```php
-$execution = new \Infocyph\OTP\Integration\RunwireContext(
+$execution = new \Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext(
     runtime: $hostRuntimeContext,
     request: $hostRequestContext,
     scope: $hostCoroutineScope,
@@ -231,7 +231,7 @@ Acceptance must exercise framework → OTP and framework → another library →
 | 5 | F6 stale-owner/fencing review and state compatibility coverage | Complete | Complete (fenced CAS regressions, v1 state keys, Pest/Pint green; Redis acceptance continues in Batch 6) | Complete |
 | 6 | F5 prerequisite, skip, Redis, and dependency-audit cleanup | Complete | Complete (4 QA lanes, live Redis/SQLite, zero skips, analyzers/clean install/benchmarks green) | Complete |
 | 7 | CacheLayer 4.0-only migration, compatibility, and dependency floor | Complete | Complete (CacheLayer 4.0 resolved; 4 QA lanes, analyzers, clean install, Redis/SQLite, benchmarks green) | Complete |
-| 8 | Performance baseline and minimal optional Runwire integration | In progress | Pending | In progress |
+| 8 | Performance baseline and minimal optional Runwire integration | In progress | Baseline recorded; implementation pending | In progress |
 | 9 | Runwire lifecycle, concurrency, and consumer coverage | Pending | Pending | Pending |
 | 10 | Documentation, migration/rollback, full release acceptance | Pending | Pending | Pending |
 

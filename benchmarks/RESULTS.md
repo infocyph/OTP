@@ -1,5 +1,31 @@
 # OTP benchmark results
 
+## OTP 7.0 / CacheLayer 4.0 pre-Runwire baseline
+
+Recorded on 2026-10-03 from the green Batch 7 GitHub Actions benchmark lanes on
+Ubuntu 24.04 with Xdebug disabled, PHPBench 1.7.0, and CacheLayer 4.0. These
+one-iteration CI modes are an attribution snapshot, not a stable throughput or
+RPM regression baseline. They are recorded before OTP adds any optional Runwire
+execution-context checks.
+
+| Subject | PHP 8.4 | PHP 8.5 |
+| --- | ---: | ---: |
+| Generic OTP generate | 114 µs | 72 µs |
+| Generic OTP verify | 138 µs | 113 µs |
+| GridOTP round trip | 522 µs | 252 µs |
+| Atomic `setIfAbsent` | 22 µs | 13 µs |
+| Atomic CAS | 85 µs | 44 µs |
+| OTP atomic monotonic advance | 406 µs | 242 µs |
+| OTP lock-fallback monotonic advance | 611 µs | 372 µs |
+| OTP atomic one-time claim | 409 µs | 252 µs |
+| OTP lock-fallback one-time claim | 579 µs | 352 µs |
+| Passkey begin authentication | 1,492 µs | 1,261 µs |
+| Passkey begin registration | 2,243 µs | 1,955 µs |
+
+The Batch 8 post-change run must compare the same subjects on the same CI class.
+Normal execution with no supplied Runwire context is the primary regression path;
+Runwire installed but unused must not alter state semantics.
+
 ## OTP 6.1 / CacheLayer 3.3 attribution
 
 OTP 6.1 adds dedicated subjects for CacheLayer 3.3 replay coordination. CI runs
