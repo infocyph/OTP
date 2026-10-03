@@ -218,3 +218,51 @@ test('concurrent recovery-code consumption commits exactly one success', functio
     expect($results)->toBe([0, 1]);
     unlink($path);
 });
+
+
+test('recovery code alphabets reject line and control separators', function () {
+    $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
+
+    foreach (["AB\n", "AB\r\n", "AB\0", "AB\u{2028}"] as $alphabet) {
+        expect(fn () => $codes->generate(
+            'strict-alphabet',
+            count: 2,
+            length: 40,
+            groupSize: 0,
+            characterSet: $alphabet,
+        ))->toThrow(InvalidArgumentException::class);
+    }
+});
+
+test('generated recovery codes from supported custom alphabets consume exactly once', function (
+    string $alphabet,
+    int $length,
+) {
+    $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
+    $generated = $codes->generate(
+        'custom-alphabet-' . md5($alphabet),
+        count: 3,
+        length: $length,
+        groupSize: 0,
+        characterSet: $alphabet,
+    );
+
+    foreach ($generated->plainCodes as $plainCode) {
+        $binding = 'consume-' . hash('sha256', $alphabet . $plainCode);
+        $single = $codes->generate(
+            $binding,
+            count: 1,
+            length: $length,
+            groupSize: 0,
+            characterSet: $alphabet,
+        );
+        $code = $single->plainCodes[0];
+
+        expect($codes->consume($binding, "\n " . strtolower($code) . " \r\n")->consumed)->toBeTrue()
+            ->and($codes->consume($binding, $code)->consumed)->toBeFalse();
+    }
+})->with([
+    'binary alphabet' => ['AB', 40],
+    'numeric alphabet' => ['0123456789', 13],
+    'mixed alphabet' => ['ABCDE2345', 13],
+]);

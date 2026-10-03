@@ -8,7 +8,7 @@ use InvalidArgumentException;
 
 final readonly class OcraSuite
 {
-    private const string PATTERN = '/^OCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(?:-P(SHA1|SHA256|SHA512))?(?:-S(\d{3}))?(?:-T((?:[1-9]|[1-3]\d|4[0-8])H|(?:[1-9]|[1-5]\d)[SM]))?$/';
+    private const string PATTERN = '/\AOCRA-1:HOTP-SHA(1|256|512)-(0|[4-9]):(C-)?Q([ANH])(0[4-9]|[1-5]\d|6[0-4])(?:-P(SHA1|SHA256|SHA512))?(?:-S(\d{3}))?(?:-T((?:[1-9]|[1-3]\d|4[0-8])H|(?:[1-9]|[1-5]\d)[SM]))?\z/D';
 
     private function __construct(
         public string $suite,

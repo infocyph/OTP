@@ -271,3 +271,26 @@ test('non-counter OCRA passes the application replay TTL to CacheLayer', functio
         replayTtl: 300,
     )->matched)->toBeTrue();
 });
+
+
+test('OCRA strict protocol fields reject trailing and control separators', function () {
+    expect(fn () => new OCRA("OCRA-1:HOTP-SHA256-8:QN08\n", OCRA_KEY_32))
+        ->toThrow(InvalidArgumentException::class);
+
+    $cases = [
+        [new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32), '12345678'],
+        [new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32), 'ABCD1234'],
+        [new OCRA('OCRA-1:HOTP-SHA256-8:QH08', OCRA_KEY_32), 'A1B2C3D4'],
+    ];
+    $suffixes = ["\n", "\r\n", "\0", "\u{2028}"];
+
+    foreach ($cases as [$ocra, $challenge]) {
+        foreach ($suffixes as $suffix) {
+            expect(fn () => $ocra->generate($challenge . $suffix))
+                ->toThrow(InvalidArgumentException::class);
+        }
+
+        expect(fn () => $ocra->generate($challenge . 'X'))
+            ->toThrow(InvalidArgumentException::class);
+    }
+});

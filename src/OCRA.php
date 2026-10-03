@@ -381,9 +381,9 @@ final readonly class OCRA
     {
         $length = $composite ? 128 : $this->suite->challengeLength;
         $valid = match ($this->suite->challengeFormat) {
-            'n' => preg_match('/^\d{1,' . $length . '}$/', $challenge) === 1,
-            'a' => preg_match('/^[A-Za-z0-9]{1,' . $length . '}$/', $challenge) === 1,
-            'h' => preg_match('/^[A-Fa-f0-9]{1,' . $length . '}$/', $challenge) === 1,
+            'n' => preg_match('/\A\d{1,' . $length . '}\z/D', $challenge) === 1,
+            'a' => preg_match('/\A[A-Za-z0-9]{1,' . $length . '}\z/D', $challenge) === 1,
+            'h' => preg_match('/\A[A-Fa-f0-9]{1,' . $length . '}\z/D', $challenge) === 1,
             default => false,
         };
         if (!$valid) {

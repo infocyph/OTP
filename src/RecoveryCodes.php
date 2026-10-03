@@ -53,7 +53,7 @@ final readonly class RecoveryCodes
         if (
             strlen($normalizedCode) < 6
             || strlen($normalizedCode) > self::MAX_CODE_LENGTH
-            || preg_match('/^[A-Z0-9]+$/', $normalizedCode) !== 1
+            || preg_match('/\A[A-Z0-9]+\z/D', $normalizedCode) !== 1
         ) {
             return $this->invalidResult($binding);
         }
@@ -155,7 +155,7 @@ final readonly class RecoveryCodes
     private static function characterSet(string $characterSet): array
     {
         $characterSet = strtoupper($characterSet);
-        if ($characterSet === '' || preg_match('/^[A-Z0-9]+$/', $characterSet) !== 1) {
+        if ($characterSet === '' || preg_match('/\A[A-Z0-9]+\z/D', $characterSet) !== 1) {
             throw new InvalidArgumentException('Recovery code character set must contain only ASCII letters and digits.');
         }
 
