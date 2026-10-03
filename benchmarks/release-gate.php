@@ -335,6 +335,7 @@ function runTimedWorkload(
     bool $enforceAbsoluteBudgets = false,
 ): array {
     $metadata['duration_per_repetition_seconds'] = $duration;
+    $metadata['soak_duration_seconds'] = $duration * $repetitions;
     $metadata['stability_spread_limit_percent'] = $stabilityLimit;
     if ($enforceAbsoluteBudgets) {
         $metadata['p99_latency_budget_ms'] = MAX_P99_LATENCY_MS;
@@ -445,8 +446,6 @@ function runRepeatedWorkload(
             $memoryGrowth = max($memoryGrowth, $memoryEnds[$index] - $startMemory);
         }
     }
-    $metadata['soak_duration_seconds'] = $wallSeconds;
-
     return buildWorkloadResult(
         name: $name,
         type: $type,
@@ -496,6 +495,7 @@ function runConcurrentVerificationWorkload(float $duration, int $repetitions): a
             'queue' => 'process start barrier only',
             'backend_connections' => CONCURRENT_WORKERS,
             'duration_per_repetition_seconds' => $duration,
+            'soak_duration_seconds' => $duration * $repetitions,
             'stability_spread_limit_percent' => CONCURRENT_STABILITY_SPREAD_PERCENT,
         ],
         CONCURRENT_WARMUP_OPERATIONS * CONCURRENT_WORKERS,
