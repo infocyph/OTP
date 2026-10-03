@@ -246,6 +246,7 @@ final class CacheLock
             self::checkpoint($runwire);
             $current = $cache->get($stateKey);
             if ($current === null) {
+                self::checkpoint($runwire);
                 if ($atomic->setIfAbsent($stateKey, $value, $ttl)) {
                     return true;
                 }
@@ -258,6 +259,7 @@ final class CacheLock
             if ($value <= $current) {
                 return false;
             }
+            self::checkpoint($runwire);
             if ($atomic->compareAndSet($stateKey, $current, $value, $ttl)) {
                 return true;
             }
@@ -326,6 +328,7 @@ final class CacheLock
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
             self::checkpoint($runwire);
+            self::checkpoint($runwire);
             if ($atomic->setIfAbsent($stateKey, 1, $ttl)) {
                 return true;
             }
@@ -389,6 +392,7 @@ final class CacheLock
             if ($current !== 0) {
                 throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
             }
+            self::checkpoint($runwire);
             if ($atomic->compareAndSet($stateKey, 0, 1, $ttl)) {
                 return true;
             }
@@ -442,6 +446,7 @@ final class CacheLock
         ?RunwireExecutionContext $runwire,
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
+            self::checkpoint($runwire);
             self::checkpoint($runwire);
             if ($atomic->setIfAbsent($stateKey, 0, $ttl)) {
                 return true;
@@ -566,6 +571,7 @@ final class CacheLock
             if ($ttl !== null && $ttl < 1) {
                 throw new RuntimeException('Atomic authentication state transitions require a positive TTL.');
             }
+            self::checkpoint($runwire);
             $mutated = $current === null
                 ? $atomic->setIfAbsent($stateKey, $decision['replacement'], $ttl)
                 : $atomic->compareAndSet($stateKey, $current, $decision['replacement'], $ttl);
