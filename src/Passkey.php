@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
-use Infocyph\CacheLayer\Cache\Lock\LockHandle;
-use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\Result\PasskeyResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
@@ -69,7 +67,7 @@ final readonly class Passkey
         if ($ttlSeconds < 1 || $ttlSeconds > self::MAX_TTL_SECONDS) {
             throw new InvalidArgumentException('Passkey ceremony TTL must be between 1 and 600 seconds.');
         }
-        CacheLock::assertLockSafe($cache);
+        CacheLock::assertSafe($cache);
 
         $factory = new CeremonyStepManagerFactory();
         $factory->setAllowedOrigins($allowedOrigins, $allowSubdomains);
@@ -195,17 +193,16 @@ final readonly class Passkey
             throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
         }
 
-        return CacheLock::synchronized(
+        return CacheLock::transition(
             $this->cache,
+            self::stateKey($binding, $ceremonyId),
             self::lockKey($binding, $ceremonyId),
-            fn(LockProviderInterface $locks, LockHandle $handle): PasskeyResult => $this->finishAuthenticationLocked(
-                $binding,
-                $ceremonyId,
+            'passkey ceremony',
+            fn(mixed $stored): array => $this->finishAuthenticationState(
+                $stored,
                 $credentialRecordJson,
                 $credentialJson,
                 $now,
-                $locks,
-                $handle,
             ),
         );
     }
@@ -225,17 +222,12 @@ final readonly class Passkey
             throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
         }
 
-        return CacheLock::synchronized(
+        return CacheLock::transition(
             $this->cache,
+            self::stateKey($binding, $ceremonyId),
             self::lockKey($binding, $ceremonyId),
-            fn(LockProviderInterface $locks, LockHandle $handle): PasskeyResult => $this->finishRegistrationLocked(
-                $binding,
-                $ceremonyId,
-                $credentialJson,
-                $now,
-                $locks,
-                $handle,
-            ),
+            'passkey ceremony',
+            fn(mixed $stored): array => $this->finishRegistrationState($stored, $credentialJson, $now),
         );
     }
 
@@ -390,25 +382,6 @@ final readonly class Passkey
         return hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremonyId);
     }
 
-    /** @param array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} $state */
-    private function consumeState(
-        string $stateKey,
-        array $state,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): void {
-        $ttl = $state['expiresAt'] - $now;
-        if ($ttl < 1) {
-            throw new RuntimeException('Passkey ceremony expired before state consumption.');
-        }
-        $state['consumed'] = true;
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->set($stateKey, $state, $ttl)) {
-            throw new RuntimeException('Unable to consume passkey ceremony state.');
-        }
-    }
-
     /**
      * @param array<array-key, mixed> $recordsJson
      * @return list<\Webauthn\PublicKeyCredentialDescriptor>
@@ -428,14 +401,6 @@ final readonly class Passkey
         }
 
         return $descriptors;
-    }
-
-    private function deleteLocked(string $stateKey, LockProviderInterface $locks, LockHandle $handle): void
-    {
-        CacheLock::ensureOwned($locks, $handle);
-        if (!$this->cache->delete($stateKey)) {
-            throw new RuntimeException('Unable to delete passkey ceremony state.');
-        }
     }
 
     private function deserializeCreationOptions(string $json): PublicKeyCredentialCreationOptions
@@ -507,31 +472,37 @@ final readonly class Passkey
         return $options;
     }
 
-    private function finishAuthenticationLocked(
-        string $binding,
-        string $ceremonyId,
+    /**
+     * @return array{
+     *     result:PasskeyResult,
+     *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
+     *     ttl?:int,
+     *     delete?:bool,
+     *     failure?:string
+     * }
+     */
+    private function finishAuthenticationState(
+        mixed $stored,
         string $credentialRecordJson,
         string $credentialJson,
         int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): PasskeyResult {
-        $stateKey = self::stateKey($binding, $ceremonyId);
-        $state = $this->loadActiveState($stateKey, PasskeyCeremony::TYPE_AUTHENTICATION, $now, $locks, $handle);
-        if ($state instanceof PasskeyResult) {
-            return $state;
+    ): array {
+        $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_AUTHENTICATION, $now);
+        if (!isset($decision['state'])) {
+            return $decision;
         }
+        $state = $decision['state'];
 
         $credential = $this->deserializeCredential($credentialJson);
         if ($credential === null || !($credential->response instanceof AuthenticatorAssertionResponse)) {
-            return PasskeyResult::malformed();
+            return ['result' => PasskeyResult::malformed()];
         }
         $record = $this->deserializeRecord($credentialRecordJson);
         if (!hash_equals($record->publicKeyCredentialId, $credential->rawId)) {
-            return PasskeyResult::mismatch();
+            return ['result' => PasskeyResult::mismatch()];
         }
         if ($state['userHandle'] !== null && !hash_equals($state['userHandle'], $record->userHandle)) {
-            return PasskeyResult::mismatch();
+            return ['result' => PasskeyResult::mismatch()];
         }
         $expectedUserHandle = $state['userHandle'] ?? $record->userHandle;
 
@@ -544,35 +515,43 @@ final readonly class Passkey
                 $expectedUserHandle,
             );
         } catch (AuthenticatorResponseVerificationException) {
-            return PasskeyResult::mismatch();
+            return ['result' => PasskeyResult::mismatch()];
         }
 
-        $this->consumeState($stateKey, $state, $now, $locks, $handle);
+        $state['consumed'] = true;
 
-        return PasskeyResult::success(
-            self::encode($updated->publicKeyCredentialId),
-            $this->serializeObject($updated),
-            $updated->userHandle === '' ? null : self::encode($updated->userHandle),
-        );
+        return [
+            'result' => PasskeyResult::success(
+                self::encode($updated->publicKeyCredentialId),
+                $this->serializeObject($updated),
+                $updated->userHandle === '' ? null : self::encode($updated->userHandle),
+            ),
+            'replacement' => $state,
+            'ttl' => $state['expiresAt'] - $now,
+            'failure' => 'Unable to consume passkey ceremony state.',
+        ];
     }
 
-    private function finishRegistrationLocked(
-        string $binding,
-        string $ceremonyId,
-        string $credentialJson,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): PasskeyResult {
-        $stateKey = self::stateKey($binding, $ceremonyId);
-        $state = $this->loadActiveState($stateKey, PasskeyCeremony::TYPE_REGISTRATION, $now, $locks, $handle);
-        if ($state instanceof PasskeyResult) {
-            return $state;
+    /**
+     * @return array{
+     *     result:PasskeyResult,
+     *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
+     *     ttl?:int,
+     *     delete?:bool,
+     *     failure?:string
+     * }
+     */
+    private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
+    {
+        $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_REGISTRATION, $now);
+        if (!isset($decision['state'])) {
+            return $decision;
         }
+        $state = $decision['state'];
 
         $credential = $this->deserializeCredential($credentialJson);
         if ($credential === null || !($credential->response instanceof AuthenticatorAttestationResponse)) {
-            return PasskeyResult::malformed();
+            return ['result' => PasskeyResult::malformed()];
         }
 
         try {
@@ -582,19 +561,24 @@ final readonly class Passkey
                 $this->rpId,
             );
         } catch (AuthenticatorResponseVerificationException) {
-            return PasskeyResult::mismatch();
+            return ['result' => PasskeyResult::mismatch()];
         }
         if ($state['userHandle'] === null || !hash_equals($state['userHandle'], $record->userHandle)) {
             throw new RuntimeException('Verified passkey registration returned an unexpected user handle.');
         }
 
-        $this->consumeState($stateKey, $state, $now, $locks, $handle);
+        $state['consumed'] = true;
 
-        return PasskeyResult::success(
-            self::encode($record->publicKeyCredentialId),
-            $this->serializeObject($record),
-            self::encode($record->userHandle),
-        );
+        return [
+            'result' => PasskeyResult::success(
+                self::encode($record->publicKeyCredentialId),
+                $this->serializeObject($record),
+                self::encode($record->userHandle),
+            ),
+            'replacement' => $state,
+            'ttl' => $state['expiresAt'] - $now,
+            'failure' => 'Unable to consume passkey ceremony state.',
+        ];
     }
 
     private function issueCeremony(
@@ -606,41 +590,19 @@ final readonly class Passkey
     ): PasskeyCeremony {
         for ($attempt = 0; $attempt < self::CEREMONY_ATTEMPTS; $attempt++) {
             $ceremonyId = self::encode(random_bytes(16));
-            $stateKey = self::stateKey($binding, $ceremonyId);
-            $ceremony = CacheLock::synchronized(
+            $ceremony = CacheLock::transition(
                 $this->cache,
+                self::stateKey($binding, $ceremonyId),
                 self::lockKey($binding, $ceremonyId),
-                function (LockProviderInterface $locks, LockHandle $handle) use (
+                'passkey ceremony',
+                fn(mixed $stored): array => $this->issueState(
+                    $stored,
                     $ceremonyId,
-                    $optionsJson,
-                    $stateKey,
                     $type,
+                    $optionsJson,
                     $userHandle,
                     $now,
-                ): ?PasskeyCeremony {
-                    if ($this->cache->get($stateKey) !== null) {
-                        return null;
-                    }
-                    $issuedAt = $now ?? time();
-                    if ($issuedAt < 0 || $issuedAt > PHP_INT_MAX - $this->ttlSeconds) {
-                        throw new InvalidArgumentException('Passkey ceremony expiration exceeds the supported timestamp range.');
-                    }
-                    $expiresAt = $issuedAt + $this->ttlSeconds;
-                    $state = [
-                        'v' => 1,
-                        'type' => $type,
-                        'optionsJson' => $optionsJson,
-                        'userHandle' => $userHandle,
-                        'expiresAt' => $expiresAt,
-                        'consumed' => false,
-                    ];
-                    CacheLock::ensureOwned($locks, $handle);
-                    if (!$this->cache->set($stateKey, $state, $this->ttlSeconds)) {
-                        throw new RuntimeException('Unable to store passkey ceremony state.');
-                    }
-
-                    return new PasskeyCeremony($ceremonyId, $type, $optionsJson, $expiresAt);
-                },
+                ),
             );
             if ($ceremony !== null) {
                 return $ceremony;
@@ -650,32 +612,81 @@ final readonly class Passkey
         throw new RuntimeException('Unable to reserve a unique passkey ceremony.');
     }
 
-    /** @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}|PasskeyResult */
-    private function loadActiveState(
-        string $stateKey,
-        string $expectedType,
-        int $now,
-        LockProviderInterface $locks,
-        LockHandle $handle,
-    ): array|PasskeyResult {
-        $stored = $this->cache->get($stateKey);
+    /**
+     * @return array{
+     *     result:PasskeyCeremony|null,
+     *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
+     *     ttl?:int,
+     *     failure?:string
+     * }
+     */
+    private function issueState(
+        mixed $stored,
+        string $ceremonyId,
+        string $type,
+        string $optionsJson,
+        ?string $userHandle,
+        ?int $now,
+    ): array {
+        if ($stored !== null) {
+            return ['result' => null];
+        }
+        $issuedAt = $now ?? time();
+        if ($issuedAt < 0 || $issuedAt > PHP_INT_MAX - $this->ttlSeconds) {
+            throw new InvalidArgumentException('Passkey ceremony expiration exceeds the supported timestamp range.');
+        }
+        $expiresAt = $issuedAt + $this->ttlSeconds;
+
+        return [
+            'result' => new PasskeyCeremony($ceremonyId, $type, $optionsJson, $expiresAt),
+            'replacement' => [
+                'v' => 1,
+                'type' => $type,
+                'optionsJson' => $optionsJson,
+                'userHandle' => $userHandle,
+                'expiresAt' => $expiresAt,
+                'consumed' => false,
+            ],
+            'ttl' => $this->ttlSeconds,
+            'failure' => 'Unable to store passkey ceremony state.',
+        ];
+    }
+
+    /**
+     * @return array{
+     *     state?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
+     *     result?:PasskeyResult,
+     *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
+     *     ttl?:int,
+     *     delete?:bool,
+     *     failure?:string
+     * }
+     */
+    private function loadStateDecision(mixed $stored, string $expectedType, int $now): array
+    {
         if ($stored === null) {
-            return PasskeyResult::mismatch();
+            return ['result' => PasskeyResult::mismatch()];
         }
         $state = $this->requireState($stored);
         if ($state['expiresAt'] <= $now) {
-            $this->deleteLocked($stateKey, $locks, $handle);
+            $state['expiresAt'] = $now;
 
-            return PasskeyResult::mismatch();
+            return [
+                'result' => PasskeyResult::mismatch(),
+                'replacement' => $state,
+                'ttl' => 1,
+                'delete' => true,
+                'failure' => 'Unable to delete passkey ceremony state.',
+            ];
         }
         if ($state['consumed']) {
-            return PasskeyResult::replay();
+            return ['result' => PasskeyResult::replay()];
         }
         if ($state['type'] !== $expectedType) {
-            return PasskeyResult::mismatch();
+            return ['result' => PasskeyResult::mismatch()];
         }
 
-        return $state;
+        return ['state' => $state];
     }
 
     /** @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} */
