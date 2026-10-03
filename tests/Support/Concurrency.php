@@ -17,6 +17,10 @@ final class Concurrency
      */
     public static function run(callable $operation, int $workers = 2): array
     {
+        if (!extension_loaded('pcntl') || !extension_loaded('posix')) {
+            throw new RuntimeException('Concurrency tests require the pcntl and posix extensions.');
+        }
+
         $barrier = tempnam(sys_get_temp_dir(), 'otp-race-');
         if ($barrier === false) {
             throw new RuntimeException('Unable to create the concurrency barrier.');

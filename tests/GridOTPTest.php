@@ -155,10 +155,6 @@ test('GridOTP expiry and factor binding fail closed', function () {
 });
 
 test('GridOTP concurrent verification accepts exactly one request', function () {
-    if (!extension_loaded('pcntl') || !extension_loaded('posix') || !extension_loaded('pdo_sqlite')) {
-        $this->markTestSkipped('pcntl, posix, and pdo_sqlite are required.');
-    }
-
     $path = tempnam(sys_get_temp_dir(), 'otp-grid-');
     if ($path === false) {
         throw new RuntimeException('Unable to create GridOTP concurrency database.');

@@ -10,6 +10,7 @@ use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\CacheLayer\Cache\Lock\FileLockProvider;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use PHPUnit\Framework\MockObject\Stub;
+use RuntimeException;
 
 final class CacheLayerState
 {
@@ -20,6 +21,10 @@ final class CacheLayerState
 
     public static function sqlite(string $path): AuthenticationStateCacheInterface
     {
+        if (!extension_loaded('pdo_sqlite')) {
+            throw new RuntimeException('SQLite authentication-state tests require the pdo_sqlite extension.');
+        }
+
         return Cache::sqlite('otp-tests', $path, self::options());
     }
 
