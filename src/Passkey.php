@@ -488,7 +488,7 @@ final readonly class Passkey
         int $now,
     ): array {
         $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_AUTHENTICATION, $now);
-        if (!isset($decision['state'])) {
+        if (isset($decision['result'])) {
             return $decision;
         }
         $state = $decision['state'];
@@ -544,7 +544,7 @@ final readonly class Passkey
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {
         $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_REGISTRATION, $now);
-        if (!isset($decision['state'])) {
+        if (isset($decision['result'])) {
             return $decision;
         }
         $state = $decision['state'];
@@ -654,8 +654,9 @@ final readonly class Passkey
 
     /**
      * @return array{
-     *     state?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
-     *     result?:PasskeyResult,
+     *     state:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}
+     * }|array{
+     *     result:PasskeyResult,
      *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
      *     ttl?:int,
      *     delete?:bool,
