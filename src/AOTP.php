@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\OTP;
 
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
@@ -111,6 +112,7 @@ final readonly class AOTP
         string $context,
         int $ttlSeconds = 120,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): AotpChallenge {
         self::assertFactorId($factorId);
         self::assertContext($context);
@@ -118,6 +120,7 @@ final readonly class AOTP
             throw new InvalidArgumentException('AOTP challenge TTL must be between 1 and 600 seconds.');
         }
         CacheLock::assertSafe($cache);
+        CacheLock::checkpoint($runwire);
 
         for ($attempt = 0; $attempt < self::RESERVATION_ATTEMPTS; $attempt++) {
             $issuedAt = $now ?? time();
@@ -138,6 +141,7 @@ final readonly class AOTP
                 self::lockKey($factorId, $challenge),
                 $ttlSeconds,
                 'AOTP challenge',
+                $runwire,
             )) {
                 return $challenge;
             }
@@ -152,8 +156,9 @@ final readonly class AOTP
         AotpChallenge $challenge,
         AotpResponse $response,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): bool {
-        return $this->verifyWithResult($cache, $factorId, $challenge, $response, $now)->matched;
+        return $this->verifyWithResult($cache, $factorId, $challenge, $response, $now, $runwire)->matched;
     }
 
     public function verifyWithResult(
@@ -162,9 +167,11 @@ final readonly class AOTP
         AotpChallenge $challenge,
         AotpResponse $response,
         ?int $now = null,
+        ?RunwireExecutionContext $runwire = null,
     ): VerificationResult {
         self::assertFactorId($factorId);
         CacheLock::assertSafe($cache);
+        CacheLock::checkpoint($runwire);
         $now ??= time();
         if ($now < 0) {
             throw new InvalidArgumentException('AOTP verification timestamp must be non-negative.');
@@ -202,6 +209,7 @@ final readonly class AOTP
             self::lockKey($factorId, $challenge),
             $ttl,
             'AOTP challenge',
+            $runwire,
         )) {
             return VerificationResult::replay();
         }
