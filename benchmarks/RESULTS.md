@@ -1,8 +1,8 @@
 # OTP benchmark results
 
-## OTP 7.0 / final sustained release gate
+## OTP 7.0 / sustained component regression gate
 
-Run #222 on 2026-10-03 added the release-decision performance gate that the
+Run #222 on 2026-10-03 added a paired component regression gate that the
 earlier PHPBench snapshots intentionally did not provide. Baseline and candidate
 used production `--no-dev` dependency sets on the same PHP 8.5 GitHub Actions
 runner, with the same environment fingerprint. The normal-path workload reuses
@@ -18,7 +18,7 @@ errors/timeouts, CPU, memory, queue/backend metadata, and stability spread.
 | RPM regression | — | **1.26%** |
 | Maximum allowed regression | — | **2.00%** |
 
-The PHPForge result contract passed for both documents and
+For this isolated component workload, the PHPForge result contract passed for both documents and
 `ic:benchmark:compare --max-regression=2 --stable-environment` passed. The
 producer also enforces an absolute normal-path p99 ceiling of 1 ms, peak memory
 below 64 MB, and worker-memory growth below 8 MB; exceeding any of those limits
@@ -35,6 +35,12 @@ The uploaded release-gate JSON artifacts remain the detailed record for
 p50/p95/p99, CPU, memory, operation counts, errors/timeouts, and environment
 metadata. The existing PHPBench sections below remain path-attribution evidence;
 they are not used as the 2% release regression gate.
+
+This gate is intentionally **not** full release-performance acceptance. It runs
+`GenericOtp::generate()` repeatedly against CacheLayer memory at concurrency one.
+Representative host-request throughput, concurrent verification, and sustained
+persistent Runwire request/scope lifecycle measurements remain required before the
+performance acceptance in the release plan can be closed.
 
 ## OTP 7.0 / Runwire cooperative contention snapshot
 
