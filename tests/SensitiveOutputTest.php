@@ -80,11 +80,14 @@ test('service diagnostic output redacts credentials and collaborator object grap
         [new RecoveryCodes(new InMemoryRecoveryCodeStore(), $recoveryKey), [$recoveryKey]],
     ];
 
+    $dumpObject = \Closure::fromCallable('var_dump');
+    $printObject = \Closure::fromCallable('print_r');
+
     foreach ($services as [$service, $sentinels]) {
         ob_start();
-        var_dump($service);
+        $dumpObject($service);
         $dump = (string) ob_get_clean();
-        $printed = print_r($service, true);
+        $printed = (string) $printObject($service, true);
 
         foreach ($sentinels as $sentinel) {
             expect($dump)->not->toContain($sentinel)
@@ -95,9 +98,9 @@ test('service diagnostic output redacts credentials and collaborator object grap
     if (Passkey::isAvailable()) {
         $passkey = new Passkey($cache, 'example.com', ['https://example.com']);
         ob_start();
-        var_dump($passkey);
+        $dumpObject($passkey);
         $dump = (string) ob_get_clean();
-        $printed = print_r($passkey, true);
+        $printed = (string) $printObject($passkey, true);
 
         expect($dump)->not->toContain('authenticationStateLock')
             ->and($printed)->not->toContain('authenticationStateLock');
