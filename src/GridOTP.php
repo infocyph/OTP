@@ -300,7 +300,7 @@ final readonly class GridOTP
         ];
     }
 
-/** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
+    /** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
     private function requireState(mixed $state): array
     {
         if (!is_array($state) || count($state) !== 5) {
@@ -334,8 +334,6 @@ final readonly class GridOTP
             'consumed' => $consumed,
         ];
     }
-
-    
 
     /**
      * @return array{
