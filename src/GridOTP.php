@@ -76,8 +76,7 @@ final readonly class GridOTP
         return implode('', self::shuffleSecure($symbols));
     }
 
-    public static function hasSufficientDiversity(string $secret, int $challengeSize = 6): bool
-    {
+    public static function hasSufficientDiversity(string $secret, int $challengeSize = 6): bool {
         self::assertSecret($secret);
         self::assertChallengeSize($challengeSize, strlen($secret));
 
@@ -107,8 +106,7 @@ final readonly class GridOTP
         string $factorId,
         ?int $now = null,
         ?RunwireExecutionContext $runwire = null,
-    ): GridChallenge
-    {
+    ): GridChallenge {
         self::assertFactorId($factorId);
         for ($attempt = 0; $attempt < self::ISSUE_ATTEMPTS; $attempt++) {
             $id = Base64Url::encode(random_bytes(16));
