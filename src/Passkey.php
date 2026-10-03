@@ -16,9 +16,9 @@ use JsonException;
 use LogicException;
 use RangeException;
 use RuntimeException;
-use TypeError;
 use Symfony\Component\Serializer\Exception\ExceptionInterface as SerializerException;
 use Symfony\Component\Serializer\SerializerInterface;
+use TypeError;
 use Webauthn\AttestationStatement\AttestationStatementSupportManager;
 use Webauthn\AuthenticatorAssertionResponse;
 use Webauthn\AuthenticatorAssertionResponseValidator;
@@ -357,6 +357,61 @@ final readonly class Passkey
         return hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremonyId);
     }
 
+    private static function hasCredentialPayloadShape(string $json): bool
+    {
+        try {
+            $data = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return false;
+        }
+        if (!is_array($data) || array_is_list($data)) {
+            return false;
+        }
+
+        $id = $data['id'] ?? null;
+        $rawId = $data['rawId'] ?? null;
+        $type = $data['type'] ?? null;
+        $response = $data['response'] ?? null;
+        if (
+            !is_string($id)
+            || $id === ''
+            || !is_string($rawId)
+            || $rawId === ''
+            || $type !== 'public-key'
+            || !is_array($response)
+            || array_is_list($response)
+            || !is_string($response['clientDataJSON'] ?? null)
+            || $response['clientDataJSON'] === ''
+        ) {
+            return false;
+        }
+
+        if (array_key_exists('transports', $response)) {
+            $transports = $response['transports'];
+            if (!is_array($transports) || !array_is_list($transports)) {
+                return false;
+            }
+            foreach ($transports as $transport) {
+                if (!is_string($transport)) {
+                    return false;
+                }
+            }
+        }
+
+        if (array_key_exists('userHandle', $response) && !is_string($response['userHandle']) && $response['userHandle'] !== null) {
+            return false;
+        }
+
+        $registration = is_string($response['attestationObject'] ?? null)
+            && $response['attestationObject'] !== '';
+        $authentication = is_string($response['authenticatorData'] ?? null)
+            && $response['authenticatorData'] !== ''
+            && is_string($response['signature'] ?? null)
+            && $response['signature'] !== '';
+
+        return $registration || $authentication;
+    }
+
     /** @param array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} $state */
     private function consumeState(
         string $stateKey,
@@ -432,61 +487,6 @@ final readonly class Passkey
         }
 
         return $credential instanceof PublicKeyCredential ? $credential : null;
-    }
-
-    private static function hasCredentialPayloadShape(string $json): bool
-    {
-        try {
-            $data = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return false;
-        }
-        if (!is_array($data) || array_is_list($data)) {
-            return false;
-        }
-
-        $id = $data['id'] ?? null;
-        $rawId = $data['rawId'] ?? null;
-        $type = $data['type'] ?? null;
-        $response = $data['response'] ?? null;
-        if (
-            !is_string($id)
-            || $id === ''
-            || !is_string($rawId)
-            || $rawId === ''
-            || $type !== 'public-key'
-            || !is_array($response)
-            || array_is_list($response)
-            || !is_string($response['clientDataJSON'] ?? null)
-            || $response['clientDataJSON'] === ''
-        ) {
-            return false;
-        }
-
-        if (array_key_exists('transports', $response)) {
-            $transports = $response['transports'];
-            if (!is_array($transports) || !array_is_list($transports)) {
-                return false;
-            }
-            foreach ($transports as $transport) {
-                if (!is_string($transport)) {
-                    return false;
-                }
-            }
-        }
-
-        if (array_key_exists('userHandle', $response) && !is_string($response['userHandle']) && $response['userHandle'] !== null) {
-            return false;
-        }
-
-        $registration = is_string($response['attestationObject'] ?? null)
-            && $response['attestationObject'] !== '';
-        $authentication = is_string($response['authenticatorData'] ?? null)
-            && $response['authenticatorData'] !== ''
-            && is_string($response['signature'] ?? null)
-            && $response['signature'] !== '';
-
-        return $registration || $authentication;
     }
 
     private function deserializeMixed(string $json, string $type): mixed

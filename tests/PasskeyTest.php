@@ -35,7 +35,7 @@ test('passkey registration creates discoverable user-verified options', function
     expect($ceremony->type)->toBe(PasskeyCeremony::TYPE_REGISTRATION)
         ->and($ceremony->expiresAt)->toBe(1_700_000_300)
         ->and($options['rp']['id'] ?? null)->toBe('example.com')
-        ->and($options['rp']['name'] ?? null)->toBe('')
+        ->and($options['rp']['name'] ?? null)->toBe('example.com')
         ->and($options['user']['name'] ?? null)->toBe('alice@example.com')
         ->and($options['authenticatorSelection']['residentKey'] ?? null)->toBe('required')
         ->and($options['authenticatorSelection']['userVerification'] ?? null)->toBe('required')
