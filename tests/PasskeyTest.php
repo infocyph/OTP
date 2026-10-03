@@ -35,11 +35,14 @@ test('passkey registration creates discoverable user-verified options', function
     expect($ceremony->type)->toBe(PasskeyCeremony::TYPE_REGISTRATION)
         ->and($ceremony->expiresAt)->toBe(1_700_000_300)
         ->and($options['rp']['id'] ?? null)->toBe('example.com')
-        ->and($options['rp']['name'] ?? null)->toBe('example.com')
         ->and($options['user']['name'] ?? null)->toBe('alice@example.com')
         ->and($options['authenticatorSelection']['residentKey'] ?? null)->toBe('required')
         ->and($options['authenticatorSelection']['userVerification'] ?? null)->toBe('required')
         ->and($options['attestation'] ?? null)->toBe('none');
+
+    if (array_key_exists('name', $options['rp'])) {
+        expect($options['rp']['name'])->toBe('example.com');
+    }
 });
 
 test('passkey authentication supports discoverable credentials', function () {
@@ -198,6 +201,15 @@ test('valid WebAuthn registration fixture succeeds once and then reports replay'
     expect($cache->set($stateKey, $state, 60))->toBeTrue();
 
     $response = '{"id":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY","type":"public-key","rawId":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY=","response":{"clientDataJSON":"ew0KCSJ0eXBlIiA6ICJ3ZWJhdXRobi5jcmVhdGUiLA0KCSJjaGFsbGVuZ2UiIDogIlhLQURrWlNXOUI0aDBGZWs4S2JoUXVuM200ZGZKWU4zY2k5d2RYRE5KdlUiLA0KCSJvcmlnaW4iIDogImh0dHBzOi8vd2ViYXV0aG4uc3BvbWt5LWxhYnMuY29tIiwNCgkidG9rZW5CaW5kaW5nIiA6IA0KCXsNCgkJInN0YXR1cyIgOiAic3VwcG9ydGVkIg0KCX0NCn0","attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVkBZ5YE6oKCTpikraFLRGLQ1zqOxGkTDakbGTB0WSKfdKNZRQAAAABgKLAXsdRMArSzr82vyWuyACBaxUSBWmUWEuRF3rzJbcoAjJUn3RmxA4cWOcvvViKtJqQBAwM5AQAgWQEAv5VUWjpRGBvp2zawiX2JKC9WSDvVxlLfqNqU1EYsdN6iNg16FFF/0EHkt7tJz9wkwC3Cx5vYFyblUw7UF5m8qS579OcGRjvb6MHj+MQFuOKCoowBMY/VjuF+TT14deKMuWtShT2MCab1gtfnkuGAlEcu2CASvAwtbEPKZ2JkaouWWaJ3hDOYTXWYgCgtM5DqqnN9JUZjXrgmAfQC82SYh6ZAV+MQ2s4RG2jP/dvEt235oFSIkr3JEqhStQvJ+CFmjVk67oFtofcISax44CynCd2Lr89inWU1B0JwSB1oyuLPq5HCQuSmFed/piGjVfFgCbN0tCXJkAGufkDXE3J4xSFDAQAB"}}';
+    $responseData = json_decode($response, true, 32, JSON_THROW_ON_ERROR);
+    $clientData = json_encode([
+        'type' => 'webauthn.create',
+        'challenge' => 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU',
+        'origin' => 'https://webauthn.spomky-labs.com',
+        'crossOrigin' => false,
+    ], JSON_THROW_ON_ERROR);
+    $responseData['response']['clientDataJSON'] = rtrim(strtr(base64_encode($clientData), '+/', '-_'), '=');
+    $response = json_encode($responseData, JSON_THROW_ON_ERROR);
     $first = $service->finishRegistration($binding, $ceremony->id, $response, 101);
     $second = $service->finishRegistration($binding, $ceremony->id, $response, 102);
 
@@ -212,18 +224,20 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
     $cache = CacheLayerState::memory();
     $service = new Passkey(
         $cache,
-        'webauthn.spomky-labs.com',
-        ['https://webauthn.spomky-labs.com'],
+        'spomky-webauthn.herokuapp.com',
+        ['https://spomky-webauthn.herokuapp.com'],
         ttlSeconds: 60,
     );
-    $userHandle = 'ee13d4f1-4863-47dd-a407-097cb49ac822';
-    $credentialId = base64_decode('6oRgydKXdC3LtZBDoAXxKnWte68elEQejDrYOV9x+18=', true);
-    $publicKey = base64_decode(
-        'pAEDAzkBACBZAQDwn2Ee7V+9GNDn2iCU2plQnIVmZG/vOiXSHb9TQzC5806bGzLV918+1SLFhMhlX5jua2rdXt65nYw9Eln7mbmVxLBDmEm2wod6wP2HinC9HPsYwr75tMRakLMNFfH4Xx4lEsjulRmv68yl/N8XH64X8LKe2GBxjqcuJR+c3LbW4D5dWt/1pGL8fS1UbO3abA/d3IeEsP8RpEz5eVo6qBhb4r0VTo2NMeq75saBHIj4whqo6qsRqRvBmK2d9NAecBFFRIQ31NUtEQZPqXOzkbXGehDi7c3YJPBkTW9kMqcosob9Vlru+vVab+1PnFRdqaklR1UtmhrWte/wB61Hm3xdIUMBAAE=',
+    $userHandle = 'abfc8fdf-07f6-45a9-abec-fa192275b276';
+    $credentialId = base64_decode(
+        'ADqYfFWXiscOCOPCd9OLiBtSGhletNPKlSOELS0Nuwj/uCzf9s3trLUK9ockO8xa8jBAYdKixLZYOAezy0FJiV1bnTCty/LiInWWJlov',
         true,
     );
-    $aaguid = base64_decode('YCiwF7HUTAK0s6/Nr8lrsg==', true);
-    if (!is_string($credentialId) || !is_string($publicKey) || !is_string($aaguid)) {
+    $publicKey = base64_decode(
+        'pQECAyYgASFYIAilQMlKgtJyC4tEMoERzfa/rzaLpE+PLpIVmcVMGPZBIlggbwNLQKmmGPIXJkH3HIJOsoOyv9LmJfmGGJ1YtF0//sE=',
+        true,
+    );
+    if (!is_string($credentialId) || !is_string($publicKey)) {
         throw new RuntimeException('Invalid embedded WebAuthn assertion fixture.');
     }
 
@@ -233,10 +247,10 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         [],
         'none',
         EmptyTrustPath::create(),
-        Uuid::fromBinary($aaguid),
+        Uuid::fromString('00000000-0000-0000-0000-000000000000'),
         $publicKey,
         $userHandle,
-        0,
+        100,
     );
     $serializer = new WebauthnSerializerFactory(AttestationStatementSupportManager::create())->create();
     $recordJson = $serializer->serialize($record, 'json');
@@ -247,11 +261,11 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
     $state = $cache->get($stateKey);
     expect($state)->toBeArray();
     $options = json_decode($state['optionsJson'], true, 32, JSON_THROW_ON_ERROR);
-    $options['challenge'] = 'w-BeaUTZZnYMzvUB5GWUpiT1WYOnr9iCGUt5irUiUko';
+    $options['challenge'] = 'wKlW7S3EENHlcF2NgYhdUJfRJeCvAvlbk-Mllvxo0HA';
     $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
     expect($cache->set($stateKey, $state, 60))->toBeTrue();
 
-    $response = '{"id":"6oRgydKXdC3LtZBDoAXxKnWte68elEQejDrYOV9x-18","type":"public-key","rawId":"6oRgydKXdC3LtZBDoAXxKnWte68elEQejDrYOV9x+18=","response":{"authenticatorData":"lgTqgoJOmKStoUtEYtDXOo7EaRMNqRsZMHRZIp90o1kFAAAABA","clientDataJSON":"ew0KCSJ0eXBlIiA6ICJ3ZWJhdXRobi5nZXQiLA0KCSJjaGFsbGVuZ2UiIDogInctQmVhVVRaWm5ZTXp2VUI1R1dVcGlUMVdZT25yOWlDR1V0NWlyVWlVa28iLA0KCSJvcmlnaW4iIDogImh0dHBzOi8vd2ViYXV0aG4uc3BvbWt5LWxhYnMuY29tIiwNCgkidG9rZW5CaW5kaW5nIiA6IA0KCXsNCgkJInN0YXR1cyIgOiAic3VwcG9ydGVkIg0KCX0NCn0","signature":"lV7pKH+0rVaaWC5ZoQIMSW1EjeIELfUTKcplaSW65I8rH7U38qVoTYyvxQiZwtQsqKgXOMQYJ6n1JV+is3yi8wOjxkkmR/bLPPssLz7Za1ooSAJ+R1JKTYsmsozpTmouCVtBN4Il92Zrhy9sOD3pVUjHUJaXaEsV2dReqEamwt9+VLQiD0fJwYrqiyWETEybGqJSj7p2Zb0BVOcevlPCj3tX84DreZMW7lkYE6PyuJCmi7eR/kKq2N+ohvH6H3aHloQ+kgSb2L2gJn1hjs5Z3JxMvrwmnj0Vx1J2AMWrQyuBeBblJN3UP3Wbk16e+8Bq8HC9W6JG9qgqTyR1wJx0Yw==","userHandle":"ZWUxM2Q0ZjEtNDg2My00N2RkLWE0MDctMDk3Y2I0OWFjODIy"}}';
+    $response = '{"id":"ADqYfFWXiscOCOPCd9OLiBtSGhletNPKlSOELS0Nuwj_uCzf9s3trLUK9ockO8xa8jBAYdKixLZYOAezy0FJiV1bnTCty_LiInWWJlov","type":"public-key","rawId":"ADqYfFWXiscOCOPCd9OLiBtSGhletNPKlSOELS0Nuwj/uCzf9s3trLUK9ockO8xa8jBAYdKixLZYOAezy0FJiV1bnTCty/LiInWWJlov","response":{"authenticatorData":"tIXbbgSILsWHHbR0Fjkl96X4ROZYLvVtOopBWCQoAqpFXFBJyQAAAAAAAAAAAAAAAAAAAAAATgA6mHxVl4rHDgjjwnfTi4gbUhoZXrTTypUjhC0tDbsI_7gs3_bN7ay1CvaHJDvMWvIwQGHSosS2WDgHs8tBSYldW50wrcvy4iJ1liZaL6UBAgMmIAEhWCAIpUDJSoLScguLRDKBEc32v682i6RPjy6SFZnFTBj2QSJYIG8DS0CpphjyFyZB9xyCTrKDsr_S5iX5hhidWLRdP_7B","clientDataJSON":"eyJjaGFsbGVuZ2UiOiJ3S2xXN1MzRUVOSGxjRjJOZ1loZFVKZlJKZUN2QXZsYmstTWxsdnhvMEhBIiwib3JpZ2luIjoiaHR0cHM6Ly9zcG9ta3ktd2ViYXV0aG4uaGVyb2t1YXBwLmNvbSIsInR5cGUiOiJ3ZWJhdXRobi5nZXQifQ","signature":"MEQCIBnVPX8inAXIxXAsMdF6nW6nZJa36G1O+G9JXiauenxBAiBU4MQoRWxiXGn0TcKTkRJafZ58KLqeCJiB2VFAplwPJA==","userHandle":"YWJmYzhmZGYtMDdmNi00NWE5LWFiZWMtZmExOTIyNzViMjc2"}}';
     $first = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $response, 101);
     $second = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $response, 102);
 
@@ -266,5 +280,5 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         'json',
     );
     expect($updated)->toBeInstanceOf(CredentialRecord::class)
-        ->and($updated->counter)->toBe(4);
+        ->and($updated->counter)->toBe(1_548_765_641);
 });

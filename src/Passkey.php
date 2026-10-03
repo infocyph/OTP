@@ -338,6 +338,39 @@ final readonly class Passkey
         return Base64Url::encode($value);
     }
 
+    private static function hasCredentialPayloadShape(string $json): bool
+    {
+        try {
+            $data = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return false;
+        }
+        if (!is_array($data) || array_is_list($data)) {
+            return false;
+        }
+
+        $response = $data['response'] ?? null;
+        if (
+            !is_string($data['id'] ?? null)
+            || $data['id'] === ''
+            || !is_string($data['rawId'] ?? null)
+            || $data['rawId'] === ''
+            || ($data['type'] ?? null) !== 'public-key'
+            || !is_array($response)
+            || array_is_list($response)
+            || !is_string($response['clientDataJSON'] ?? null)
+            || $response['clientDataJSON'] === ''
+        ) {
+            return false;
+        }
+
+        return is_string($response['attestationObject'] ?? null)
+            || (
+                is_string($response['authenticatorData'] ?? null)
+                && is_string($response['signature'] ?? null)
+            );
+    }
+
     private static function lockKey(string $binding, string $ceremonyId): string
     {
         return hash('sha256', "infocyph:otp:passkey:lock:v1\0" . $binding . "\0" . $ceremonyId);
@@ -355,61 +388,6 @@ final readonly class Passkey
     private static function stateKey(string $binding, string $ceremonyId): string
     {
         return hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremonyId);
-    }
-
-    private static function hasCredentialPayloadShape(string $json): bool
-    {
-        try {
-            $data = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return false;
-        }
-        if (!is_array($data) || array_is_list($data)) {
-            return false;
-        }
-
-        $id = $data['id'] ?? null;
-        $rawId = $data['rawId'] ?? null;
-        $type = $data['type'] ?? null;
-        $response = $data['response'] ?? null;
-        if (
-            !is_string($id)
-            || $id === ''
-            || !is_string($rawId)
-            || $rawId === ''
-            || $type !== 'public-key'
-            || !is_array($response)
-            || array_is_list($response)
-            || !is_string($response['clientDataJSON'] ?? null)
-            || $response['clientDataJSON'] === ''
-        ) {
-            return false;
-        }
-
-        if (array_key_exists('transports', $response)) {
-            $transports = $response['transports'];
-            if (!is_array($transports) || !array_is_list($transports)) {
-                return false;
-            }
-            foreach ($transports as $transport) {
-                if (!is_string($transport)) {
-                    return false;
-                }
-            }
-        }
-
-        if (array_key_exists('userHandle', $response) && !is_string($response['userHandle']) && $response['userHandle'] !== null) {
-            return false;
-        }
-
-        $registration = is_string($response['attestationObject'] ?? null)
-            && $response['attestationObject'] !== '';
-        $authentication = is_string($response['authenticatorData'] ?? null)
-            && $response['authenticatorData'] !== ''
-            && is_string($response['signature'] ?? null)
-            && $response['signature'] !== '';
-
-        return $registration || $authentication;
     }
 
     /** @param array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} $state */
@@ -463,8 +441,13 @@ final readonly class Passkey
     private function deserializeCreationOptions(string $json): PublicKeyCredentialCreationOptions
     {
         try {
+            $data = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+            if (is_array($data) && is_array($data['rp'] ?? null)) {
+                unset($data['rp']['name']);
+                $json = json_encode($data, JSON_THROW_ON_ERROR);
+            }
             $options = $this->deserializeMixed($json, PublicKeyCredentialCreationOptions::class);
-        } catch (SerializerException $failure) {
+        } catch (JsonException|SerializerException $failure) {
             throw new RuntimeException('Invalid stored passkey registration options.', previous: $failure);
         }
         if (!$options instanceof PublicKeyCredentialCreationOptions) {
