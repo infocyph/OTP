@@ -8,6 +8,7 @@ use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\CacheLayer\Cache\Lock\FileLockProvider;
+use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\GenericOtp;
@@ -16,11 +17,17 @@ use Infocyph\OTP\OCRA;
 use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 use Infocyph\OTP\Support\ProvisioningUriParser;
+use Infocyph\OTP\Support\RunwireState;
 use Infocyph\OTP\Support\SecretUtility;
 use Infocyph\OTP\TOTP;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
+use Infocyph\Runwire\Coroutine\CoroutineRuntime;
+use Infocyph\Runwire\Coroutine\CoroutineScope;
 use Infocyph\Runwire\RequestContext;
+use Infocyph\Runwire\Runtime\Enum\RuntimeDriver;
+use Infocyph\Runwire\RuntimeCapabilities;
 use Infocyph\Runwire\RuntimeContext;
+use RuntimeException;
 use PhpBench\Attributes\BeforeMethods;
 use PhpBench\Attributes\Revs;
 
@@ -28,6 +35,14 @@ use PhpBench\Attributes\Revs;
 final class OtpBench
 {
     private AuthenticationStateCacheInterface $cache;
+
+    private LockProviderInterface $contendedLocks;
+
+    private CoroutineRuntime $coroutines;
+
+    private RequestContext $cooperativeRequest;
+
+    private RuntimeContext $cooperativeRuntime;
 
     private string $genericCode;
 
@@ -137,6 +152,48 @@ final class OtpBench
         $this->recoveryCodes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
         $runtime = RuntimeContext::standalone();
         $this->runwire = new RunwireExecutionContext($runtime, RequestContext::create($runtime));
+        $capabilities = new RuntimeCapabilities(
+            driver: RuntimeDriver::NATIVE,
+            runwireLoopAvailable: true,
+            supportsRunwireCoroutines: true,
+        );
+        $this->cooperativeRuntime = RuntimeContext::fromCapabilities(
+            $capabilities,
+            'otp-bench',
+            generation: 1,
+            concurrent: true,
+        );
+        $this->cooperativeRequest = RequestContext::create($this->cooperativeRuntime);
+        $this->coroutines = new CoroutineRuntime();
+        $this->contendedLocks = new class implements LockProviderInterface {
+            private bool $miss = true;
+
+            public function acquire(string $key, float $waitSeconds, float $leaseSeconds = 30.0): ?LockHandle
+            {
+                if ($key !== 'benchmark-contended-lock' || $waitSeconds !== 0.0) {
+                    throw new RuntimeException('Cooperative contention benchmark must use zero-wait acquisition.');
+                }
+                if ($this->miss) {
+                    $this->miss = false;
+
+                    return null;
+                }
+
+                return new LockHandle($key, 'benchmark-owner', leaseSeconds: $leaseSeconds);
+            }
+
+            public function refresh(?LockHandle $handle, float $leaseSeconds): bool
+            {
+                return $handle !== null && $leaseSeconds > 0.0;
+            }
+
+            public function release(?LockHandle $handle): void
+            {
+                if ($handle !== null) {
+                    $this->miss = true;
+                }
+            }
+        };
 
         $this->totpCode = $this->totp->generate(1716532624);
         $this->hotpCode = $this->hotp->generate(5);
@@ -179,6 +236,32 @@ final class OtpBench
     {
         $this->cache->set('benchmark-state', 1, 60);
         $this->cache->get('benchmark-state');
+    }
+
+    #[Revs(1)]
+    public function benchCooperativeLockContention(): void
+    {
+        $this->coroutines->runRequest(
+            $this->cooperativeRequest,
+            function (CoroutineScope $scope): void {
+                $execution = new RunwireExecutionContext(
+                    $this->cooperativeRuntime,
+                    $this->cooperativeRequest,
+                    $scope,
+                );
+                $handle = RunwireState::acquireLock(
+                    $this->contendedLocks,
+                    'benchmark-contended-lock',
+                    $execution,
+                    1.0,
+                    30.0,
+                );
+                if ($handle === null) {
+                    throw new RuntimeException('Cooperative contention benchmark failed to acquire the lock.');
+                }
+                $this->contendedLocks->release($handle);
+            },
+        );
     }
 
     public function benchGenericOtpConstruction(): void
