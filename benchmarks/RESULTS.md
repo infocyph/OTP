@@ -1,5 +1,23 @@
 # OTP benchmark results
 
+## OTP 7.0 / Runwire cooperative contention snapshot
+
+Batch 9 adds a synthetic one-miss lock provider exercised through a real
+``CoroutineRuntime`` request scope. The provider rejects blocking waits, misses
+once, yields through the supplied scope, and then acquires successfully.
+
+| Subject | PHP 8.4 | PHP 8.5 |
+| --- | ---: | ---: |
+| Cooperative lock contention, one forced miss | 6,329 µs | 6,443 µs |
+| Generic OTP generate, no context | 115 µs | 135 µs |
+| Generic OTP generate, supplied context | 121 µs | 157 µs |
+
+The cooperative contention subject intentionally includes one scheduler sleep of
+up to 5 ms, so its ~6.3-6.4 ms CI result is evidence that the cooperative path is
+executed and bounded, not a target latency or throughput claim. The ordinary
+no-context path remains independently benchmarked and all Batch 9 correctness
+and lifecycle gates passed on the same revision.
+
 ## OTP 7.0 / optional Runwire Batch 8 snapshot
 
 Recorded on 2026-10-03 from the exact green Batch 8 revision on the same GitHub
