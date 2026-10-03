@@ -121,7 +121,7 @@ test('atomic OCRA replay rejects corrupted existing state', function () {
     ))->toThrow(RuntimeException::class, 'Invalid OCRA replay token in CacheLayer.');
 });
 
-test('GenericOtp still requires the coordinated lock capability', function () {
+test('GenericOtp accepts atomic state coordination without a lock', function () {
     $atomic = $this->createMock(AtomicCacheInterface::class);
     $cache = $this->createMockForIntersectionOfInterfaces([
         AuthenticationStateCacheInterface::class,
@@ -131,8 +131,7 @@ test('GenericOtp still requires the coordinated lock capability', function () {
     $cache->method('hasPayloadIntegrity')->willReturn(true);
     $cache->method('isAuthoritative')->willReturn(true);
     $cache->method('atomic')->willReturn($atomic);
-    $cache->expects($this->once())->method('authenticationStateLock')->willReturn(null);
+    $cache->expects($this->never())->method('authenticationStateLock');
 
-    expect(fn () => new GenericOtp($cache, str_repeat('g', 32)))
-        ->toThrow(InvalidArgumentException::class, 'coordinated lock capability');
+    expect(new GenericOtp($cache, str_repeat('g', 32)))->toBeInstanceOf(GenericOtp::class);
 });
