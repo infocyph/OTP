@@ -13,7 +13,6 @@ use Infocyph\CacheLayer\Cache\Lock\MemcachedLockProvider;
 use Infocyph\CacheLayer\Cache\Lock\RedisLockProvider;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use InvalidArgumentException;
-use LogicException;
 use RuntimeException;
 use Throwable;
 
@@ -81,9 +80,7 @@ final class CacheLock
             return;
         }
 
-        self::validateRunwireContext($runwire);
-        $runwire->request?->cancellation->throwIfCancelled();
-        $runwire->scope?->cancellation()->throwIfCancelled();
+        RunwireState::checkpoint($runwire);
     }
 
     public static function consumeOnce(
@@ -234,46 +231,6 @@ final class CacheLock
             },
             $runwire,
         );
-    }
-
-    private static function acquireLock(
-        LockProviderInterface $locks,
-        string $key,
-        ?RunwireExecutionContext $runwire,
-    ): ?LockHandle {
-        self::checkpoint($runwire);
-        if (
-            $runwire === null
-            || $runwire->scope === null
-            || !$runwire->runtime->capabilities->supportsRunwireCoroutines
-        ) {
-            return $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS);
-        }
-
-        $waitSeconds = self::remainingWaitSeconds($runwire);
-        if ($waitSeconds <= 0.0) {
-            self::checkpoint($runwire);
-
-            return null;
-        }
-
-        $deadline = (int) hrtime(true) + (int) ceil($waitSeconds * 1_000_000_000);
-        do {
-            self::checkpoint($runwire);
-            $handle = $locks->acquire($key, 0.0, self::LEASE_SECONDS);
-            if ($handle !== null) {
-                return $handle;
-            }
-
-            $remainingNanoseconds = $deadline - (int) hrtime(true);
-            if ($remainingNanoseconds <= 0) {
-                self::checkpoint($runwire);
-
-                return null;
-            }
-
-            $runwire->scope->sleep(min(0.005, $remainingNanoseconds / 1_000_000_000));
-        } while (true);
     }
 
     private static function advanceAtomically(
@@ -476,21 +433,6 @@ final class CacheLock
         return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
     }
 
-    private static function remainingWaitSeconds(RunwireExecutionContext $runwire): float
-    {
-        $remaining = self::WAIT_SECONDS;
-        $requestRemaining = $runwire->request?->deadline()->remainingSeconds();
-        if ($requestRemaining !== null) {
-            $remaining = min($remaining, $requestRemaining);
-        }
-        $scopeRemaining = $runwire->scope?->cancellation()->deadline()->remainingSeconds();
-        if ($scopeRemaining !== null) {
-            $remaining = min($remaining, $scopeRemaining);
-        }
-
-        return max(0.0, $remaining);
-    }
-
     private static function reserveOnceAtomically(
         AuthenticationStateCacheInterface $cache,
         AtomicCacheInterface $atomic,
@@ -560,7 +502,13 @@ final class CacheLock
     ): mixed {
         $locks = $cache->authenticationStateLock()
             ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
-        $handle = self::acquireLock($locks, $key, $runwire);
+        $handle = RunwireState::acquireLock(
+            $locks,
+            $key,
+            $runwire,
+            self::WAIT_SECONDS,
+            self::LEASE_SECONDS,
+        );
         if ($handle === null) {
             self::checkpoint($runwire);
 
@@ -629,21 +577,4 @@ final class CacheLock
         throw new RuntimeException('Unable to transition ' . $stateName . ' state after atomic contention.');
     }
 
-    private static function validateRunwireContext(RunwireExecutionContext $runwire): void
-    {
-        $request = $runwire->request;
-        if ($request !== null) {
-            if ($request->completed()) {
-                throw new LogicException('Completed Runwire request context cannot be used for OTP state operations.');
-            }
-            if ($request->runtime() !== $runwire->runtime) {
-                throw new LogicException('Runwire request context is bound to a different runtime context.');
-            }
-        }
-
-        $pid = getmypid();
-        if (is_int($pid) && $runwire->runtime->pid !== 0 && $runwire->runtime->pid !== $pid) {
-            throw new LogicException('Runwire runtime context belongs to a different process.');
-        }
-    }
 }
