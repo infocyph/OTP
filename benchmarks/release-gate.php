@@ -364,6 +364,7 @@ function runTimedWorkload(
             return measureOperation($operation, $duration, $sampleInterval);
         },
     );
+    $workload['duration_seconds'] = $duration * $repetitions;
 
     if (!$enforceAbsoluteBudgets) {
         return $workload;
