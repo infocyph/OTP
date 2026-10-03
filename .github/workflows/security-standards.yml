@@ -78,6 +78,12 @@ jobs:
             --duration=8 \
             --repetitions=3 \
             --stable
+          php candidate/benchmarks/release-gate.php \
+            --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
+            --output="$GITHUB_WORKSPACE/perf/cold-start.json" \
+            --release="$GITHUB_SHA" \
+            --repetitions=3 \
+            --workload=cold-start
 
       - name: Install PHPForge validation tooling
         run: composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
@@ -87,6 +93,7 @@ jobs:
         run: |
           composer --working-dir=candidate ic:benchmark:validate "$GITHUB_WORKSPACE/perf/baseline.json"
           composer --working-dir=candidate ic:benchmark:validate "$GITHUB_WORKSPACE/perf/candidate.json"
+          composer --working-dir=candidate ic:benchmark:validate "$GITHUB_WORKSPACE/perf/cold-start.json"
 
       - name: Enforce 2 percent successful-RPM budget
         shell: bash
