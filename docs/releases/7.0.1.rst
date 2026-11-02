@@ -24,6 +24,8 @@ Correctness and maintainability
 * centralizes shared scalar-claim and fenced-write logic;
 * isolates Redis test namespaces across concurrent containers with reused PIDs;
 * gives RFC 6287 message encoding one internal owner;
+* uses the upstream strict Base32 decoder to preserve canonical pad-bit
+  rejection without re-encoding every decoded secret;
 * simplifies OCRA drift traversal, provisioning query validation and Passkey
   persisted-payload handling without weakening replay or malformed-input rules;
 * excludes dependencies, generated graphs, plans and local output from archives.

@@ -7,6 +7,7 @@ namespace Infocyph\OTP\Support;
 use Exception;
 use InvalidArgumentException;
 use ParagonIE\ConstantTime\Base32;
+use RangeException;
 use Throwable;
 
 final class SecretUtility
@@ -16,16 +17,12 @@ final class SecretUtility
         $normalized = self::normalizeBase32($secret);
 
         try {
-            $decoded = Base32::decodeUpper($normalized);
+            return Base32::decodeUpper($normalized, true);
+        } catch (RangeException $exception) {
+            throw new InvalidArgumentException('Secret must use canonical Base32 encoding.', previous: $exception);
         } catch (Throwable $exception) {
             throw new InvalidArgumentException('Secret must be a valid Base32 string.', previous: $exception);
         }
-
-        if (rtrim(Base32::encodeUpper($decoded), '=') !== $normalized) {
-            throw new InvalidArgumentException('Secret must use canonical Base32 encoding.');
-        }
-
-        return $decoded;
     }
 
     /**
