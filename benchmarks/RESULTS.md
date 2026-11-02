@@ -1,5 +1,35 @@
 # OTP benchmark results
 
+## OTP 7.0.1 acceptance
+
+The paired component job compares generation, generate/verify round trips and
+four-worker SQLite verification against the configured pre-Runwire baseline.
+All comparisons retain the 2% median successful-RPM budget. The collector now
+keeps numeric MiB measurements, samples the live parent/worker RSS while all
+workers remain alive, and captures cold child CPU and peak OS RSS.
+
+`http-acceptance.py` launches two Runwire 3 workers per revision, waits for both
+workers, warms them, then alternates baseline/candidate trials at concurrency
+1, 8 and 32. Worker CPUs are held to the same affinity; the client uses other
+available CPUs. Every HTTP response must confirm Generic OTP acceptance/replay
+rejection, counter OCRA and provisioning parsing against shared integrity-protected
+SQLite. It fails on invalid responses, timeouts, a process/resource violation,
+more than 2.5% trial RPM CV or more than 2% median RPM regression. The configured
+300-second candidate soak also checks bounded live process-tree RSS and FDs.
+
+Example (both checkouts must include the same stable Runwire 3 host dependency):
+
+```sh
+python3 benchmarks/http-acceptance.py \
+  --baseline=/path/to/baseline --candidate=/path/to/candidate \
+  --output=/tmp/otp-http --duration=15 --repetitions=3 \
+  --soak-duration=300 --concurrency 1 8 32
+```
+
+The host fixture is a measured integration workload; it does not predict every
+application's throughput. Results are retained as artifacts of the exact-candidate
+Security & Standards workflow. Earlier snapshots below do not certify 7.0.1.
+
 ## OTP 7.0 / sustained component regression gate
 
 Run #222 on 2026-10-03 added a paired component regression gate that the

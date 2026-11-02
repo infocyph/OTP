@@ -182,6 +182,24 @@ final class ProvisioningUriParser
         };
     }
 
+    /** @return array{string, string} */
+    private static function decodeQueryParameter(string $parameter): array
+    {
+        if ($parameter === '') {
+            throw new InvalidArgumentException('Invalid empty otpauth query parameter.');
+        }
+        [$encodedKey, $encodedValue] = array_pad(explode('=', $parameter, 2), 2, '');
+        if ($encodedKey === '' || preg_match('/%(?![A-Fa-f0-9]{2})/', $encodedKey . $encodedValue) === 1) {
+            throw new InvalidArgumentException('Invalid otpauth query encoding.');
+        }
+        $key = rawurldecode($encodedKey);
+        if (trim($key) === '' || preg_match('/[\x00-\x1F\x7F]/', $key) === 1) {
+            throw new InvalidArgumentException('Invalid otpauth query parameter name.');
+        }
+
+        return [$key, rawurldecode($encodedValue)];
+    }
+
     /**
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
@@ -252,22 +270,7 @@ final class ProvisioningUriParser
 
         $query = [];
         foreach ($parameters as $parameter) {
-            if ($parameter === '') {
-                throw new InvalidArgumentException('Invalid empty otpauth query parameter.');
-            }
-
-            [$encodedKey, $encodedValue] = array_pad(explode('=', $parameter, 2), 2, '');
-            if (
-                $encodedKey === ''
-                || preg_match('/%(?![A-Fa-f0-9]{2})/', $encodedKey . $encodedValue) === 1
-            ) {
-                throw new InvalidArgumentException('Invalid otpauth query encoding.');
-            }
-
-            $key = rawurldecode($encodedKey);
-            if (trim($key) === '' || preg_match('/[\x00-\x1F\x7F]/', $key) === 1) {
-                throw new InvalidArgumentException('Invalid otpauth query parameter name.');
-            }
+            [$key, $value] = self::decodeQueryParameter($parameter);
             if (isset($query[$key])) {
                 throw new InvalidArgumentException(sprintf('Duplicate otpauth query parameter "%s".', $key));
             }
@@ -286,7 +289,6 @@ final class ProvisioningUriParser
                 throw new InvalidArgumentException(sprintf('Reserved otpauth query parameter "%s" has invalid casing.', $key));
             }
 
-            $value = rawurldecode($encodedValue);
             if (
                 !isset($canonicalReserved[$lowerKey])
                 && (strlen($key) > 64 || strlen($value) > 1024)

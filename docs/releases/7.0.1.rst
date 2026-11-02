@@ -1,0 +1,46 @@
+OTP 7.0.1
+=========
+
+OTP 7.0.1 is a compatible dependency, maintainability and release-verification
+update. Public OTP signatures and persisted OTP key domains are unchanged.
+
+Dependencies
+------------
+
+* validates the optional passed-context integration against Runwire 3.0;
+* requires CacheLayer ``^4.0.2``;
+* tests the optional WebAuthn integration from ``5.3.10``;
+* excludes the specific older Symfony and PKI releases whose implicit-nullable
+  signatures are incompatible with PHP 8.4/8.5 strict deprecation checks.
+
+Runwire and WebAuthn remain optional. PHPForge remains development tooling.
+Hosts continue to own workers, event loops, requests and coroutine scopes.
+
+Correctness and maintainability
+-------------------------------
+
+* separates bounded atomic persistence from coordinated lock ownership;
+* centralizes shared scalar-claim and fenced-write logic;
+* isolates Redis test namespaces across concurrent containers with reused PIDs;
+* gives RFC 6287 message encoding one internal owner;
+* simplifies OCRA drift traversal, provisioning query validation and Passkey
+  persisted-payload handling without weakening replay or malformed-input rules;
+* excludes dependencies, generated graphs, plans and local output from archives.
+
+Release verification
+--------------------
+
+The performance collector preserves numeric memory measurements and samples
+live concurrent workers after readiness. Cold-start children report CPU and OS
+peak RSS. Generation, round-trip and concurrent comparisons retain the 2%
+successful-RPM regression budget.
+
+The HTTP fixture runs two real Runwire workers with shared, integrity-protected
+SQLite state. Every response validates Generic OTP consumption/replay rejection,
+counter OCRA and provisioning parsing. The paired host acceptance includes a
+concurrency curve, continuous process-tree resource sampling, a 2.5% maximum RPM
+coefficient of variation, and a five-minute persistent-host soak. Its conclusions
+apply to this declared workload and backend, not all applications or deployments.
+
+Require the configured PHP 8.4/8.5 lowest/stable matrix, analysis, production
+consumer and performance jobs to pass on the final candidate before tagging.

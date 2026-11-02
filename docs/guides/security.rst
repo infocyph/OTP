@@ -155,7 +155,7 @@ and secures those subdomains. Do not derive allowed origins from untrusted Host,
 Origin, proxy, or request parameters.
 
 TOTP, AOTP, and MobileOTP time
------------------------------
+------------------------------
 
 Use monitored NTP synchronization on every verifier. AOTP signing clients also
 need a trustworthy local clock because ``AOTP::respond()`` refuses challenges

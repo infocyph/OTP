@@ -7,7 +7,16 @@ MobileOTP, and Passkey/WebAuthn. Migrate runtime coordination and application
 persistence deliberately; changing code without understanding state ownership is
 unsafe.
 
-OTP 6.0 to 6.1
+OTP 7.0 to the next patch
+-------------------------
+
+The next patch validates the optional Runwire integration against Runwire 3.0.
+Hosts enabling it should install ``infocyph/runwire:^3.0``. CacheLayer's minimum
+is ``^4.0.2`` and the optional WebAuthn development/test minimum is ``^5.3.10``.
+Public OTP APIs and persisted OTP key domains are unchanged. The host continues
+to own all Runwire workers, event loops, requests and coroutine scopes.
+
+OTP 6.1 to 7.0
 --------------
 
 OTP 7.0 raises the CacheLayer floor to ``^4.0``. Public HOTP/TOTP/OCRA result
@@ -15,7 +24,13 @@ contracts and OTP's v1 replay key domains remain unchanged. CacheLayer 4.0 nativ
 atomics are preferred for scalar and fenced whole-record replay transitions, and
 a coordinated lock is used when the configured backend does not expose a safe
 atomic capability.
-``GenericOtp`` remains lock-based.
+``GenericOtp``, GridOTP and Passkey use whole-record atomic transitions when
+available and coordinated locks otherwise. Drain CacheLayer 3.x workers before
+activating the CacheLayer 4.x generation; their signed state envelopes are not a
+supported mixed-version boundary.
+
+OTP 6.0 to 6.1
+--------------
 
 Do not run shared stateful 6.0 and atomic-path 6.1 workers through a prolonged
 rolling window. A 6.0 worker coordinates the existing scalar replay state by
@@ -54,14 +69,14 @@ The base package does not require sodium or the WebAuthn library at runtime.
 Composer configuration is:
 
 * ``ext-sodium`` — ``require-dev`` + ``suggest``; required only for AOTP;
-* ``web-auth/webauthn-lib:^5.3`` — ``require-dev`` + ``suggest``; required only
+* ``web-auth/webauthn-lib:^5.3.10`` — ``require-dev`` + ``suggest``; required only
   for Passkey/WebAuthn.
 
 Applications enabling Passkey install:
 
 .. code-block:: bash
 
-   composer require web-auth/webauthn-lib:^5.3
+   composer require web-auth/webauthn-lib:^5.3.10
 
 AOTP production images must enable ``ext-sodium``. ``AOTP::isAvailable()`` and
 ``Passkey::isAvailable()`` can be used for capability-gated feature exposure.
