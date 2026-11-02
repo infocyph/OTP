@@ -6,7 +6,9 @@ The paired component job compares generation, generate/verify round trips and
 four-worker SQLite verification against the configured pre-Runwire baseline.
 All comparisons retain the 2% median successful-RPM budget. The collector now
 keeps numeric MiB measurements, samples the live parent/worker RSS while all
-workers remain alive, and captures cold child CPU and peak OS RSS.
+workers remain alive, and captures cold child CPU and peak OS RSS. Timed workload
+settings record the configured duration consistently; RPM and CPU still use the
+measured ready-workload elapsed time.
 
 `http-acceptance.py` launches two Runwire 3 workers per revision, waits for both
 workers, warms them, then alternates baseline/candidate trials at concurrency

@@ -151,21 +151,27 @@ jobs:
       - name: Enforce 2 percent successful-RPM budget
         shell: bash
         run: |
+          comparison_status=0
           for suffix in '' '-roundtrip' '-concurrent'; do
-            composer --working-dir=candidate ic:benchmark:compare \
+            if ! composer --working-dir=candidate ic:benchmark:compare \
               "$GITHUB_WORKSPACE/perf/baseline${suffix}.json" \
               "$GITHUB_WORKSPACE/perf/candidate${suffix}.json" \
               --max-regression=2 \
-              --stable-environment
+              --stable-environment; then
+              comparison_status=1
+            fi
           done
+          exit "$comparison_status"
 
       - name: Prepare the matching Runwire 3 HTTP host baseline
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           composer require --working-dir=baseline --dev 'infocyph/runwire:^3.0' --no-update --no-interaction
           composer update --working-dir=baseline --no-interaction --prefer-dist --no-progress --prefer-stable
 
       - name: Compare validated HTTP requests and soak the persistent host
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           python3 candidate/benchmarks/http-acceptance.py \

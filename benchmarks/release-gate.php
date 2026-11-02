@@ -486,7 +486,7 @@ function runConcurrentVerificationWorkload(float $duration, int $repetitions): a
         throw new RuntimeException('Concurrent verification benchmark requires pcntl, posix, and pdo_sqlite.');
     }
 
-    return runRepeatedWorkload(
+    $workload = runRepeatedWorkload(
         $repetitions,
         'generic-otp-concurrent-verification',
         'persistent-worker',
@@ -616,6 +616,9 @@ function runConcurrentVerificationWorkload(float $duration, int $repetitions): a
         },
         concurrency: CONCURRENT_WORKERS,
     );
+    $workload['duration_seconds'] = $duration * $repetitions;
+
+    return $workload;
 }
 
 /** @param list<int> $pids */

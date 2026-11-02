@@ -26,6 +26,10 @@ test('benchmark results retain measured memory and CPU for acceptance budgets', 
         expect($result['memory']['peak_mb'])->toBeGreaterThan(0)
             ->and($result['cpu']['average_percent'])->toBeGreaterThan(0)
             ->and($result['failed_operations'])->toBe(0);
+        if ($workload !== 'cold-start') {
+            expect($document['workloads'][0]['duration_seconds'])->toBe(3)
+                ->and($document['workloads'][0]['metadata']['duration_per_repetition_seconds'])->toBe(1);
+        }
         if ($workload === 'sustained') {
             expect($result['memory']['average_mb'])->toBeGreaterThan(0)
                 ->and($result['memory']['growth_mb'])->not->toBeNull()
