@@ -10,6 +10,7 @@ Dependencies
 * validates the optional passed-context integration against Runwire 3.0;
 * requires CacheLayer ``^4.0.2``;
 * tests the optional WebAuthn integration from ``5.3.10``;
+* declares ``ext-xmlwriter`` for SVG tests and suggests it to consumers;
 * excludes the specific older Symfony and PKI releases whose implicit-nullable
   signatures are incompatible with PHP 8.4/8.5 strict deprecation checks.
 

@@ -47,6 +47,8 @@ OTP keeps `web-auth/webauthn-lib` under `require-dev` + `suggest` as well.
 `Passkey::isAvailable()` reports whether it is loaded. OTP's Passkey integration
 does **not** require `ext-sodium`.
 
+SVG QR rendering requires `ext-xmlwriter`; code generation and URI provisioning work without it.
+
 Runwire integration is also optional. Applications that already own a Runwire
 3.0 request/coroutine lifecycle may install it explicitly:
 

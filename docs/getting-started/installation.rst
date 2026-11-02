@@ -67,6 +67,12 @@ the WebAuthn/CBOR/PKI/Symfony dependency graph.
 Constructing ``Passkey`` without it throws ``LogicException`` with the install
 command. OTP's Passkey wrapper does not itself require ``ext-sodium``.
 
+Optional SVG QR rendering
+-------------------------
+
+Enable ``ext-xmlwriter`` to render SVG QR codes. Code generation and URI
+provisioning do not require this extension.
+
 Optional Runwire dependency
 ---------------------------
 
