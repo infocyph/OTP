@@ -3,6 +3,22 @@ benchmarks export-ignore
 docs export-ignore
 examples export-ignore
 tests export-ignore
+vendor export-ignore
+graphify-out export-ignore
+phpforge export-ignore
+plans export-ignore
+build export-ignore
+dist export-ignore
+var export-ignore
+.agents export-ignore
+.aws export-ignore
+.codex export-ignore
+.idea export-ignore
+.vscode export-ignore
+.windsurf export-ignore
+.phpunit.cache export-ignore
+.psalm-cache export-ignore
+composer.lock export-ignore
 
 .editorconfig export-ignore
 .gitattributes export-ignore

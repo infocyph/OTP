@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Support\LabelHelper;
+use Infocyph\OTP\Support\OcraMessage;
 use Infocyph\OTP\Support\ProvisioningUriBuilder;
 use Infocyph\OTP\Support\SecretRotationPlanner;
 use Infocyph\OTP\Support\SecretUtility;
@@ -65,7 +66,7 @@ final readonly class OCRA
             throw new InvalidArgumentException('Hexadecimal session input must be non-empty.');
         }
 
-        $session = self::hexToBytes($hex);
+        $session = OcraMessage::hexToBytes($hex);
         if (preg_match('//u', $session) !== 1) {
             throw new InvalidArgumentException('Hexadecimal session input must decode to valid UTF-8.');
         }
@@ -322,53 +323,6 @@ final readonly class OCRA
         }
     }
 
-    private static function decimalToBinary(string $decimal): string
-    {
-        $decimal = ltrim($decimal, '0');
-        if ($decimal === '') {
-            return "\0";
-        }
-
-        $hex = '';
-        while ($decimal !== '') {
-            $quotient = '';
-            $remainder = 0;
-            $length = strlen($decimal);
-            for ($index = 0; $index < $length; $index++) {
-                $value = ($remainder * 10) + (ord($decimal[$index]) - 48);
-                $digit = intdiv($value, 16);
-                if ($quotient !== '' || $digit !== 0) {
-                    $quotient .= (string) $digit;
-                }
-                $remainder = $value % 16;
-            }
-
-            $hex = dechex($remainder) . $hex;
-            $decimal = $quotient;
-        }
-
-        return self::hexToBytes($hex);
-    }
-
-    private static function hexToBytes(string $hex): string
-    {
-        if (strlen($hex) % 2 !== 0) {
-            $hex = '0' . $hex;
-        }
-
-        $bytes = hex2bin($hex);
-        if ($bytes === false) {
-            throw new InvalidArgumentException('Invalid hexadecimal input.');
-        }
-
-        return $bytes;
-    }
-
-    private static function packInteger(int $value): string
-    {
-        return pack('NN', ($value >> 32) & 0xFFFFFFFF, $value & 0xFFFFFFFF);
-    }
-
     private function advanceCounter(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -456,29 +410,9 @@ final readonly class OCRA
      * @param string $challenge Validated operation challenge.
      * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
      */
-    private function buildMessage(string $challenge, array $operation): string
-    {
-        $message = $this->suite->suite . "\0";
-        if ($operation['counter'] !== null) {
-            $message .= self::packInteger($operation['counter']);
-        }
-        $message .= $this->encodeChallenge($challenge);
-        $message .= $operation['pinDigest'] ?? '';
-        $message .= $operation['session'] ?? '';
-        if ($operation['timestamp'] !== null && $this->suite->timeStepSeconds !== null) {
-            $message .= self::packInteger(intdiv($operation['timestamp'], $this->suite->timeStepSeconds));
-        }
-
-        return $message;
-    }
-
-    /**
-     * @param string $challenge Validated operation challenge.
-     * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
-     */
     private function calculate(string $challenge, array $operation): string
     {
-        $hash = hash_hmac($this->suite->algorithm, $this->buildMessage($challenge, $operation), $this->sharedKey, true);
+        $hash = hash_hmac($this->suite->algorithm, OcraMessage::build($this->suite, $challenge, $operation), $this->sharedKey, true);
         if ($this->suite->digits === 0) {
             return strtoupper(bin2hex($hash));
         }
@@ -530,18 +464,6 @@ final readonly class OCRA
         return CacheLock::consumeOnce($cache, $stateKey, $lockKey, $ttl, 'OCRA replay', $runwire);
     }
 
-    private function encodeChallenge(string $challenge): string
-    {
-        $bytes = match ($this->suite->challengeFormat) {
-            'n' => self::decimalToBinary($challenge),
-            'a' => $challenge,
-            'h' => self::hexToBytes($challenge),
-            default => throw new RuntimeException('Invalid parsed OCRA challenge format.'),
-        };
-
-        return str_pad($bytes, 128, "\0");
-    }
-
     /**
      * @param string $otp Submitted OCRA output.
      * @param string $challenge Validated operation challenge.
@@ -561,17 +483,20 @@ final readonly class OCRA
     ): ?array {
         $maximumDrift = max($window->past, $window->future);
         for ($distance = 1; $distance <= $maximumDrift; $distance++) {
+            $past = null;
             if ($distance <= $window->past && $timestamp >= $distance * $timeStep) {
                 $past = $this->matchTimeOffset($otp, $challenge, $operation, -$distance);
-                if ($past !== null) {
-                    return $past;
-                }
             }
+            if ($past !== null) {
+                return $past;
+            }
+
+            $future = null;
             if ($distance <= $window->future && $timestamp <= PHP_INT_MAX - ($distance * $timeStep)) {
                 $future = $this->matchTimeOffset($otp, $challenge, $operation, $distance);
-                if ($future !== null) {
-                    return $future;
-                }
+            }
+            if ($future !== null) {
+                return $future;
             }
         }
 
@@ -638,7 +563,7 @@ final readonly class OCRA
             return null;
         }
 
-        return ['message' => $this->buildMessage($challenge, $operation), 'offset' => $offset];
+        return ['message' => OcraMessage::build($this->suite, $challenge, $operation), 'offset' => $offset];
     }
 
     /**

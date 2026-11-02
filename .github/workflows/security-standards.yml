@@ -151,17 +151,46 @@ jobs:
       - name: Enforce 2 percent successful-RPM budget
         shell: bash
         run: |
-          composer --working-dir=candidate ic:benchmark:compare \
-            "$GITHUB_WORKSPACE/perf/baseline.json" \
-            "$GITHUB_WORKSPACE/perf/candidate.json" \
-            --max-regression=2 \
-            --stable-environment
+          comparison_status=0
+          for suffix in '' '-roundtrip' '-concurrent'; do
+            if ! composer --working-dir=candidate ic:benchmark:compare \
+              "$GITHUB_WORKSPACE/perf/baseline${suffix}.json" \
+              "$GITHUB_WORKSPACE/perf/candidate${suffix}.json" \
+              --max-regression=2 \
+              --stable-environment; then
+              comparison_status=1
+            fi
+          done
+          exit "$comparison_status"
+
+      - name: Prepare the matching Runwire 3 HTTP host baseline
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          composer require --working-dir=baseline --dev 'infocyph/runwire:^3.0' --no-update --no-interaction
+          composer update --working-dir=baseline --no-interaction --prefer-dist --no-progress --prefer-stable
+
+      - name: Compare validated HTTP requests and soak the persistent host
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          python3 candidate/benchmarks/http-acceptance.py \
+            --baseline="$GITHUB_WORKSPACE/baseline" \
+            --candidate="$GITHUB_WORKSPACE/candidate" \
+            --output="$GITHUB_WORKSPACE/perf/http" \
+            --duration=15 \
+            --repetitions=3 \
+            --soak-duration=300 \
+            --concurrency 1 8 32
 
       - name: Upload sustained benchmark results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: sustained-performance-results
-          path: perf/*.json
+          path: |
+            perf/*.json
+            perf/http/*.json
+            perf/http/*-server.log
           retention-days: 61
           if-no-files-found: error

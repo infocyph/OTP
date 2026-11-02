@@ -54,6 +54,9 @@ final readonly class Passkey
 
     private SerializerInterface $serializer;
 
+    /** @var positive-int Validated ceremony TTL converted once during construction. */
+    private int $timeoutMilliseconds;
+
     /** @param list<string> $allowedOrigins Exact WebAuthn origins, including scheme and optional port. */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
@@ -68,6 +71,7 @@ final readonly class Passkey
         if ($ttlSeconds < 1 || $ttlSeconds > self::MAX_TTL_SECONDS) {
             throw new InvalidArgumentException('Passkey ceremony TTL must be between 1 and 600 seconds.');
         }
+        $this->timeoutMilliseconds = $ttlSeconds * 1000;
         CacheLock::assertSafe($cache);
 
         $factory = new CeremonyStepManagerFactory();
@@ -115,7 +119,7 @@ final readonly class Passkey
             rpId: $this->rpId,
             allowCredentials: $this->credentialDescriptors($credentialRecordsJson),
             userVerification: PublicKeyCredentialRequestOptions::USER_VERIFICATION_REQUIREMENT_REQUIRED,
-            timeout: $this->timeoutMilliseconds(),
+            timeout: $this->timeoutMilliseconds,
         );
 
         return $this->issueCeremony(
@@ -158,7 +162,7 @@ final readonly class Passkey
             ),
             attestation: PublicKeyCredentialCreationOptions::ATTESTATION_CONVEYANCE_PREFERENCE_NONE,
             excludeCredentials: $this->credentialDescriptors($existingCredentialRecordsJson),
-            timeout: $this->timeoutMilliseconds(),
+            timeout: $this->timeoutMilliseconds,
         );
 
         return $this->issueCeremony(
@@ -244,8 +248,13 @@ final readonly class Passkey
 
     private static function assertBinding(string $binding): void
     {
-        if ($binding === '' || strlen($binding) > self::MAX_BINDING_LENGTH) {
-            throw new InvalidArgumentException('Passkey bindings must contain between 1 and 190 bytes.');
+        self::assertByteLength($binding, self::MAX_BINDING_LENGTH, 'Passkey bindings must contain between 1 and 190 bytes.');
+    }
+
+    private static function assertByteLength(string $value, int $maximum, string $message): void
+    {
+        if ($value === '' || strlen($value) > $maximum) {
+            throw new InvalidArgumentException($message);
         }
     }
 
@@ -258,16 +267,12 @@ final readonly class Passkey
 
     private static function assertCredentialJsonLength(string $json): void
     {
-        if ($json === '' || strlen($json) > self::MAX_CREDENTIAL_JSON_LENGTH) {
-            throw new InvalidArgumentException('WebAuthn credential JSON must contain between 1 and 131072 bytes.');
-        }
+        self::assertByteLength($json, self::MAX_CREDENTIAL_JSON_LENGTH, 'WebAuthn credential JSON must contain between 1 and 131072 bytes.');
     }
 
     private static function assertOrigin(string $origin): void
     {
-        if ($origin === '' || strlen($origin) > 2048) {
-            throw new InvalidArgumentException('Passkey origins must contain between 1 and 2048 bytes.');
-        }
+        self::assertByteLength($origin, 2048, 'Passkey origins must contain between 1 and 2048 bytes.');
 
         $scheme = parse_url($origin, PHP_URL_SCHEME);
         $host = parse_url($origin, PHP_URL_HOST);
@@ -324,15 +329,15 @@ final readonly class Passkey
 
     private static function assertUserHandle(string $userHandle): void
     {
-        if ($userHandle === '' || strlen($userHandle) > 64) {
-            throw new InvalidArgumentException('Passkey user handles must contain between 1 and 64 bytes.');
-        }
+        self::assertByteLength($userHandle, 64, 'Passkey user handles must contain between 1 and 64 bytes.');
     }
 
     private static function assertUserName(string $value, string $name): void
     {
-        if ($value === '' || strlen($value) > 255 || preg_match('//u', $value) !== 1) {
-            throw new InvalidArgumentException($name . ' must be valid UTF-8 between 1 and 255 bytes.');
+        $message = $name . ' must be valid UTF-8 between 1 and 255 bytes.';
+        self::assertByteLength($value, 255, $message);
+        if (preg_match('//u', $value) !== 1) {
+            throw new InvalidArgumentException($message);
         }
     }
 
@@ -422,15 +427,11 @@ final readonly class Passkey
                 unset($data['rp']['name']);
                 $json = json_encode($data, JSON_THROW_ON_ERROR);
             }
-            $options = $this->deserializeMixed($json, PublicKeyCredentialCreationOptions::class);
-        } catch (JsonException|SerializerException $failure) {
+        } catch (JsonException $failure) {
             throw new RuntimeException('Invalid stored passkey registration options.', previous: $failure);
         }
-        if (!$options instanceof PublicKeyCredentialCreationOptions) {
-            throw new RuntimeException('Invalid stored passkey registration options.');
-        }
 
-        return $options;
+        return $this->deserializeStored($json, PublicKeyCredentialCreationOptions::class, 'Invalid stored passkey registration options.');
     }
 
     private function deserializeCredential(string $json): ?PublicKeyCredential
@@ -457,30 +458,31 @@ final readonly class Passkey
     {
         self::assertCredentialJsonLength($json);
 
-        try {
-            $record = $this->deserializeMixed($json, CredentialRecord::class);
-        } catch (SerializerException $failure) {
-            throw new RuntimeException('Invalid persisted passkey credential record.', previous: $failure);
-        }
-        if (!$record instanceof CredentialRecord) {
-            throw new RuntimeException('Invalid persisted passkey credential record.');
-        }
-
-        return $record;
+        return $this->deserializeStored($json, CredentialRecord::class, 'Invalid persisted passkey credential record.');
     }
 
     private function deserializeRequestOptions(string $json): PublicKeyCredentialRequestOptions
     {
+        return $this->deserializeStored($json, PublicKeyCredentialRequestOptions::class, 'Invalid stored passkey authentication options.');
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $type
+     * @return T
+     */
+    private function deserializeStored(string $json, string $type, string $message): object
+    {
         try {
-            $options = $this->deserializeMixed($json, PublicKeyCredentialRequestOptions::class);
+            $value = $this->serializer->deserialize($json, $type, 'json');
         } catch (SerializerException $failure) {
-            throw new RuntimeException('Invalid stored passkey authentication options.', previous: $failure);
+            throw new RuntimeException($message, previous: $failure);
         }
-        if (!$options instanceof PublicKeyCredentialRequestOptions) {
-            throw new RuntimeException('Invalid stored passkey authentication options.');
+        if (!$value instanceof $type) {
+            throw new RuntimeException($message);
         }
 
-        return $options;
+        return $value;
     }
 
     /**
@@ -750,16 +752,5 @@ final readonly class Passkey
         }
 
         return $json;
-    }
-
-    /** @return positive-int */
-    private function timeoutMilliseconds(): int
-    {
-        $timeout = $this->ttlSeconds * 1000;
-        if ($timeout < 1) {
-            throw new RuntimeException('Invalid passkey timeout configuration.');
-        }
-
-        return $timeout;
     }
 }

@@ -21,8 +21,6 @@ final class CacheLock
 {
     private const float LEASE_SECONDS = 30.0;
 
-    private const int MAX_ATOMIC_ATTEMPTS = 8;
-
     private const float WAIT_SECONDS = 1.0;
 
     public static function advance(
@@ -37,7 +35,7 @@ final class CacheLock
         self::checkpoint($runwire);
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
-            return self::advanceAtomically($cache, $atomic, $stateKey, $value, $ttl, $stateName, $runwire);
+            return AtomicState::advance($cache, $atomic, $stateKey, $value, $ttl, $stateName, $runwire);
         }
 
         return self::advanceWithLock($cache, $stateKey, $lockKey, $value, $ttl, $stateName, $runwire);
@@ -94,7 +92,7 @@ final class CacheLock
         self::checkpoint($runwire);
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
-            return self::consumeOnceAtomically($cache, $atomic, $stateKey, $ttl, $stateName, $runwire);
+            return AtomicState::claim($cache, $atomic, $stateKey, 1, $ttl, $stateName, $runwire);
         }
 
         return self::consumeOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
@@ -114,7 +112,7 @@ final class CacheLock
         }
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
-            return self::consumeReservedAtomically($cache, $atomic, $stateKey, $ttl, $stateName, $runwire);
+            return AtomicState::consumeReserved($cache, $atomic, $stateKey, $ttl, $stateName, $runwire);
         }
 
         return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
@@ -141,7 +139,7 @@ final class CacheLock
         }
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
-            return self::reserveOnceAtomically($cache, $atomic, $stateKey, $ttl, $stateName, $runwire);
+            return AtomicState::claim($cache, $atomic, $stateKey, 0, $ttl, $stateName, $runwire);
         }
 
         return self::reserveOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
@@ -200,7 +198,7 @@ final class CacheLock
         }
         $atomic = self::stateAtomic($cache);
         if ($atomic !== null) {
-            return self::transitionAtomically($cache, $atomic, $stateKey, $stateName, $transition, $runwire);
+            return AtomicState::transition($cache, $atomic, $stateKey, $stateName, $transition, $runwire);
         }
 
         return self::synchronizedKnownSafe(
@@ -235,41 +233,6 @@ final class CacheLock
         );
     }
 
-    private static function advanceAtomically(
-        AuthenticationStateCacheInterface $cache,
-        AtomicCacheInterface $atomic,
-        string $stateKey,
-        int $value,
-        ?int $ttl,
-        string $stateName,
-        ?RunwireExecutionContext $runwire,
-    ): bool {
-        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            self::checkpoint($runwire);
-            $current = $cache->get($stateKey);
-            if ($current === null) {
-                self::checkpoint($runwire);
-                if ($atomic->setIfAbsent($stateKey, $value, $ttl)) {
-                    return true;
-                }
-
-                continue;
-            }
-            if (!is_int($current)) {
-                throw new RuntimeException('Invalid ' . $stateName . ' state in CacheLayer.');
-            }
-            if ($value <= $current) {
-                return false;
-            }
-            self::checkpoint($runwire);
-            if ($atomic->compareAndSet($stateKey, $current, $value, $ttl)) {
-                return true;
-            }
-        }
-
-        throw new RuntimeException('Unable to advance ' . $stateName . ' state after atomic contention.');
-    }
-
     private static function advanceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -290,11 +253,7 @@ final class CacheLock
                 if ($current !== null && $value <= $current) {
                     return false;
                 }
-                self::checkpoint($runwire);
-                self::ensureOwned($locks, $handle);
-                if (!$cache->set($stateKey, $value, $ttl)) {
-                    throw new RuntimeException('Unable to store ' . $stateName . ' state.');
-                }
+                self::storeLocked($cache, $locks, $handle, $stateKey, $value, $ttl, 'Unable to store ' . $stateName . ' state.', $runwire);
 
                 return true;
             },
@@ -320,31 +279,6 @@ final class CacheLock
         return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
     }
 
-    private static function consumeOnceAtomically(
-        AuthenticationStateCacheInterface $cache,
-        AtomicCacheInterface $atomic,
-        string $stateKey,
-        int $ttl,
-        string $stateName,
-        ?RunwireExecutionContext $runwire,
-    ): bool {
-        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            self::checkpoint($runwire);
-            if ($atomic->setIfAbsent($stateKey, 1, $ttl)) {
-                return true;
-            }
-            $current = $cache->get($stateKey);
-            if ($current === 1) {
-                return false;
-            }
-            if ($current !== null) {
-                throw new RuntimeException('Invalid ' . $stateName . ' token in CacheLayer.');
-            }
-        }
-
-        throw new RuntimeException('Unable to consume ' . $stateName . ' token after atomic contention.');
-    }
-
     private static function consumeOnceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -364,42 +298,12 @@ final class CacheLock
                 if ($current === 1) {
                     return false;
                 }
-                self::checkpoint($runwire);
-                self::ensureOwned($locks, $handle);
-                if (!$cache->set($stateKey, 1, $ttl)) {
-                    throw new RuntimeException('Unable to store ' . $stateName . ' token.');
-                }
+                self::storeLocked($cache, $locks, $handle, $stateKey, 1, $ttl, 'Unable to store ' . $stateName . ' token.', $runwire);
 
                 return true;
             },
             $runwire,
         );
-    }
-
-    private static function consumeReservedAtomically(
-        AuthenticationStateCacheInterface $cache,
-        AtomicCacheInterface $atomic,
-        string $stateKey,
-        int $ttl,
-        string $stateName,
-        ?RunwireExecutionContext $runwire,
-    ): bool {
-        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            self::checkpoint($runwire);
-            $current = $cache->get($stateKey);
-            if ($current === null || $current === 1) {
-                return false;
-            }
-            if ($current !== 0) {
-                throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
-            }
-            self::checkpoint($runwire);
-            if ($atomic->compareAndSet($stateKey, 0, 1, $ttl)) {
-                return true;
-            }
-        }
-
-        throw new RuntimeException('Unable to consume reserved ' . $stateName . ' after atomic contention.');
     }
 
     private static function consumeReservedWithLock(
@@ -421,11 +325,7 @@ final class CacheLock
                 if ($current !== 0) {
                     throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
                 }
-                self::checkpoint($runwire);
-                self::ensureOwned($locks, $handle);
-                if (!$cache->set($stateKey, 1, $ttl)) {
-                    throw new RuntimeException('Unable to consume reserved ' . $stateName . '.');
-                }
+                self::storeLocked($cache, $locks, $handle, $stateKey, 1, $ttl, 'Unable to consume reserved ' . $stateName . '.', $runwire);
 
                 return true;
             },
@@ -436,31 +336,6 @@ final class CacheLock
     private static function lockRequiresAtomic(LockProviderInterface $locks): bool
     {
         return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
-    }
-
-    private static function reserveOnceAtomically(
-        AuthenticationStateCacheInterface $cache,
-        AtomicCacheInterface $atomic,
-        string $stateKey,
-        int $ttl,
-        string $stateName,
-        ?RunwireExecutionContext $runwire,
-    ): bool {
-        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            self::checkpoint($runwire);
-            if ($atomic->setIfAbsent($stateKey, 0, $ttl)) {
-                return true;
-            }
-            $current = $cache->get($stateKey);
-            if ($current === 0 || $current === 1) {
-                return false;
-            }
-            if ($current !== null) {
-                throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
-            }
-        }
-
-        throw new RuntimeException('Unable to reserve ' . $stateName . ' after atomic contention.');
     }
 
     private static function reserveOnceWithLock(
@@ -482,16 +357,29 @@ final class CacheLock
                 if ($current !== null) {
                     throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
                 }
-                self::checkpoint($runwire);
-                self::ensureOwned($locks, $handle);
-                if (!$cache->set($stateKey, 0, $ttl)) {
-                    throw new RuntimeException('Unable to reserve ' . $stateName . '.');
-                }
+                self::storeLocked($cache, $locks, $handle, $stateKey, 0, $ttl, 'Unable to reserve ' . $stateName . '.', $runwire);
 
                 return true;
             },
             $runwire,
         );
+    }
+
+    private static function storeLocked(
+        AuthenticationStateCacheInterface $cache,
+        LockProviderInterface $locks,
+        LockHandle $handle,
+        string $stateKey,
+        int $value,
+        ?int $ttl,
+        string $failure,
+        ?RunwireExecutionContext $runwire,
+    ): void {
+        self::checkpoint($runwire);
+        self::ensureOwned($locks, $handle);
+        if (!$cache->set($stateKey, $value, $ttl)) {
+            throw new RuntimeException($failure);
+        }
     }
 
     /**
@@ -538,52 +426,5 @@ final class CacheLock
         }
 
         return $result;
-    }
-
-    /**
-     * @template T
-     * @param callable(mixed): array{
-     *     result:T,
-     *     replacement?:mixed,
-     *     ttl?:int|null,
-     *     delete?:bool,
-     *     failure?:string
-     * } $transition
-     * @return T
-     */
-    private static function transitionAtomically(
-        AuthenticationStateCacheInterface $cache,
-        AtomicCacheInterface $atomic,
-        string $stateKey,
-        string $stateName,
-        callable $transition,
-        ?RunwireExecutionContext $runwire,
-    ): mixed {
-        for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            if ($runwire !== null) {
-                self::checkpoint($runwire);
-            }
-            $current = $cache->get($stateKey);
-            $decision = $transition($current);
-            if (!array_key_exists('replacement', $decision)) {
-                return $decision['result'];
-            }
-
-            $ttl = $decision['ttl'] ?? null;
-            if ($ttl !== null && $ttl < 1) {
-                throw new RuntimeException('Atomic authentication state transitions require a positive TTL.');
-            }
-            if ($runwire !== null) {
-                self::checkpoint($runwire);
-            }
-            $mutated = $current === null
-                ? $atomic->setIfAbsent($stateKey, $decision['replacement'], $ttl)
-                : $atomic->compareAndSet($stateKey, $current, $decision['replacement'], $ttl);
-            if ($mutated) {
-                return $decision['result'];
-            }
-        }
-
-        throw new RuntimeException('Unable to transition ' . $stateName . ' state after atomic contention.');
     }
 }

@@ -9,7 +9,7 @@ The base package requires:
 * PHP ``^8.4``;
 * a 64-bit PHP build;
 * the ``ctype`` extension;
-* CacheLayer ``^4.0``; and
+* CacheLayer ``^4.0.2``; and
 * Composer.
 
 Install the current release:
@@ -55,7 +55,7 @@ instead of duplicating WebAuthn cryptography and ceremony validation:
 
 .. code-block:: bash
 
-   composer require web-auth/webauthn-lib:^5.3
+   composer require web-auth/webauthn-lib:^5.3.10
 
 OTP declares this dependency under Composer ``suggest`` and installs it in
 ``require-dev`` for its own test/static-analysis matrix. It is intentionally not
@@ -67,16 +67,22 @@ the WebAuthn/CBOR/PKI/Symfony dependency graph.
 Constructing ``Passkey`` without it throws ``LogicException`` with the install
 command. OTP's Passkey wrapper does not itself require ``ext-sodium``.
 
+Optional SVG QR rendering
+-------------------------
+
+Enable ``ext-xmlwriter`` to render SVG QR codes. Code generation and URI
+provisioning do not require this extension.
+
 Optional Runwire dependency
 ---------------------------
 
 Runwire is optional and is useful only when the host already owns a compatible
-Runwire 2.1+ request/coroutine lifecycle. Install it explicitly when that
+Runwire 3.0 request/coroutine lifecycle. Install it explicitly when that
 integration is required:
 
 .. code-block:: bash
 
-   composer require infocyph/runwire:^2.1
+   composer require infocyph/runwire:^3.0
 
 OTP accepts CacheLayer's existing ``RunwireExecutionContext`` as a trailing
 optional ``runwire`` argument on stateful operations. When omitted, behavior

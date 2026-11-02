@@ -23,7 +23,7 @@ four uses `otpauth://` provisioning.
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
-- CacheLayer `^4.0`
+- CacheLayer `^4.0.2`
 - Composer
 
 ```bash
@@ -40,18 +40,20 @@ not include sodium.
 Passkey/WebAuthn requires the upstream WebAuthn implementation:
 
 ```bash
-composer require web-auth/webauthn-lib:^5.3
+composer require web-auth/webauthn-lib:^5.3.10
 ```
 
 OTP keeps `web-auth/webauthn-lib` under `require-dev` + `suggest` as well.
 `Passkey::isAvailable()` reports whether it is loaded. OTP's Passkey integration
 does **not** require `ext-sodium`.
 
+SVG QR rendering requires `ext-xmlwriter`; code generation and URI provisioning work without it.
+
 Runwire integration is also optional. Applications that already own a Runwire
-2.1+ request/coroutine lifecycle may install it explicitly:
+3.0 request/coroutine lifecycle may install it explicitly:
 
 ```bash
-composer require infocyph/runwire:^2.1
+composer require infocyph/runwire:^3.0
 ```
 
 Pass the existing CacheLayer `RunwireExecutionContext` to stateful OTP

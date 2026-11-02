@@ -128,3 +128,4 @@ examples. Production deployments should always review :doc:`guides/security`,
    :caption: Releases
 
    releases/7.0.0
+   releases/7.0.1

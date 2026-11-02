@@ -34,8 +34,8 @@ test('cancelled Runwire requests fail before authentication state mutation', fun
     $cache = CacheLayerState::memory();
     $runtime = RuntimeContext::standalone();
     $request = RequestContext::create($runtime);
-    $request->cancel(CancellationReason::HOST_CANCELLED);
     $execution = new RunwireExecutionContext($runtime, $request);
+    $request->cancel(CancellationReason::HOST_CANCELLED);
 
     expect(fn () => CacheLock::advance(
         $cache,
@@ -53,8 +53,8 @@ test('completed Runwire requests cannot mutate authentication state', function (
     $cache = CacheLayerState::memory();
     $runtime = RuntimeContext::standalone();
     $request = RequestContext::create($runtime);
-    $request->complete();
     $execution = new RunwireExecutionContext($runtime, $request);
+    $request->complete();
 
     expect(fn () => CacheLock::advance(
         $cache,
@@ -102,8 +102,8 @@ test('stateful OTP APIs forward the supplied Runwire execution context', functio
     $cache = CacheLayerState::memory();
     $runtime = RuntimeContext::standalone();
     $request = RequestContext::create($runtime);
-    $request->cancel(CancellationReason::HOST_CANCELLED);
     $execution = new RunwireExecutionContext($runtime, $request);
+    $request->cancel(CancellationReason::HOST_CANCELLED);
     $otp = new GenericOtp($cache, str_repeat('r', 32));
 
     expect(fn () => $otp->generate('runwire-api', runwire: $execution))
@@ -349,7 +349,6 @@ test('interleaved request contexts remain isolated and OTP never binds the Cache
     $runtime = RuntimeContext::fromCapabilities($capabilities, 'otp-test', generation: 1, concurrent: true);
     $cancelledRequest = RequestContext::create($runtime, requestId: 'cancelled-request');
     $liveRequest = RequestContext::create($runtime, requestId: 'live-request');
-    $cancelledRequest->cancel(CancellationReason::HOST_CANCELLED);
     $coroutines = new CoroutineRuntime();
     $otp = new GenericOtp(CacheLayerState::memory(), str_repeat('w', 32));
 
@@ -361,6 +360,7 @@ test('interleaved request contexts remain isolated and OTP never binds the Cache
     ): array {
         $cancelled = new RunwireExecutionContext($runtime, $cancelledRequest, $scope);
         $live = new RunwireExecutionContext($runtime, $liveRequest, $scope);
+        $cancelledRequest->cancel(CancellationReason::HOST_CANCELLED);
         $cancelledTask = $scope->spawn(function () use ($otp, $cancelled): string {
             try {
                 $otp->generate('cancelled-binding', runwire: $cancelled);
