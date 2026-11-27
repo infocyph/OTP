@@ -105,3 +105,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E12 — runtime contracts and source complexity
 
 - Run 45964581553: PHPStan 22, Psalm 663; clean install and standard benchmarks pass; all QA jobs blocked by Passkey method ordering. Reordered the static helper and removed redundant list checks (required string keys already exclude lists). Consolidated conditional atomic cancellation checks through the existing null-aware checkpoint, preserving precommit cancellation and retry bounds. Declared the real cancellation contract on GenericOtp generation. Hosted verification pending; sustained performance must be remeasured.
+
+### Batch E13 — remaining test contracts
+
+- Use a mutable typed fixture for the nested GenericOtp CAS test (retains the same interleaving and assertions); explicitly validate stored state before inspecting offsets. Narrow PHPUnit dataset shapes and declare missing lock overrides. Split concurrency fixture into worker creation, barrier and collection phases, preserving process and timing behavior. Hosted verification pending.

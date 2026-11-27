@@ -26,6 +26,19 @@ final class Concurrency
         if ($barrier === false) {
             throw new RuntimeException('Unable to create the concurrency barrier.');
         }
+        $children = self::spawnWorkers($operation, $workers, $barrier);
+        self::releaseBarrier($workers, $barrier);
+
+        return self::collectWorkers($children, $barrier);
+    }
+
+    /**
+     * @param callable(int): int $operation
+     * @return list<int>
+     * @throws RuntimeException
+     */
+    private static function spawnWorkers(callable $operation, int $workers, string $barrier): array
+    {
         $children = [];
         for ($worker = 0; $worker < $workers; $worker++) {
             $processId = pcntl_fork();
@@ -53,7 +66,13 @@ final class Concurrency
             $children[] = $processId;
         }
 
-        $deadline = microtime(true) + 5;
+        return $children;
+    }
+
+    /** @throws RuntimeException */
+    private static function releaseBarrier(int $workers, string $barrier): void
+    {
+        $deadline = microtime(true) + 5.0;
         for ($worker = 0; $worker < $workers; $worker++) {
             while (!file_exists($barrier . '.ready.' . $worker)) {
                 if (microtime(true) > $deadline) {
@@ -63,7 +82,15 @@ final class Concurrency
             }
         }
         file_put_contents($barrier . '.go', '1');
+    }
 
+    /**
+     * @param list<int> $children
+     * @return list<int>
+     * @throws RuntimeException
+     */
+    private static function collectWorkers(array $children, string $barrier): array
+    {
         $results = [];
         $failures = [];
         foreach ($children as $worker => $processId) {

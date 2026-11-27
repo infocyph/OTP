@@ -21,11 +21,13 @@ final class AtomicTerminalStateTest extends TestCase
     #[TestDox('atomic GenericOtp terminal tombstone rejects a delayed verifier with an earlier timestamp')]
     public function testAtomicGenericOtpTerminalTombstoneRejectsADelayedVerifierWithAnEarlierTimestamp(): void
     {
-        $state = null;
-        $nestedAccepted = null;
-        $triggerNestedVerifier = false;
-        $otp = null;
-        $code = null;
+        $fixture = new class {
+            public mixed $state = null;
+            public ?bool $nestedAccepted = null;
+            public bool $triggerNestedVerifier = false;
+            public ?GenericOtp $otp = null;
+            public ?string $code = null;
+        };
 
         $atomic = $this->createMock(AtomicCacheInterface::class);
         $cache = $this->createMockForIntersectionOfInterfaces([
@@ -37,20 +39,20 @@ final class AtomicTerminalStateTest extends TestCase
         $cache->method('isAuthoritative')->willReturn(true);
         $cache->method('atomic')->willReturn($atomic);
         $cache->method('authenticationStateLock')->willReturn(null);
-        $cache->method('get')->willReturnCallback(function (string $key) use (&$state): mixed {
+        $cache->method('get')->willReturnCallback(function (string $key) use ($fixture): mixed {
             unset($key);
 
-            return $state;
+            return $fixture->state;
         });
 
         $atomic->method('setIfAbsent')->willReturnCallback(
-            function (string $key, mixed $value, mixed $ttl) use (&$state): bool {
+            function (string $key, mixed $value, mixed $ttl) use ($fixture): bool {
                 unset($key, $ttl);
-                if ($state !== null) {
+                if ($fixture->state !== null) {
                     return false;
                 }
 
-                $state = $value;
+                $fixture->state = $value;
 
                 return true;
             },
@@ -61,33 +63,35 @@ final class AtomicTerminalStateTest extends TestCase
                 mixed $expected,
                 mixed $replacement,
                 mixed $ttl,
-            ) use (&$state, &$nestedAccepted, &$triggerNestedVerifier, &$otp, &$code): bool {
+            ) use ($fixture): bool {
                 unset($key, $ttl);
-                if ($triggerNestedVerifier) {
-                    $triggerNestedVerifier = false;
+                if ($fixture->triggerNestedVerifier) {
+                    $fixture->triggerNestedVerifier = false;
                     usleep(1_100_000);
-                    $nestedAccepted = $otp?->verify('binding', $code ?? '');
+                    $fixture->nestedAccepted = ($fixture->otp ?? throw new \LogicException('Missing OTP fixture.'))->verify('binding', $fixture->code ?? throw new \LogicException('Missing code fixture.'));
                 }
-                if ($state !== $expected) {
+                if ($fixture->state !== $expected) {
                     return false;
                 }
 
-                $state = $replacement;
+                $fixture->state = $replacement;
 
                 return true;
             },
         );
 
-        $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 30);
-        $code = $otp->generate('binding');
-        $triggerNestedVerifier = true;
+        $fixture->otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 30);
+        $fixture->code = $fixture->otp->generate('binding');
+        $fixture->triggerNestedVerifier = true;
 
-        $delayedAccepted = $otp->verify('binding', $code);
+        $delayedAccepted = $fixture->otp->verify('binding', $fixture->code);
 
-        expect($nestedAccepted)->toBeTrue()
+        $stored = $fixture->state;
+        self::assertIsArray($stored);
+        expect($fixture->nestedAccepted)->toBeTrue()
             ->and($delayedAccepted)->toBeFalse()
-            ->and($state)->toBeArray()
-            ->and($state['remainingAttempts'] ?? null)->toBe(0);
+            ->and($fixture->state)->toBeArray()
+            ->and($stored['remainingAttempts'] ?? null)->toBe(0);
     }
 
     /**
@@ -149,6 +153,7 @@ final class AtomicTerminalStateTest extends TestCase
         $exhausted = $service->verifyWithResult('factor', $challenge, $wrong, now: 120);
         $stale = $service->verifyWithResult('factor', $challenge, $valid, now: 110);
 
+        self::assertIsArray($state);
         expect($exhausted->matched)->toBeFalse()
             ->and($state)->toBeArray()
             ->and($state['consumed'] ?? null)->toBeTrue()

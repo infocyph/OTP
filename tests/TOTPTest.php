@@ -19,7 +19,7 @@ use RuntimeException;
 
 final class TOTPTest extends TestCase
 {
-    /** @return array<array-key, list<mixed>> */
+    /** @return array<string, array{int, int, int}> */
     public static function tOTPReplayTTLCoversEveryAcceptedWindowShapeCases(): array
     {
         return [

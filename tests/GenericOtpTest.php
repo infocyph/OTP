@@ -21,7 +21,7 @@ use RuntimeException;
 
 final class GenericOtpTest extends TestCase
 {
-    /** @return array<array-key, list<mixed>> */
+    /** @return array<string, array{array<string, mixed>}> */
     public static function genericOTPRejectsImpossibleCachedStateCases(): array
     {
         return [
@@ -234,6 +234,7 @@ final class GenericOtpTest extends TestCase
         $locks = new class implements LockProviderInterface {
             private int $acquisitions = 0;
 
+            #[\Override]
             public function acquire(string $key, float $waitSeconds, float $leaseSeconds = 30.0): ?LockHandle
             {
                 if ($waitSeconds <= 0 || $leaseSeconds <= 0) {
@@ -246,11 +247,13 @@ final class GenericOtpTest extends TestCase
                 return new LockHandle($key, 'delayed');
             }
 
+            #[\Override]
             public function refresh(?LockHandle $handle, float $leaseSeconds): bool
             {
                 return $handle !== null && $handle->token !== '' && $leaseSeconds > 0;
             }
 
+            #[\Override]
             public function release(?LockHandle $handle): void
             {
             }

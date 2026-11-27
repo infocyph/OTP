@@ -21,7 +21,7 @@ const OCRA_KEY_64 = '12345678901234567890123456789012345678901234567890123456789
 
 final class OCRATest extends TestCase
 {
-    /** @return array<array-key, list<mixed>> */
+    /** @return list<array{string, int}> */
     public static function oCRAFullHMACSuitesReturnStablePrintableHexadecimalCases(): array
     {
         return [['sha1', 40], ['sha256', 64], ['sha512', 128]];
