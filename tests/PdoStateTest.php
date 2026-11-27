@@ -39,7 +39,7 @@ test('native PDO OTP state is shared and consumed exactly once across connection
         expect($independent->get($stateKey))->toBeArray();
 
         $results = Concurrency::run(
-            static fn(int $worker): int => (int) new GenericOtp($factory(), $key)->verify($binding, $proof),
+            static fn(): int => (int) new GenericOtp($factory(), $key)->verify($binding, $proof),
             4,
         );
 

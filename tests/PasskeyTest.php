@@ -427,7 +427,22 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         json_encode($invalid, JSON_THROW_ON_ERROR),
         101,
     );
-    expect($rejected->matched)->toBeFalse();
+    expect($rejected->matched)->toBeFalse()
+        ->and($rejected->reason)->toBe(VerificationReason::Malformed);
+
+    if (!openssl_sign($authenticatorData . hash('sha256', $clientData . "\0", true), $wrongSignature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        throw new RuntimeException('Unable to sign the negative WebAuthn assertion fixture.');
+    }
+    $invalid['response']['signature'] = $encode($wrongSignature);
+    $mismatch = $service->finishAuthentication(
+        $binding,
+        $ceremony->id,
+        $recordJson,
+        json_encode($invalid, JSON_THROW_ON_ERROR),
+        101,
+    );
+    expect($mismatch->matched)->toBeFalse()
+        ->and($mismatch->reason)->toBe(VerificationReason::Mismatch);
 
     $json = json_encode($response, JSON_THROW_ON_ERROR);
     $first = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 101);

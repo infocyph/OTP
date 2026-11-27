@@ -47,3 +47,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 - Historical PostgreSQL job 139376679657: installed CacheLayer 4.0.3, GenericOtp generation failed in the whole-record advisory-lock path. Compared CacheLayer 4.0.3 and 4.1 PdoLockProvider blobs (identical); precise advisory failure cause is not established.
 - CacheLayer 4.1 exposes native conditional PDO mutations, with row locks/transactions and corrected PostgreSQL binary payload binding. Select that supported capability before any lock attempt, not as a runtime fallback. No state format/key change, and no mixed old/new writers; deployment guidance added.
 - Added mandatory real MySQL, MariaDB and PostgreSQL independent-connection replay tests in the hosted matrix. SEC/DATA/FLOW/PERF evidence pending; upstream advisory lock issue remains separately unconfirmed, as do durable recovery/rotation scenarios.
+
+### Batch F/B — hosted regression follow-up
+
+- Run 45955159443 (PHP 8.4 prefer-lowest and PHP 8.6 prefer-stable): 201 tests passed including all three PDO services; one new Passkey negative-signature test failed because upstream COSE DER parsing threw InvalidArgumentException. PHPCS reported an unused test callback parameter.
+- Map the verifier's malformed-input exception to a non-consuming malformed result; keep stored options decoding outside the catch. Added separate DER-malformed and well-formed wrong-signature assertions, followed by successful authentication/replay; removed the unused callback parameter. New head verification pending. PDO lock-provider root cause remains separate from native-state path verification.

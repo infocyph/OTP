@@ -519,16 +519,20 @@ final readonly class Passkey
         }
         $expectedUserHandle = $state['userHandle'] ?? $record->userHandle;
 
+        $options = $this->deserializeRequestOptions($state['optionsJson']);
         try {
             $updated = $this->assertionValidator->check(
                 $record,
                 $credential->response,
-                $this->deserializeRequestOptions($state['optionsJson']),
+                $options,
                 $this->rpId,
                 $expectedUserHandle,
             );
         } catch (AuthenticatorResponseVerificationException) {
             return ['result' => PasskeyResult::mismatch()];
+        } catch (InvalidArgumentException) {
+            // COSE signature decoding can reject malformed authenticator input before verification.
+            return ['result' => PasskeyResult::malformed()];
         }
 
         $state['consumed'] = true;
