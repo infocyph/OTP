@@ -37,3 +37,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 - Implemented target constraints: CacheLayer ^4.1, Runwire ^4.0.1, constant-time-encoding ^3.1.5, WebAuthn ^5.3.17. Bacon QR ^3.1.1 is current; PHPForge tracks main. Confirmed published upstream release tags; package resolution and compatibility pending hosted QA.
 - Added PHP 8.6 to the QA matrix. Historical Runwire 3 performance baseline remains unchanged intentionally; current candidate uses Runwire 4.
 - Updated README and installation guidance. COMPAT/CONFIG/FLOW/PERF verification pending; no change to authentication semantics or performance thresholds.
+
+### Batch F — WebAuthn assertion fixture
+
+- Replaced the legacy assertion fixture (attested-credential-data flag set during authentication, omitted crossOrigin) with an ES256 signature over the actual issued challenge, correct RP hash, UP/UV flags and counter. Added invalid-signature rejection before valid authentication and replay rejection after consumption. No production validation weakened. FLOW-02/SEC: hosted test pending; do not close until confirmed.

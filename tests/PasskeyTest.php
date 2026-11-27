@@ -353,25 +353,28 @@ test('expired atomic passkey ceremony remains terminal for a stale valid registr
 
 test('valid WebAuthn assertion fixture succeeds once and advances the credential counter', function () {
     $cache = CacheLayerState::memory();
-    $service = new Passkey(
-        $cache,
-        'spomky-webauthn.herokuapp.com',
-        ['https://spomky-webauthn.herokuapp.com'],
-        ttlSeconds: 60,
-    );
-    $userHandle = 'abfc8fdf-07f6-45a9-abec-fa192275b276';
-    $credentialId = base64_decode(
-        'ADqYfFWXiscOCOPCd9OLiBtSGhletNPKlSOELS0Nuwj/uCzf9s3trLUK9ockO8xa8jBAYdKixLZYOAezy0FJiV1bnTCty/LiInWWJlov',
-        true,
-    );
-    $publicKey = base64_decode(
-        'pQECAyYgASFYIAilQMlKgtJyC4tEMoERzfa/rzaLpE+PLpIVmcVMGPZBIlggbwNLQKmmGPIXJkH3HIJOsoOyv9LmJfmGGJ1YtF0//sE=',
-        true,
-    );
-    if (!is_string($credentialId) || !is_string($publicKey)) {
-        throw new RuntimeException('Invalid embedded WebAuthn assertion fixture.');
+    $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 60);
+    $userHandle = 'fixture-user';
+    $credentialId = random_bytes(32);
+    $privateKey = openssl_pkey_new([
+        'private_key_type' => OPENSSL_KEYTYPE_EC,
+        'curve_name' => 'prime256v1',
+    ]);
+    if ($privateKey === false) {
+        throw new RuntimeException('Unable to create the WebAuthn assertion fixture key.');
+    }
+    $details = openssl_pkey_get_details($privateKey);
+    $x = $details['ec']['x'] ?? null;
+    $y = $details['ec']['y'] ?? null;
+    if (!is_string($x) || !is_string($y) || strlen($x) > 32 || strlen($y) > 32) {
+        throw new RuntimeException('Invalid P-256 assertion fixture public key.');
     }
 
+    // COSE EC2 key: ES256, P-256 and fixed-width public coordinates.
+    $publicKey = "\xa5\x01\x02\x03\x26\x20\x01\x21\x58\x20"
+        . str_pad($x, 32, "\0", STR_PAD_LEFT)
+        . "\x22\x58\x20"
+        . str_pad($y, 32, "\0", STR_PAD_LEFT);
     $record = CredentialRecord::create(
         $credentialId,
         PublicKeyCredentialDescriptor::CREDENTIAL_TYPE_PUBLIC_KEY,
@@ -388,17 +391,47 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
 
     $binding = 'fixture-authentication';
     $ceremony = $service->beginAuthentication($binding, [$recordJson], $userHandle, now: 100);
-    $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremony->id);
-    $state = $cache->get($stateKey);
-    expect($state)->toBeArray();
-    $options = json_decode($state['optionsJson'], true, 32, JSON_THROW_ON_ERROR);
-    $options['challenge'] = 'wKlW7S3EENHlcF2NgYhdUJfRJeCvAvlbk-Mllvxo0HA';
-    $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
-    expect($cache->set($stateKey, $state, 60))->toBeTrue();
+    $options = json_decode($ceremony->optionsJson, true, 32, JSON_THROW_ON_ERROR);
+    if (!is_array($options) || !is_string($options['challenge'] ?? null)) {
+        throw new RuntimeException('Missing assertion fixture challenge.');
+    }
+    $clientData = json_encode([
+        'type' => 'webauthn.get',
+        'challenge' => $options['challenge'],
+        'origin' => 'https://example.com',
+        'crossOrigin' => false,
+    ], JSON_THROW_ON_ERROR);
+    // Assertion authenticator data contains UP/UV and the counter, not attested credential data.
+    $authenticatorData = hash('sha256', 'example.com', true) . "\x05" . pack('N', 101);
+    if (!openssl_sign($authenticatorData . hash('sha256', $clientData, true), $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        throw new RuntimeException('Unable to sign the WebAuthn assertion fixture.');
+    }
+    $encode = static fn(string $value): string => rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    $response = [
+        'id' => $encode($credentialId),
+        'type' => 'public-key',
+        'rawId' => $encode($credentialId),
+        'response' => [
+            'authenticatorData' => $encode($authenticatorData),
+            'clientDataJSON' => $encode($clientData),
+            'signature' => $encode($signature),
+            'userHandle' => $encode($userHandle),
+        ],
+    ];
+    $invalid = $response;
+    $invalid['response']['signature'] = $encode(str_repeat("\0", strlen($signature)));
+    $rejected = $service->finishAuthentication(
+        $binding,
+        $ceremony->id,
+        $recordJson,
+        json_encode($invalid, JSON_THROW_ON_ERROR),
+        101,
+    );
+    expect($rejected->matched)->toBeFalse();
 
-    $response = '{"id":"ADqYfFWXiscOCOPCd9OLiBtSGhletNPKlSOELS0Nuwj_uCzf9s3trLUK9ockO8xa8jBAYdKixLZYOAezy0FJiV1bnTCty_LiInWWJlov","type":"public-key","rawId":"ADqYfFWXiscOCOPCd9OLiBtSGhletNPKlSOELS0Nuwj/uCzf9s3trLUK9ockO8xa8jBAYdKixLZYOAezy0FJiV1bnTCty/LiInWWJlov","response":{"authenticatorData":"tIXbbgSILsWHHbR0Fjkl96X4ROZYLvVtOopBWCQoAqpFXFBJyQAAAAAAAAAAAAAAAAAAAAAATgA6mHxVl4rHDgjjwnfTi4gbUhoZXrTTypUjhC0tDbsI_7gs3_bN7ay1CvaHJDvMWvIwQGHSosS2WDgHs8tBSYldW50wrcvy4iJ1liZaL6UBAgMmIAEhWCAIpUDJSoLScguLRDKBEc32v682i6RPjy6SFZnFTBj2QSJYIG8DS0CpphjyFyZB9xyCTrKDsr_S5iX5hhidWLRdP_7B","clientDataJSON":"eyJjaGFsbGVuZ2UiOiJ3S2xXN1MzRUVOSGxjRjJOZ1loZFVKZlJKZUN2QXZsYmstTWxsdnhvMEhBIiwib3JpZ2luIjoiaHR0cHM6Ly9zcG9ta3ktd2ViYXV0aG4uaGVyb2t1YXBwLmNvbSIsInR5cGUiOiJ3ZWJhdXRobi5nZXQifQ","signature":"MEQCIBnVPX8inAXIxXAsMdF6nW6nZJa36G1O+G9JXiauenxBAiBU4MQoRWxiXGn0TcKTkRJafZ58KLqeCJiB2VFAplwPJA==","userHandle":"YWJmYzhmZGYtMDdmNi00NWE5LWFiZWMtZmExOTIyNzViMjc2"}}';
-    $first = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $response, 101);
-    $second = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $response, 102);
+    $json = json_encode($response, JSON_THROW_ON_ERROR);
+    $first = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 101);
+    $second = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 102);
 
     expect($first->matched)->toBeTrue()
         ->and($first->credentialRecordJson)->not->toBeNull()
@@ -410,6 +443,5 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         CredentialRecord::class,
         'json',
     );
-    expect($updated)->toBeInstanceOf(CredentialRecord::class)
-        ->and($updated->counter)->toBe(1_548_765_641);
+    expect($updated->counter)->toBe(101);
 });
