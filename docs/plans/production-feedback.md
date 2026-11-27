@@ -79,3 +79,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E6 — benchmark measurement types
 
 - Declare the actual workload and repetition shapes, validate CPU usage and cold-start child result payloads, and reject empty measurements. Preserved workload, duration, repetitions and acceptance thresholds. Hosted verification pending.
+
+### Batch E7 — explicit PHPUnit test contexts
+
+- Migrated 13 mock-bearing test files to ordinary PHPUnit test classes, retaining every test body, descriptive TestDox name and dataset. This removes reliance on Pest's dynamically rebound closure `$this` (181 UndefinedMagicMethod diagnostics), without suppressing the analyzer or changing expectations. Pest continues to run PHPUnit tests. Hosted test count and behavior must be verified before closure.
