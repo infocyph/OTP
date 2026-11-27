@@ -218,12 +218,9 @@ final readonly class AOTP
         }
 
         $stateKey = self::stateKey($factorId, $challenge);
-        $state = $cache->get($stateKey);
+        $state = self::reservationState($cache, $stateKey);
         if ($state === null) {
             return VerificationResult::mismatch();
-        }
-        if (!is_int($state) || ($state !== 0 && $state !== 1)) {
-            throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.');
         }
 
         $signature = self::decodeSignature($response->signature);
@@ -339,6 +336,21 @@ final readonly class AOTP
             'sha256',
             "infocyph:otp:aotp:lock:v1\0" . $factorId . "\0" . hash('sha256', $challenge->signingPayload(), true),
         );
+    }
+
+    /**
+     * @return 0|1|null
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    private static function reservationState(AuthenticationStateCacheInterface $cache, string $stateKey): ?int
+    {
+        $state = $cache->get($stateKey);
+
+        return match ($state) {
+            null, 0, 1 => $state,
+            default => throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.'),
+        };
     }
 
     /**
