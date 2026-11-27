@@ -20,6 +20,7 @@ use Infocyph\Runwire\Exception\CancelledException;
 use Infocyph\Runwire\RequestContext;
 use Infocyph\Runwire\Runtime\Enum\CancellationReason;
 use Infocyph\Runwire\Runtime\Enum\RuntimeDriver;
+use Infocyph\Runwire\Runtime\RequestExecutionPolicy;
 use Infocyph\Runwire\RuntimeCapabilities;
 use Infocyph\Runwire\RuntimeContext;
 use LogicException;
@@ -236,6 +237,46 @@ final class RunwireIntegrationTest extends TestCase
             ->and($diagnostics->activeTasks)->toBe(0)
             ->and($diagnostics->requestScopesActive)->toBe(0)
             ->and($diagnostics->backgroundTasksActive)->toBe(0);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
+    #[TestDox('synchronous Runwire lock waits are bounded by the request deadline')]
+    public function testSynchronousRunwireLockWaitsAreBoundedByTheRequestDeadline(): void
+    {
+        $runtime = RuntimeContext::standalone();
+        $request = RequestContext::create($runtime, new RequestExecutionPolicy(maxExecutionSeconds: 0.8));
+        $execution = new RunwireExecutionContext($runtime, $request);
+        $handle = new LockHandle('deadline-lock', 'owner-token', leaseSeconds: 30.0);
+        $locks = $this->createMock(LockProviderInterface::class);
+        $locks->expects($this->once())
+            ->method('acquire')
+            ->willReturnCallback(static function (string $key, float $waitSeconds, float $leaseSeconds) use ($handle): LockHandle {
+                expect($key)->toBe('deadline-lock')
+                    ->and($waitSeconds)->toBeGreaterThan(0.0)
+                    ->and($waitSeconds)->toBeLessThanOrEqual(0.8)
+                    ->and($leaseSeconds)->toBe(30.0);
+
+                return $handle;
+            });
+        $locks->expects($this->once())->method('release')->with($handle);
+
+        $cache = $this->createMock(AuthenticationStateCacheInterface::class);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('authenticationStateLock')->willReturn($locks);
+
+        expect(CacheLock::synchronized(
+            $cache,
+            'deadline-lock',
+            static fn(LockProviderInterface $locks, LockHandle $handle): bool => true,
+            $execution,
+        ))->toBeTrue();
     }
 
     /**

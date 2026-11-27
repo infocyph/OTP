@@ -25,11 +25,7 @@ final class RunwireState
         float $leaseSeconds,
     ): ?LockHandle {
         self::checkpoint($runwire);
-        if (
-            $runwire === null
-            || $runwire->scope === null
-            || !$runwire->runtime->capabilities->supportsRunwireCoroutines
-        ) {
+        if ($runwire === null) {
             return $locks->acquire($key, $waitSeconds, $leaseSeconds);
         }
 
@@ -38,6 +34,9 @@ final class RunwireState
             self::checkpoint($runwire);
 
             return null;
+        }
+        if ($runwire->scope === null || !$runwire->runtime->capabilities->supportsRunwireCoroutines) {
+            return $locks->acquire($key, $waitSeconds, $leaseSeconds);
         }
 
         $deadline = (int) hrtime(true) + (int) ceil($waitSeconds * 1_000_000_000.0);
