@@ -118,8 +118,7 @@ test('native PDO GenericOtp preserves expiry and attempt ownership across indepe
             static fn(): int => (int) new GenericOtp($factory(), $key, maxAttempts: 3)->verify($binding, $wrong),
             2,
         ))->toBe([0, 0]);
-        $remaining = $independent->get($stateKey);
-        expect($remaining)->toBe(array_replace($initial, ['remainingAttempts' => 1]));
+        expect($independent->get($stateKey))->toBe(array_replace($initial, ['remainingAttempts' => 1]));
 
         expect($verifier->verify($binding, $wrong))->toBeFalse()
             ->and($otp->verify($binding, $proof))->toBeFalse();
