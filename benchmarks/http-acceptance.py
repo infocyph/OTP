@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare validated OTP HTTP requests on matched Runwire 3 hosts (Python stdlib)."""
+"""Compare validated OTP HTTP requests on matched two-worker Runwire hosts (Python stdlib)."""
 import argparse
 import asyncio
 import json
@@ -61,11 +61,33 @@ async def request(reader, writer):
     return fields.get(b'connection', b'').strip() != b'close'
 
 
-async def load(port, concurrency, duration, pid, warmup=False):
-    connections = [await asyncio.open_connection('127.0.0.1', port) for _ in range(concurrency)]
-    # Every connection and request path is ready before the measured interval.
-    for reader, writer in connections:
-        await request(reader, writer)
+async def load(port, concurrency, duration, pid, warmup=False, settle_seconds=0):
+    connections = []
+
+    async def prime(index):
+        deadline = time.monotonic() + settle_seconds
+        while True:
+            reader, writer = connections[index]
+            if not await request(reader, writer):
+                writer.close()
+                await writer.wait_closed()
+                connections[index] = await asyncio.open_connection('127.0.0.1', port)
+            if time.monotonic() >= deadline:
+                return
+
+    # Prime the actual measured connections at the same load and concurrency.
+    # All warmup responses are validated but excluded from the timed samples.
+    try:
+        for _ in range(concurrency):
+            connections.append(await asyncio.open_connection('127.0.0.1', port))
+        async with asyncio.TaskGroup() as priming:
+            for index in range(concurrency):
+                priming.create_task(prime(index))
+    except BaseException:
+        for _, writer in connections:
+            writer.close()
+        await asyncio.gather(*(writer.wait_closed() for _, writer in connections), return_exceptions=True)
+        raise
     start = time.monotonic()
     deadline = start + duration
     samples, ticks, latencies = [], {}, []
@@ -173,7 +195,7 @@ def stop_host(host):
 async def main(configuration):
     output = configuration.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    result = {'scope': 'HTTP/1.1 keep-alive, two Runwire 3 workers, shared integrity-protected SQLite; '
+    result = {'scope': 'HTTP/1.1 keep-alive, two Runwire workers (baseline 3.x, candidate 4.x), shared integrity-protected SQLite; '
                        'Generic OTP generate/verify/replay, counter OCRA and provisioning parse on every request',
               'environment': {'php': subprocess.check_output([configuration.php, '-v'], text=True).splitlines()[0],
                               'os': os.uname().release, 'cpu_count': os.cpu_count(),
@@ -191,7 +213,8 @@ async def main(configuration):
                 order = ['baseline', 'candidate'] if trial % 2 == 0 else ['candidate', 'baseline']
                 for label in order:
                     process, port, _, _ = hosts[label]
-                    measured = await load(port, concurrency, configuration.duration, process.pid)
+                    measured = await load(port, concurrency, configuration.duration, process.pid,
+                                          settle_seconds=configuration.warmup)
                     trials[label][str(concurrency)].append(measured)
                     print(label, 'c=' + str(concurrency), 'trial=' + str(trial + 1),
                           round(measured['successful_rpm']), 'RPM', flush=True)
