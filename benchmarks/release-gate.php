@@ -110,6 +110,14 @@ printf(
     $environmentStable ? 'stable' : 'unverified',
 );
 
+if ($workloadName === 'sustained') {
+    enforceSustainedBudgets(
+        $workload['result']['latency_ms']['p99'],
+        $workload['result']['memory']['peak_mb'],
+        $workload['result']['memory']['growth_mb'],
+    );
+}
+
 /**
  * @return array<string, mixed>
  */
@@ -403,24 +411,24 @@ function runTimedWorkload(
     );
     $workload['duration_seconds'] = $duration * (float) $repetitions;
 
-    if (!$enforceAbsoluteBudgets) {
-        return $workload;
-    }
+    return $workload;
+}
 
-    $p99 = $workload['result']['latency_ms']['p99'] ?? null;
-    $peakMemory = $workload['result']['memory']['peak_mb'] ?? null;
-    $memoryGrowth = $workload['result']['memory']['growth_mb'] ?? null;
-    if (is_float($p99) && $p99 > MAX_P99_LATENCY_MS) {
+/** @throws RuntimeException */
+function enforceSustainedBudgets(?float $p99, ?float $peakMemory, ?float $memoryGrowth): void
+{
+    if ($p99 === null || $peakMemory === null || $memoryGrowth === null) {
+        throw new RuntimeException('Sustained benchmark did not report all required budget metrics.');
+    }
+    if ($p99 > MAX_P99_LATENCY_MS) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute p99 latency budget.');
     }
-    if (is_float($peakMemory) && $peakMemory > MAX_PEAK_MEMORY_MB) {
+    if ($peakMemory > MAX_PEAK_MEMORY_MB) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute peak-memory budget.');
     }
-    if (is_float($memoryGrowth) && $memoryGrowth > MAX_MEMORY_GROWTH_MB) {
+    if ($memoryGrowth > MAX_MEMORY_GROWTH_MB) {
         throw new RuntimeException('Sustained benchmark exceeded the absolute memory-growth budget.');
     }
-
-    return $workload;
 }
 
 /**

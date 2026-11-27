@@ -144,3 +144,9 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E21 — remaining caller contracts
 
 - Run 45968200172, PHP 8.5 job 140401963178: PHPStan passed; Psalm reduced to 47 errors, all propagated exceptions. Added exact method contracts; no suppressions or behavior changes. PHP 8.5 prefer-lowest QA passed on this head (previous p99 smoke failure did not recur). Benchmark PHP 8.6 encountered upstream GitHub codeload HTTP 429 during dependency download, not a code failure. All 51 inline review threads resolved by the code-scanning bot at inspection. Final matrix pending.
+
+### Batch E22/H — benchmark failure evidence and caller contracts
+
+- Run 45968479044: PHPStan passed, Psalm 12 errors (six distinct exception diagnostics). Added the exact remaining benchmark caller contracts. All three benchmark jobs passed, but both PHP 8.5 QA jobs failed the 1 ms p99 budget in the parallel benchmark reporting smoke test; the other four QA jobs passed.
+- Preserve every absolute budget and the nonzero benchmark exit on breach. Write measurement JSON before enforcing those budgets so failure evidence survives; the reporting test verifies the exit status against measured p99, peak memory and growth, including an explicit breach diagnostic. Dedicated benchmark and sustained release jobs still fail on an over-budget measurement. Added workflow-level PR concurrency cancellation to prevent superseded sustained jobs from accumulating. No benchmark workload, sample count or threshold changed.
+- CacheLayer 4.1 wraps SQLite file locks in PdoLockProvider, with no public way to distinguish the effective lock. Native PDO CAS selection remains safe but affects the concurrent SQLite workload. An upstream capability fix is needed; attempted to create CacheLayer branch patch/pdo-lock-capability and received GitHub 403. No upstream files changed. Final performance gate remains open.

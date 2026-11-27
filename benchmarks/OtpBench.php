@@ -562,6 +562,7 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchOcraVerify(): void
     {
@@ -570,6 +571,7 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchOcraVerifyInvalid(): void
     {
@@ -718,6 +720,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerify(): void
     {
@@ -750,6 +753,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyInvalid(): void
     {
@@ -760,6 +764,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyMalformed(): void
     {
