@@ -14,6 +14,7 @@ use RuntimeException;
 
 /**
  * @return \Closure(): Cache
+ * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
  * @throws \RuntimeException
  */
 function pdoStateFactory(string $backend): \Closure

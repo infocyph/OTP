@@ -160,3 +160,9 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch B2 — native OCRA absent-row contention
 
 - Added real MySQL/MariaDB/PostgreSQL regression for initially absent non-counter OCRA replay state: four independent connections race to consume one proof, exactly one succeeds, a separate connection reads the native marker, repeat rejects, and replacement factor generation is isolated. This reproduces the missing-row atomic claim boundary implicated by historical OCRA PDO rotation job 139376832186 without assuming a database deadlock or hiding any backend exception. Retained GenericOtp native regression. Hosted matrix pending.
+
+### Batch E24/B3 — remaining QA and native SQL failure evidence
+
+- Latest completed run [45969337132](https://github.com/infocyph/OTP/actions/runs/45969337132): PHPStan passed; Psalm two findings (PDO fixture constructor exception and legacy mOTP WeakHash). Corrected the fixture exception declaration and MobileOTP method ordering; retained exact mOTP digest per SEC protocol compatibility rule. No suppression introduced.
+- PDO OCRA absent-row contention reproduced in MariaDB in PHP 8.5 prefer-stable and PHP 8.4 prefer-lowest. Other QA failures are formatting. Capture nested exception class/code/message from forked workers, without converting backend failures into successful or replay outcomes, so the actual SQL error can be isolated. CacheLayer 4.1 transaction code uses SELECT FOR UPDATE then INSERT IGNORE on MySQL-family drivers; missing-row gap-lock deadlock is a hypothesis, not yet verified. CacheLayer branch creation again denied (403).
+- Sustained RPM: generate +1.42%, roundtrip +1.72%, concurrent +0.10% (all within 2% budget); HTTP throughput improved at all concurrency levels, but concurrency 1 failed the 2.5% variance criterion. No threshold changes. Final certification open.

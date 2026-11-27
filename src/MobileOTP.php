@@ -235,6 +235,12 @@ final readonly class MobileOTP
         return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'MobileOTP replay', $runwire);
     }
 
+    private function codeAtStep(int $step): string
+    {
+        // Legacy mOTP wire compatibility requires this exact digest and truncation.
+        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+    }
+
     /** @return array{step:int,offset:int}|null */
     private function findMatch(string $otp, int $currentStep, VerificationWindow $window): ?array
     {
@@ -254,12 +260,6 @@ final readonly class MobileOTP
         }
 
         return null;
-    }
-
-    private function codeAtStep(int $step): string
-    {
-        // Legacy mOTP wire compatibility requires this exact digest and truncation.
-        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
     }
 
     private function matches(string $otp, int $step): bool

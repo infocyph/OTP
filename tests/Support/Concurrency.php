@@ -55,7 +55,7 @@ final class Concurrency
                 } catch (Throwable $failure) {
                     file_put_contents(
                         $barrier . '.error.' . $worker,
-                        $failure::class . ': ' . $failure->getMessage(),
+                        self::describeFailure($failure),
                     );
                     $result = 250;
                 }
@@ -67,6 +67,17 @@ final class Concurrency
         }
 
         return $children;
+    }
+
+    private static function describeFailure(Throwable $failure): string
+    {
+        $messages = [];
+        do {
+            $messages[] = $failure::class . ' [' . $failure->getCode() . ']: ' . $failure->getMessage();
+            $failure = $failure->getPrevious();
+        } while ($failure !== null);
+
+        return implode(' <- ', $messages);
     }
 
     /** @throws RuntimeException */
