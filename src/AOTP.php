@@ -339,21 +339,6 @@ final readonly class AOTP
     }
 
     /**
-     * @return 0|1|null
-     * @throws \Psr\SimpleCache\InvalidArgumentException
-     * @throws \RuntimeException
-     */
-    private static function reservationState(AuthenticationStateCacheInterface $cache, string $stateKey): ?int
-    {
-        $state = $cache->get($stateKey);
-
-        return match ($state) {
-            null, 0, 1 => $state,
-            default => throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.'),
-        };
-    }
-
-    /**
      * @throws \LogicException
      */
     private static function requireSodium(): void
@@ -361,6 +346,20 @@ final readonly class AOTP
         if (!self::isAvailable()) {
             throw new LogicException('AOTP requires ext-sodium for Ed25519 operations.');
         }
+    }
+
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    private static function reservationState(AuthenticationStateCacheInterface $cache, string $stateKey): ?int
+    {
+        return match ($cache->get($stateKey)) {
+            null => null,
+            0 => 0,
+            1 => 1,
+            default => throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.'),
+        };
     }
 
     private static function stateKey(string $factorId, AotpChallenge $challenge): string
