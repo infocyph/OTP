@@ -31,3 +31,9 @@ Follow [PHPForge engineering principles](https://github.com/infocyph/PHPForge/bl
 - [ ] H: Hosted QA, security and sustained performance gates.
 
 Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 passed, 4 failed, 2 skipped). Findings pending reproduction on updated dependencies. Preserve public contracts and fail-closed semantics. Apply PHPForge CORE, FLOW, SEC, DATA, COMPAT, CONFIG, OPS, PERF and remaining applicable rules with evidence per batch. No automatic merge.
+
+### Batch A — dependency manifest and runtime matrix
+
+- Implemented target constraints: CacheLayer ^4.1, Runwire ^4.0.1, constant-time-encoding ^3.1.5, WebAuthn ^5.3.17. Bacon QR ^3.1.1 is current; PHPForge tracks main. Confirmed published upstream release tags; package resolution and compatibility pending hosted QA.
+- Added PHP 8.6 to the QA matrix. Historical Runwire 3 performance baseline remains unchanged intentionally; current candidate uses Runwire 4.
+- Updated README and installation guidance. COMPAT/CONFIG/FLOW/PERF verification pending; no change to authentication semantics or performance thresholds.

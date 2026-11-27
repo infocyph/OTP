@@ -18,7 +18,7 @@ jobs:
       actions: read
       contents: read
     with:
-      php_versions: '["8.4","8.5"]'
+      php_versions: '["8.4","8.5","8.6"]'
       dependency_versions: '["prefer-lowest","prefer-stable"]'
       fail_on_skipped_tests: true
       integration_services: '["sqlite","redis"]'
