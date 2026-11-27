@@ -235,9 +235,7 @@ final readonly class Passkey
         self::assertCeremonyId($ceremonyId);
         self::assertCredentialJsonLength($credentialRecordJson);
         self::assertCredentialJsonLength($credentialJson);
-        if ($now !== null && $now < 0) {
-            throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
-        }
+        self::assertVerificationTimestamp($now);
 
         return CacheLock::transition(
             $this->cache,
@@ -271,9 +269,7 @@ final readonly class Passkey
         self::assertBinding($binding);
         self::assertCeremonyId($ceremonyId);
         self::assertCredentialJsonLength($credentialJson);
-        if ($now !== null && $now < 0) {
-            throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
-        }
+        self::assertVerificationTimestamp($now);
 
         return CacheLock::transition(
             $this->cache,
@@ -404,6 +400,16 @@ final readonly class Passkey
         self::assertByteLength($value, 255, $message);
         if (preg_match('//u', $value) !== 1) {
             throw new InvalidArgumentException($message);
+        }
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     */
+    private static function assertVerificationTimestamp(?int $now): void
+    {
+        if ((int) $now < 0) {
+            throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
         }
     }
 

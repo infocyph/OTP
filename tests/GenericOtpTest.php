@@ -247,7 +247,7 @@ final class GenericOtpTest extends TestCase
         $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
         $cache->expects($this->once())->method('get')->willReturnCallback(static function () use ($key): array {
             $expiresAt = time() + 1;
-            sleep(1);
+            usleep(1_100_000);
 
             return [
                 'v' => 1,
