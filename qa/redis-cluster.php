@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\QA;
+
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\CacheLayer\Exceptions\CacheBackendException;
@@ -12,6 +14,9 @@ use Infocyph\OTP\OCRA;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\TOTP;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
+use InvalidArgumentException;
+use RedisClusterException;
+use RuntimeException;
 
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../tests/Support/Concurrency.php';
@@ -27,7 +32,7 @@ function requireClusterResult(bool $condition, string $message): void
 /**
  * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
  * @throws RuntimeException
- * @throws LogicException
+ * @throws \LogicException
  */
 function clusterCache(): Cache
 {
