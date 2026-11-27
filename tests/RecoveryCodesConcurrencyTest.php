@@ -39,3 +39,42 @@ test('recovery replacement racing consumption commits one serializable final bat
 
     unlink($path);
 });
+
+test('durable recovery isolates full-length factor identifiers during consumption and rotation', function (): void {
+    $path = tempnam(sys_get_temp_dir(), 'otp-recovery-owner-');
+    if ($path === false) {
+        throw new \RuntimeException('Unable to create the recovery database.');
+    }
+
+    $key = random_bytes(32);
+    $owner = 'otp-recovery-' . hash('sha256', 'owner-a');
+    $other = 'otp-recovery-' . hash('sha256', 'owner-b');
+
+    try {
+        $proof = (new RecoveryCodes(new SqliteAtomicStore($path), $key))->generate($owner, count: 2)->plainCodes[0];
+        $otherProof = (new RecoveryCodes(new SqliteAtomicStore($path), $key))->generate($other, count: 2)->plainCodes[0];
+
+        expect(strlen($owner))->toBe(77)
+            ->and((new RecoveryCodes(new SqliteAtomicStore($path), $key))->consume($other, $proof)->consumed)->toBeFalse()
+            ->and((new SqliteAtomicStore($path))->metadata($other)['remaining'])->toBe(2);
+
+        $results = Concurrency::run(
+            static fn(): int => (int) new RecoveryCodes(new SqliteAtomicStore($path), $key)->consume($owner, $proof)->consumed,
+            4,
+        );
+        sort($results);
+        expect($results)->toBe([0, 0, 0, 1])
+            ->and((new SqliteAtomicStore($path))->metadata($owner)['remaining'])->toBe(1)
+            ->and((new SqliteAtomicStore($path))->metadata($other)['lastUsedAt'])->toBeNull();
+
+        $replacement = (new RecoveryCodes(new SqliteAtomicStore($path), $key))->generate($owner, count: 3);
+        expect((new SqliteAtomicStore($path))->metadata($owner)['remaining'])->toBe(3)
+            ->and((new RecoveryCodes(new SqliteAtomicStore($path), $key))->consume($owner, $proof)->consumed)->toBeFalse()
+            ->and((new RecoveryCodes(new SqliteAtomicStore($path), $key))->consume($owner, $replacement->plainCodes[0])->consumed)->toBeTrue()
+            ->and((new SqliteAtomicStore($path))->metadata($other)['remaining'])->toBe(2)
+            ->and((new RecoveryCodes(new SqliteAtomicStore($path), $key))->consume($other, $otherProof)->consumed)->toBeTrue()
+            ->and((new SqliteAtomicStore($path))->metadata($other)['remaining'])->toBe(1);
+    } finally {
+        unlink($path);
+    }
+});

@@ -1,6 +1,6 @@
 # OTP — production feedback and upstream action plan
 
-Status: **open — initial investigation and release planning** · 2026-11-26
+Status: **implementation and qualification — external release blockers open** · 2026-11-27
 
 Baseline: Exact installed specialist version pending inventory. Release target to be selected after root-cause isolation; no version bump authorized by this file.
 
@@ -22,9 +22,9 @@ Follow [PHPForge engineering principles](https://github.com/infocyph/PHPForge/bl
 ## OTP implementation tracker — 2026-11-27
 
 - [x] A: Runwire ^4.0.1, CacheLayer ^4.1, compatible dependency updates and PHP 8.6 matrix.
-- [ ] B: PDO lock ownership and native atomic state.
+- [ ] B: PDO lock ownership and native atomic state (direct OTP regressions green; historical upstream advisory-lock cause remains open).
 - [x] C: Distributed topology and replay (36/36 Redis/Valkey jobs on both 3a747ed and 2351362; final-head recheck remains H).
-- [ ] D: Protocol coverage and cross-owner recovery qualification.
+- [ ] D: Protocol coverage and cross-owner recovery qualification (direct OTP families and native Passkey assertions green; published Foundation integration blocked).
 - [ ] E: PHPStan (179) and Psalm (940) findings on baseline f40d42e; root-cause fixes, no suppressions.
 - [x] F: Prefer-stable Passkey regression (WebAuthn 5.3.15 baseline).
 - [x] G: Documentation and migration updates (warning-free hosted Sphinx build on 5e0ce3d).
@@ -238,3 +238,9 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 - [46023583134](https://github.com/infocyph/OTP/actions/runs/46023583134) on 5e0ce3d: all 36 cluster cases passed again. [Documentation job 140589232973](https://github.com/infocyph/OTP/actions/runs/46023585127/job/140589232973) passed the strict Sphinx build; G closed. Other jobs remained active at inspection.
 - Expanded the existing real ES256 assertion fixture to MySQL, MariaDB and PostgreSQL while retaining the original memory case and malformed/wrong-signature tests. Native cases use separate connections, reject another binding without changing state, race four valid signed submissions, require exactly one winner with credential counter 101 and explicit replay for every loser, and preserve the original expiry in the terminal state. Application-owned credential persistence remains outside the OTP contract. DATA/SEC/TYPE/FLOW hosted recheck pending.
 - Recovered [46022458177 sustained job 140585429569](https://github.com/infocyph/OTP/actions/runs/46022458177/job/140585429569) logs: generate 1,475,345.51 to 1,474,251.75 RPM (0.07% regression); roundtrip 960,271.15 to 945,281.36 (1.56%); SQLite concurrent verify 413,103.47 to 332,495.98 (19.51%, FAIL). HTTP/soak cancelled before completion. Latest CacheLayer main and 4.1 still wrap SQLite file locks in PdoLockProvider with no public effective-lock accessor; choosing native PDO CAS for all PDO drivers changes SQLite concurrency. Retried CacheLayer branch creation and received HTTP 403 Resource not accessible by integration. Correct fix belongs in the upstream capability boundary (expose actual effective lock provider or native driver capability; qualify both SQLite and network PDO), then remeasure default configuration with a published package. No reflection, runtime lock fallback, benchmark-only configuration change, threshold or workload change. H remains open.
+
+### Batch D5 — durable full-length recovery identity and final-head evidence
+
+- [46023940169](https://github.com/infocyph/OTP/actions/runs/46023940169) on 7c6e1eb: all 36 Redis/Valkey topology jobs passed (complete paginated list). [46023940813](https://github.com/infocyph/OTP/actions/runs/46023940813): six QA variants, three standard benchmarks, clean install, matrix preparation and strict Sphinx build passed; native Passkey assertion race is green. PHPStan passed and Psalm PHP 8.5 log confirms one legacy WeakHash error; the same unresolved review thread remains. Sustained certification was active at inspection; not treated as passed.
+- Added a standalone durable SQLite recovery regression using the exact 77-byte Foundation-shaped factor identifiers: cross-owner proof rejection, four independent consumers with exactly one winner, native remaining count, rotation and independent other-owner consumption. DATA/SEC-07/TYPE/FLOW: no production contract change or schema workaround. This proves OTP-side identity capacity only, not Foundation's own migration. Hosted verification pending.
+- Rechecked published CacheLayer 4.1 and Foundation 4.0.1; neither upstream fix is available as a published dependency. CacheLayer branch creation retried and again returned HTTP 403 Resource not accessible by integration despite repository metadata reporting push access. B/D/H remain open for external evidence. No legacy mOTP suppression or incompatible removal authorized. No gate changes.
