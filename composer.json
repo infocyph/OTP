@@ -92,6 +92,6 @@
             "@benchmark",
             "@benchmark:release"
         ],
-        "benchmark:release": "@php benchmarks/release-gate.php --autoload=vendor/autoload.php --output=build/benchmark-result.json --release=working-tree"
+        "benchmark:release": "@php benchmarks/release-gate.php --autoload=vendor/autoload.php --build-report --release=working-tree"
     }
 }

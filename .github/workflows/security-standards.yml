@@ -79,56 +79,49 @@ jobs:
           mkdir -p perf
           php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/baseline.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
             --duration=15 \
             --repetitions=3 \
-            --stable
+            --stable > "$GITHUB_WORKSPACE/perf/baseline.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/candidate.json" \
             --release="$GITHUB_SHA" \
             --duration=15 \
             --repetitions=3 \
-            --stable
+            --stable > "$GITHUB_WORKSPACE/perf/candidate.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/baseline-roundtrip.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
             --duration=15 \
             --repetitions=3 \
             --stable \
-            --workload=roundtrip
+            --workload=roundtrip > "$GITHUB_WORKSPACE/perf/baseline-roundtrip.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/candidate-roundtrip.json" \
             --release="$GITHUB_SHA" \
             --duration=15 \
             --repetitions=3 \
             --stable \
-            --workload=roundtrip
+            --workload=roundtrip > "$GITHUB_WORKSPACE/perf/candidate-roundtrip.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/baseline-concurrent.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
             --duration=8 \
             --repetitions=3 \
             --stable \
-            --workload=concurrent-verify
+            --workload=concurrent-verify > "$GITHUB_WORKSPACE/perf/baseline-concurrent.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/candidate-concurrent.json" \
             --release="$GITHUB_SHA" \
             --duration=8 \
             --repetitions=3 \
             --stable \
-            --workload=concurrent-verify
+            --workload=concurrent-verify > "$GITHUB_WORKSPACE/perf/candidate-concurrent.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/cold-start.json" \
             --release="$GITHUB_SHA" \
             --repetitions=3 \
-            --workload=cold-start
+            --workload=cold-start > "$GITHUB_WORKSPACE/perf/cold-start.json"
 
       - name: Install PHPForge validation tooling
         run: composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
@@ -138,12 +131,11 @@ jobs:
         run: |
           php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/runwire-lifecycle.json" \
             --release="$GITHUB_SHA" \
             --duration=8 \
             --repetitions=3 \
             --stable \
-            --workload=runwire-lifecycle
+            --workload=runwire-lifecycle > "$GITHUB_WORKSPACE/perf/runwire-lifecycle.json"
 
       - name: Validate representative benchmark results
         shell: bash

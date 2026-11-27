@@ -136,10 +136,9 @@ async def start_host(root, configuration, output_dir, label):
         port = sock.getsockname()[1]
     command = [configuration.php, '-d', 'opcache.enable_cli=1', '-d', 'auto_prepend_file=' + str(root / 'vendor/autoload.php'),
                str(Path(__file__).with_name('http-host.php')),
-               '--autoload=' + str(root / 'vendor/autoload.php'), '--address=127.0.0.1:' + str(port),
-               '--ready-dir=' + ready.name]
+               '--autoload=' + str(root / 'vendor/autoload.php'), '--address=127.0.0.1:' + str(port)]
     log = (output_dir / (label + '-server.log')).open('w')
-    process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+    process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, cwd=ready.name,
                                preexec_fn=lambda: os.sched_setaffinity(0, configuration.server_cpus))
     host = (process, port, log, ready)
     try:

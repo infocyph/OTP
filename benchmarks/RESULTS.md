@@ -253,3 +253,10 @@ direct array mutations and could not coordinate multiple workers or hosts, so
 these figures are not a like-for-like optimization regression. The full raw
 suite remains the authoritative release gate; this document highlights the
 security-sensitive and corrected worst-case subjects.
+
+The release-gate PHP command emits JSON on standard output and diagnostics on
+standard error; redirect standard output to the desired report file. The
+Composer `benchmark:release` command uses `--build-report` for the fixed
+`build/benchmark-result.json` path. The HTTP harness launches its workers in
+its own temporary directories. Cold-start measurements use the current
+checkout's Composer autoloader.

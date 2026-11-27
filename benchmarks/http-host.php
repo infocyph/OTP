@@ -15,15 +15,15 @@ use Infocyph\Runwire\Runtime;
 use Infocyph\Runwire\Server;
 use Infocyph\Runwire\Supervisor\WorkerContext;
 
-$options = getopt('', ['autoload:', 'address:', 'ready-dir:']);
+$options = getopt('', ['autoload:', 'address:']);
 if ($options === false) {
     throw new RuntimeException('Unable to parse HTTP benchmark arguments.');
 }
 $autoload = $options['autoload'] ?? null;
 $address = $options['address'] ?? null;
-$readyDirectory = $options['ready-dir'] ?? null;
+$readyDirectory = getcwd();
 if (!is_string($autoload) || !is_file($autoload) || !is_string($address) || !is_string($readyDirectory)) {
-    throw new RuntimeException('HTTP benchmark requires valid autoload, address and ready directory arguments.');
+    throw new RuntimeException('HTTP benchmark requires valid autoload, address and a private working directory.');
 }
 $autoload = realpath($autoload);
 if ($autoload === false) {

@@ -28,63 +28,50 @@ function benchmarkResultArray(mixed $value): array
 
 test('benchmark results retain measured memory and CPU for acceptance budgets', function (string $workload) {
     $root = dirname(__DIR__);
-    $output = sys_get_temp_dir() . '/otp-benchmark-contract-' . bin2hex(random_bytes(8)) . '.json';
+    $process = new Process([
+        PHP_BINARY,
+        $root . '/benchmarks/release-gate.php',
+        '--autoload=' . $root . '/vendor/autoload.php',
+        '--release=test',
+        '--duration=1',
+        '--repetitions=3',
+        '--workload=' . $workload,
+    ], $root);
+    $process->run();
+    if ($workload !== 'sustained' && !$process->isSuccessful()) {
+        throw new \Symfony\Component\Process\Exception\ProcessFailedException($process);
+    }
+    $document = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+    $workloadResult = benchmarkResultArray(benchmarkResultArray(benchmarkResultArray($document)['workloads'] ?? null)[0] ?? null);
+    $result = benchmarkResultArray($workloadResult['result'] ?? null);
+    $memory = benchmarkResultArray($result['memory'] ?? null);
+    $cpu = benchmarkResultArray($result['cpu'] ?? null);
+    $metadata = benchmarkResultArray($workloadResult['metadata'] ?? null);
 
-    try {
-        $process = new Process([
-            PHP_BINARY,
-            $root . '/benchmarks/release-gate.php',
-            '--autoload=' . $root . '/vendor/autoload.php',
-            '--output=' . $output,
-            '--release=test',
-            '--duration=1',
-            '--repetitions=3',
-            '--workload=' . $workload,
-        ], $root);
-        $process->run();
-        if ($workload !== 'sustained' && !$process->isSuccessful()) {
-            throw new \Symfony\Component\Process\Exception\ProcessFailedException($process);
+    expect($memory['peak_mb'])->toBeGreaterThan(0)
+        ->and($cpu['average_percent'])->toBeGreaterThan(0)
+        ->and($result['failed_operations'])->toBe(0);
+    if ($workload !== 'cold-start') {
+        expect($workloadResult['duration_seconds'])->toBe(3)
+            ->and($metadata['duration_per_repetition_seconds'])->toBe(1);
+    }
+    if ($workload === 'sustained') {
+        $latency = benchmarkResultArray($result['latency_ms'] ?? null);
+        $p99 = $latency['p99'] ?? null;
+        $peak = $memory['peak_mb'] ?? null;
+        $growth = $memory['growth_mb'] ?? null;
+        if (!is_numeric($p99) || !is_numeric($peak) || !is_numeric($growth)) {
+            throw new RuntimeException('Missing sustained benchmark budget measurements.');
         }
-        $json = file_get_contents($output);
-        if ($json === false) {
-            throw new RuntimeException('Missing benchmark output.');
-        }
-        $document = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
-        $workloadResult = benchmarkResultArray(benchmarkResultArray(benchmarkResultArray($document)['workloads'] ?? null)[0] ?? null);
-        $result = benchmarkResultArray($workloadResult['result'] ?? null);
-        $memory = benchmarkResultArray($result['memory'] ?? null);
-        $cpu = benchmarkResultArray($result['cpu'] ?? null);
-        $metadata = benchmarkResultArray($workloadResult['metadata'] ?? null);
-
-        expect($memory['peak_mb'])->toBeGreaterThan(0)
-            ->and($cpu['average_percent'])->toBeGreaterThan(0)
-            ->and($result['failed_operations'])->toBe(0);
-        if ($workload !== 'cold-start') {
-            expect($workloadResult['duration_seconds'])->toBe(3)
-                ->and($metadata['duration_per_repetition_seconds'])->toBe(1);
-        }
-        if ($workload === 'sustained') {
-            $latency = benchmarkResultArray($result['latency_ms'] ?? null);
-            $p99 = $latency['p99'] ?? null;
-            $peak = $memory['peak_mb'] ?? null;
-            $growth = $memory['growth_mb'] ?? null;
-            if (!is_numeric($p99) || !is_numeric($peak) || !is_numeric($growth)) {
-                throw new RuntimeException('Missing sustained benchmark budget measurements.');
-            }
-            $withinBudget = (float) $p99 <= 1.0 && (float) $peak <= 64.0 && (float) $growth <= 8.0;
-            expect($memory['average_mb'])->toBeGreaterThan(0)
-                ->and($growth)->toBeGreaterThanOrEqual(0)
-                ->and($metadata['p99_latency_budget_ms'])->toEqual(1.0)
-                ->and($metadata['peak_memory_budget_mb'])->toEqual(64.0)
-                ->and($metadata['memory_growth_budget_mb'])->toEqual(8.0)
-                ->and($process->isSuccessful())->toBe($withinBudget);
-            if (!$withinBudget) {
-                expect($process->getErrorOutput())->toContain('Sustained benchmark exceeded the absolute');
-            }
-        }
-    } finally {
-        if (is_file($output)) {
-            unlink($output);
+        $withinBudget = (float) $p99 <= 1.0 && (float) $peak <= 64.0 && (float) $growth <= 8.0;
+        expect($memory['average_mb'])->toBeGreaterThan(0)
+            ->and($growth)->toBeGreaterThanOrEqual(0)
+            ->and($metadata['p99_latency_budget_ms'])->toEqual(1.0)
+            ->and($metadata['peak_memory_budget_mb'])->toEqual(64.0)
+            ->and($metadata['memory_growth_budget_mb'])->toEqual(8.0)
+            ->and($process->isSuccessful())->toBe($withinBudget);
+        if (!$withinBudget) {
+            expect($process->getErrorOutput())->toContain('Sustained benchmark exceeded the absolute');
         }
     }
 })->with(['sustained', 'concurrent-verify', 'cold-start']);

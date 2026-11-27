@@ -24,7 +24,7 @@ const WARMUP_OPERATIONS = 5_000;
 $options = getopt('', [
     'autoload:',
     'duration::',
-    'output:',
+    'build-report',
     'release:',
     'repetitions::',
     'stable',
@@ -35,7 +35,7 @@ if ($options === false) {
 }
 
 $autoload = $options['autoload'] ?? null;
-$output = $options['output'] ?? null;
+$buildReport = array_key_exists('build-report', $options);
 $release = $options['release'] ?? null;
 $rawDuration = $options['duration'] ?? (string) DEFAULT_DURATION_SECONDS;
 $rawRepetitions = $options['repetitions'] ?? (string) DEFAULT_REPETITIONS;
@@ -49,9 +49,6 @@ $workloadName = $options['workload'] ?? 'sustained';
 
 if (!is_string($autoload) || $autoload === '' || !is_file($autoload)) {
     throw new RuntimeException('A readable --autoload path is required.');
-}
-if (!is_string($output) || $output === '') {
-    throw new RuntimeException('A non-empty --output path is required.');
 }
 if (!is_string($release) || $release === '') {
     throw new RuntimeException('A non-empty --release identifier is required.');
@@ -77,8 +74,12 @@ if (!in_array($autoload, get_included_files(), true)) {
     require_once __DIR__ . '/../vendor/autoload.php';
 }
 
+if ($workloadName === 'cold-start' && $autoload !== realpath(__DIR__ . '/../vendor/autoload.php')) {
+    throw new RuntimeException('Cold-start measurement requires the local checkout autoloader.');
+}
+
 $workload = match ($workloadName) {
-    'cold-start' => runColdStartWorkload($autoload, $repetitions),
+    'cold-start' => runColdStartWorkload($repetitions),
     'concurrent-verify' => runConcurrentVerificationWorkload($duration, $repetitions),
     'roundtrip' => runRoundTripWorkload($duration, $repetitions),
     'runwire-lifecycle' => runRunwireLifecycleWorkload($duration, $repetitions),
@@ -93,16 +94,21 @@ $document = [
     'workloads' => [$workload],
 ];
 
-$directory = dirname($output);
-if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
-    throw new RuntimeException('Unable to create benchmark output directory.');
-}
 $json = json_encode($document, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-if (file_put_contents($output, $json . PHP_EOL) === false) {
+if ($buildReport) {
+    $directory = __DIR__ . '/../build';
+    if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+        throw new RuntimeException('Unable to create benchmark output directory.');
+    }
+    if (file_put_contents($directory . '/benchmark-result.json', $json . PHP_EOL) === false) {
+        throw new RuntimeException('Unable to write benchmark result.');
+    }
+} elseif (fwrite(STDOUT, $json . PHP_EOL) === false) {
     throw new RuntimeException('Unable to write benchmark result.');
 }
 
-printf(
+fprintf(
+    STDERR,
     "%s benchmark: %.2f successful RPM, %.2f%% spread, %s environment\n",
     ucfirst(str_replace('-', ' ', $workloadName)),
     $workload['result']['successful_rpm'],
@@ -1078,7 +1084,7 @@ function benchmarkCacheOptions(): CacheOptions
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  * @throws \RuntimeException
  */
-function runColdStartWorkload(string $autoload, int $repetitions): array
+function runColdStartWorkload(int $repetitions): array
 {
     $warmupOperations = 3;
 
@@ -1096,10 +1102,10 @@ function runColdStartWorkload(string $autoload, int $repetitions): array
         ],
         $warmupOperations,
         COLD_START_STABILITY_SPREAD_PERCENT,
-        static function (int $repetition) use ($autoload, $warmupOperations): array {
+        static function (int $repetition) use ($warmupOperations): array {
             unset($repetition);
             for ($index = 0; $index < $warmupOperations; $index++) {
-                runColdStartOperation($autoload);
+                runColdStartOperation();
             }
 
             $start = hrtime(true);
@@ -1110,7 +1116,7 @@ function runColdStartWorkload(string $autoload, int $repetitions): array
             $memoryPeak = 0.0;
             for ($index = 0; $index < COLD_START_OPERATIONS; $index++) {
                 $before = hrtime(true);
-                $measurement = runColdStartOperation($autoload);
+                $measurement = runColdStartOperation();
                 $cpu += $measurement['cpu_seconds'];
                 $memoryPeak = max($memoryPeak, $measurement['memory_peak_mb']);
                 if ($measurement['successful']) {
@@ -1143,7 +1149,7 @@ function runColdStartWorkload(string $autoload, int $repetitions): array
  * @return array{successful:bool,cpu_seconds:float,memory_peak_mb:float}
  * @throws \RuntimeException
  */
-function runColdStartOperation(string $autoload): array
+function runColdStartOperation(): array
 {
     $code = <<<'PHP'
 require $argv[1];
@@ -1171,7 +1177,7 @@ echo json_encode([
 PHP;
 
     $process = proc_open(
-        [PHP_BINARY, '-d', 'opcache.enable_cli=0', '-r', $code, '--', $autoload],
+        [PHP_BINARY, '-d', 'opcache.enable_cli=0', '-r', $code, '--', __DIR__ . '/../vendor/autoload.php'],
         [
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],

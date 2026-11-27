@@ -63,7 +63,7 @@ final readonly class MobileOTP
     {
         $step = $this->getTimeStepFromTimestamp($timestamp ?? time(), $offsetSteps);
 
-        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+        return $this->codeAtStep($step);
     }
 
     /**
@@ -256,10 +256,14 @@ final readonly class MobileOTP
         return null;
     }
 
+    private function codeAtStep(int $step): string
+    {
+        // Legacy mOTP wire compatibility requires this exact digest and truncation.
+        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+    }
+
     private function matches(string $otp, int $step): bool
     {
-        $candidate = substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
-
-        return hash_equals($candidate, $otp);
+        return hash_equals($this->codeAtStep($step), $otp);
     }
 }
