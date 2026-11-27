@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\GridOTP;
+use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\VerificationReason;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
@@ -215,5 +216,36 @@ final class AtomicTerminalStateTest extends TestCase
             ->and($state['consumed'] ?? null)->toBeTrue()
             ->and($stale->matched)->toBeFalse()
             ->and($stale->reason)->toBe(VerificationReason::Replay);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
+    #[TestDox('GridOTP rejects a correct response after its cached deadline passes during state access')]
+    public function testGridOtpRechecksImplicitClockAfterStateAccess(): void
+    {
+        $secret = 'ABCDEFGH';
+        $challenge = new GridOTP(CacheLayerState::memory(), $secret)->issue('factor');
+        $response = GridOTP::respond($challenge, $secret);
+        $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
+        $cache->expects($this->once())->method('get')->willReturnCallback(static function () use ($challenge): array {
+            $expiresAt = time() + 1;
+            sleep(1);
+
+            return [
+                'v' => 1,
+                'digest' => hash('sha256', $challenge->canonicalPayload()),
+                'remainingAttempts' => 3,
+                'expiresAt' => $expiresAt,
+                'consumed' => false,
+            ];
+        });
+        $cache->expects($this->once())->method('delete')->willReturn(true);
+        $cache->expects($this->never())->method('set');
+
+        expect(new GridOTP($cache, $secret)->verifyWithResult('factor', $challenge, $response)->reason)
+            ->toBe(VerificationReason::Mismatch);
     }
 }

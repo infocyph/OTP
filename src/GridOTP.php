@@ -180,8 +180,7 @@ final readonly class GridOTP
         if (strlen($response) !== count($challenge->positions) || !ctype_digit($response)) {
             return VerificationResult::malformed();
         }
-        $now ??= time();
-        if ($now < 0) {
+        if ($now !== null && $now < 0) {
             throw new InvalidArgumentException('GridOTP verification timestamp must be non-negative.');
         }
 
@@ -190,7 +189,7 @@ final readonly class GridOTP
             self::stateKey($factorId, $challenge->id),
             self::lockKey($factorId, $challenge->id),
             'GridOTP challenge',
-            fn(mixed $stored): array => $this->verifyState($stored, $challenge, $response, $now),
+            fn(mixed $stored): array => $this->verifyState($stored, $challenge, $response, $now ?? time()),
             $runwire,
         );
     }

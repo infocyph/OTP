@@ -152,6 +152,10 @@ fail before a response can be accepted.
 Attempts, expiry, and replay
 ----------------------------
 
+With no explicit verification timestamp, the clock is sampled after each
+state read, including atomic retries. An explicit timestamp retains its
+caller-defined semantics.
+
 Malformed responses do not consume an attempt. A wrong well-formed response
 decrements attempts without extending expiration. Once the last allowed attempt
 is consumed, the state is deleted and the challenge cannot be reused.

@@ -361,6 +361,41 @@ final class PasskeyTest extends TestCase
     }
 
     /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
+    #[TestDox('Passkey checks implicit ceremony expiry after delayed state access')]
+    public function testPasskeyRechecksImplicitClockAfterStateAccess(): void
+    {
+        $ceremonyId = rtrim(strtr(base64_encode(str_repeat('a', 16)), '+/', '-_'), '=');
+        foreach ([PasskeyCeremony::TYPE_REGISTRATION, PasskeyCeremony::TYPE_AUTHENTICATION] as $type) {
+            $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
+            $cache->expects($this->once())->method('get')->willReturnCallback(static function () use ($type): array {
+                $expiresAt = time() + 1;
+                sleep(1);
+
+                return [
+                    'v' => 1,
+                    'type' => $type,
+                    'optionsJson' => '{}',
+                    'userHandle' => 'user-handle',
+                    'expiresAt' => $expiresAt,
+                    'consumed' => false,
+                ];
+            });
+            $cache->expects($this->once())->method('delete')->willReturn(true);
+            $cache->expects($this->never())->method('set');
+
+            $service = new Passkey($cache, 'example.com', ['https://example.com']);
+            $result = $type === PasskeyCeremony::TYPE_REGISTRATION
+                ? $service->finishRegistration('binding', $ceremonyId, '{}')
+                : $service->finishAuthentication('binding', $ceremonyId, '{}', '{}');
+            expect($result->reason)->toBe(VerificationReason::Mismatch);
+        }
+    }
+
+    /**
      * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
      * @throws \LogicException
      */

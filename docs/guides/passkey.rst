@@ -163,6 +163,8 @@ back from the browser:
 ``credentialRecordJson`` is a serialized webauthn-lib ``CredentialRecord`` and
 is durable application authentication data. Store it in an authoritative
 database. CacheLayer stores only the expiring ceremony.
+Without an explicit verification timestamp, ceremony expiry is checked against
+the clock after each state read, including atomic retries.
 
 Complete authentication flow
 ----------------------------

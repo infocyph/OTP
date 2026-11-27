@@ -235,8 +235,7 @@ final readonly class Passkey
         self::assertCeremonyId($ceremonyId);
         self::assertCredentialJsonLength($credentialRecordJson);
         self::assertCredentialJsonLength($credentialJson);
-        $now ??= time();
-        if ($now < 0) {
+        if ($now !== null && $now < 0) {
             throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
         }
 
@@ -249,7 +248,7 @@ final readonly class Passkey
                 $stored,
                 $credentialRecordJson,
                 $credentialJson,
-                $now,
+                $now ?? time(),
             ),
             $runwire,
         );
@@ -272,8 +271,7 @@ final readonly class Passkey
         self::assertBinding($binding);
         self::assertCeremonyId($ceremonyId);
         self::assertCredentialJsonLength($credentialJson);
-        $now ??= time();
-        if ($now < 0) {
+        if ($now !== null && $now < 0) {
             throw new InvalidArgumentException('Passkey verification timestamp must be non-negative.');
         }
 
@@ -282,7 +280,7 @@ final readonly class Passkey
             self::stateKey($binding, $ceremonyId),
             self::lockKey($binding, $ceremonyId),
             'passkey ceremony',
-            fn(mixed $stored): array => $this->finishRegistrationState($stored, $credentialJson, $now),
+            fn(mixed $stored): array => $this->finishRegistrationState($stored, $credentialJson, $now ?? time()),
             $runwire,
         );
     }
