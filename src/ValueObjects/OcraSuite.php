@@ -24,7 +24,7 @@ final readonly class OcraSuite
 
     public static function parse(string $suite): self
     {
-        if (preg_match(self::PATTERN, $suite, $matches, PREG_UNMATCHED_AS_NULL) !== 1) {
+        if (preg_match(self::PATTERN, $suite, $matches, PREG_UNMATCHED_AS_NULL) !== 1 || !isset($matches[4])) {
             throw new InvalidArgumentException('Invalid OCRA suite.');
         }
 

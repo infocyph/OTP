@@ -28,7 +28,11 @@ final class CacheLayerState
         return Cache::sqlite('otp-tests', $path, self::options());
     }
 
-    /** @return AuthenticationStateCacheInterface&Stub */
+    /**
+     * @template T of AuthenticationStateCacheInterface&Stub
+     * @param T $cache
+     * @return T
+     */
     public static function configureMock(
         AuthenticationStateCacheInterface&Stub $cache,
         ?LockProviderInterface $locks = null,

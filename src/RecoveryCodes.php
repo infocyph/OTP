@@ -92,7 +92,7 @@ final readonly class RecoveryCodes
         }
 
         $characters = self::characterSet($characterSet);
-        if ($length * log(count($characters), 2) < self::MIN_ENTROPY_BITS) {
+        if ((float) $length * log(count($characters), 2) < self::MIN_ENTROPY_BITS) {
             throw new InvalidArgumentException('Recovery code configuration must provide at least 40 bits of entropy.');
         }
         if (!self::canGenerateUniqueCodes($count, $length, count($characters))) {
@@ -209,7 +209,7 @@ final readonly class RecoveryCodes
     }
 
     /**
-     * @param array{total:mixed,remaining:mixed,lastUsedAt:mixed} $state
+     * @param array<string, mixed> $state
      * @return array{total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
      */
     private static function requireMetadataState(array $state): array

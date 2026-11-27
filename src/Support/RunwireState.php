@@ -35,7 +35,7 @@ final class RunwireState
             return null;
         }
 
-        $deadline = (int) hrtime(true) + (int) ceil($waitSeconds * 1_000_000_000);
+        $deadline = (int) hrtime(true) + (int) ceil($waitSeconds * 1_000_000_000.0);
         do {
             self::checkpoint($runwire);
             $handle = $locks->acquire($key, 0.0, $leaseSeconds);

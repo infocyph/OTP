@@ -14,6 +14,7 @@ final class InMemoryRecoveryCodeStore implements RecoveryCodeStoreInterface
      */
     private array $storage = [];
 
+    #[\Override]
     public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
     {
         if (!isset($this->storage[$binding]['codes'][$hashedCode])) {
@@ -26,6 +27,7 @@ final class InMemoryRecoveryCodeStore implements RecoveryCodeStoreInterface
         return ['consumed' => true] + $this->metadata($binding);
     }
 
+    #[\Override]
     public function metadata(string $binding): array
     {
         if (!isset($this->storage[$binding])) {
@@ -44,6 +46,7 @@ final class InMemoryRecoveryCodeStore implements RecoveryCodeStoreInterface
      * @param list<string> $hashedCodes Unique keyed code digests.
      * @param DateTimeImmutable $issuedAt Batch issuance timestamp.
      */
+    #[\Override]
     public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
     {
         $codes = [];

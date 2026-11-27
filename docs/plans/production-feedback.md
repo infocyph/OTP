@@ -52,3 +52,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 
 - Run 45955159443 (PHP 8.4 prefer-lowest and PHP 8.6 prefer-stable): 201 tests passed including all three PDO services; one new Passkey negative-signature test failed because upstream COSE DER parsing threw InvalidArgumentException. PHPCS reported an unused test callback parameter.
 - Map the verifier's malformed-input exception to a non-consuming malformed result; keep stored options decoding outside the catch. Added separate DER-malformed and well-formed wrong-signature assertions, followed by successful authentication/replay; removed the unused callback parameter. New head verification pending. PDO lock-provider root cause remains separate from native-state path verification.
+
+### Batch E1 — explicit type contracts
+
+- Fixed real mock/stub subtype loss by preserving the input generic type; corrected the SQLite fixture's split generic annotations and interface overrides. Replaced truthiness of environment values with explicit checks (preserving a valid password of '0').
+- Clarified recovery-state trust-boundary shape, numeric operands, provisioning parsing and OCRA mandatory match; unified label return documentation. Added explicit interface overrides. TYPE/COMPAT/FLOW evidence pending hosted analysis; no exclusions or suppressions.
