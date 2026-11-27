@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\MobileOTP;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 use Infocyph\OTP\VerificationReason;
+use InvalidArgumentException;
 
 test('MobileOTP matches the legacy counter secret pin construction', function () {
     $mobile = new MobileOTP('7ac61d4736f51a2b', '5555');

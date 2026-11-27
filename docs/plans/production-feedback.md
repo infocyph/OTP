@@ -66,3 +66,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 
 - Run [45955469231](https://github.com/infocyph/OTP/actions/runs/45955469231): PHPStan 137 findings (previously 179); Psalm 987 (previously 1000). Pest passed on PHP 8.5 prefer-stable; Pint flagged one missing blank line in Passkey, corrected here. Earlier native PDO regression tests passed on all three database engines. Final certification remains open.
 - OTP-002 historical cluster jobs 139376823288, 139376823683, 139376826426 and 139376822095 terminated with Docker container-not-running errors (CacheLayer 4.0.3); these do not establish an OTP defect. Real cluster requalification remains outstanding.
+
+### Batch E4 — test namespace contracts
+
+- Run [45955741826](https://github.com/infocyph/OTP/actions/runs/45955741826), PHP 8.5: PHPStan 138, Psalm 946, including 277 internal class/method findings caused by root-namespace tests accessing library-owned internals. Moved the 16 affected test files into `Infocyph\\OTP\\Tests` with explicit global class imports. No analyzer exemptions or production API changes. Hosted verification pending.

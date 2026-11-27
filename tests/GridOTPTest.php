@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\GridOTP;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\ValueObjects\GridChallenge;
 use Infocyph\OTP\VerificationReason;
+use InvalidArgumentException;
+use RuntimeException;
 
 test('GridOTP generates a dynamic balanced grid and verifies its response once', function () {
     $cache = CacheLayerState::memory();

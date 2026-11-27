@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\OCRA;
-use Infocyph\OTP\TOTP;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\Tests\Support\RedisState;
+use Infocyph\OTP\TOTP;
 
 beforeEach(function () {
     RedisState::requireAvailable();

@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\VerificationReason;
+use InvalidArgumentException;
 
 const RFC_4226_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 

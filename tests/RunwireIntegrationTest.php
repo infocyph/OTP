@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;

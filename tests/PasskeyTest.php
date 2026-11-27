@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
@@ -9,6 +11,8 @@ use Infocyph\OTP\Passkey;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\ValueObjects\PasskeyCeremony;
 use Infocyph\OTP\VerificationReason;
+use InvalidArgumentException;
+use RuntimeException;
 use Symfony\Component\Uid\Uuid;
 use Webauthn\AttestationStatement\AttestationStatementSupportManager;
 use Webauthn\CredentialRecord;

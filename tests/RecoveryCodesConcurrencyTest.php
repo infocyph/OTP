@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\Tests\Support\SqliteAtomicStore;

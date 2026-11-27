@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
-use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\CacheLayer\Cache\Adapter\ArrayCacheAdapter;
+use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
@@ -11,6 +13,8 @@ use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
+use InvalidArgumentException;
+use RuntimeException;
 
 test('generic OTP is atomic, single-use, and decrements failed attempts', function () {
     $cache = CacheLayerState::memory();
