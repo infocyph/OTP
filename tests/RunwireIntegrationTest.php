@@ -271,12 +271,15 @@ final class RunwireIntegrationTest extends TestCase
         $cache->method('isAuthoritative')->willReturn(true);
         $cache->method('authenticationStateLock')->willReturn($locks);
 
-        expect(CacheLock::synchronized(
+        CacheLock::synchronized(
             $cache,
             'deadline-lock',
-            static fn(LockProviderInterface $locks, LockHandle $handle): bool => true,
+            static function (LockProviderInterface $acquiredLocks, LockHandle $acquiredHandle) use ($locks, $handle): void {
+                expect($acquiredLocks)->toBe($locks)
+                    ->and($acquiredHandle)->toBe($handle);
+            },
             $execution,
-        ))->toBeTrue();
+        );
     }
 
     /**
