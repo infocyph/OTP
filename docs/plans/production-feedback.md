@@ -109,3 +109,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E13 — remaining test contracts
 
 - Use a mutable typed fixture for the nested GenericOtp CAS test (retains the same interleaving and assertions); explicitly validate stored state before inspecting offsets. Narrow PHPUnit dataset shapes and declare missing lock overrides. Split concurrency fixture into worker creation, barrier and collection phases, preserving process and timing behavior. Hosted verification pending.
+
+### Batch E14 — benchmark process and measurement contracts
+
+- Split repeat aggregation, worker launch/barrier/sample/join and independent result decoding into bounded helpers; validate CLI and process identifiers and reject malformed measurement records instead of silently converting them. Retained four workers, original timings, workloads, resource sampling and acceptance limits. Added lock overrides. Hosted performance and QA verification pending.

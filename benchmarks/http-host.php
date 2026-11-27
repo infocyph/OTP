@@ -16,6 +16,13 @@ use Infocyph\Runwire\Server;
 use Infocyph\Runwire\Supervisor\WorkerContext;
 
 $options = getopt('', ['autoload:', 'address:', 'ready-dir:']);
+if ($options === false
+    || !is_string($options['autoload'] ?? null)
+    || !is_file($options['autoload'])
+    || !is_string($options['address'] ?? null)
+    || !is_string($options['ready-dir'] ?? null)) {
+    throw new RuntimeException('HTTP benchmark requires valid autoload, address and ready directory arguments.');
+}
 require $options['autoload'];
 $readyDirectory = $options['ready-dir'];
 $cacheOptions = new CacheOptions(
@@ -40,7 +47,11 @@ $server = Server::http($options['address'], static function (HttpRequest $reques
         $ocra = new OCRA('OCRA-1:HOTP-SHA256-6:C-QN08', str_repeat('o', 32));
         $sequence = 0;
         $uri = $ocra->getProvisioningUri('fixture', 'OTP');
-        file_put_contents($readyDirectory . '/ready-' . getmypid(), 'ready');
+        $pid = getmypid();
+        if ($pid === false) {
+            throw new RuntimeException('Unable to identify HTTP worker.');
+        }
+        file_put_contents($readyDirectory . '/ready-' . $pid, 'ready');
 
         return static function (HttpRequest $request, ResponseWriterInterface $writer) use (
             $cache,
@@ -48,9 +59,10 @@ $server = Server::http($options['address'], static function (HttpRequest $reques
             $ocra,
             $uri,
             &$sequence,
+            $pid,
         ): void {
             $execution = new RunwireExecutionContext($request->context->runtime(), $request->context);
-            $binding = 'fixture-' . getmypid() . '-' . ($sequence % 64);
+            $binding = 'fixture-' . $pid . '-' . ($sequence % 64);
             $sequence++;
             $code = $otp->generate($binding, $execution);
             $accepted = $otp->verify($binding, $code, $execution);
@@ -65,7 +77,7 @@ $server = Server::http($options['address'], static function (HttpRequest $reques
                 null,
                 null,
                 $cache,
-                'http-ocra-' . getmypid(),
+                'http-ocra-' . $pid,
                 null,
                 $execution,
             )->matched;

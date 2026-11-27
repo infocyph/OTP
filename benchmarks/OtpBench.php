@@ -168,6 +168,7 @@ final class OtpBench
         $this->contendedLocks = new class implements LockProviderInterface {
             private bool $miss = true;
 
+            #[\Override]
             public function acquire(string $key, float $waitSeconds, float $leaseSeconds = 30.0): ?LockHandle
             {
                 if ($key !== 'benchmark-contended-lock' || $waitSeconds !== 0.0) {
@@ -182,11 +183,13 @@ final class OtpBench
                 return new LockHandle($key, 'benchmark-owner', leaseSeconds: $leaseSeconds);
             }
 
+            #[\Override]
             public function refresh(?LockHandle $handle, float $leaseSeconds): bool
             {
                 return $handle !== null && $leaseSeconds > 0.0;
             }
 
+            #[\Override]
             public function release(?LockHandle $handle): void
             {
                 if ($handle !== null) {
