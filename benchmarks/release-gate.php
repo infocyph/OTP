@@ -787,11 +787,12 @@ function readConcurrentResult(string $path): array
     }
     $result = json_decode($payload, true, 32, JSON_THROW_ON_ERROR);
     if (!is_array($result)
-        || !is_int($result['attempted'] ?? null)
-        || !is_int($result['successful'] ?? null)
-        || !is_int($result['failed'] ?? null)
-        || !is_array($result['latencies'] ?? null)
-        || !is_numeric($result['cpu_seconds'] ?? null)) {
+        || !isset($result['attempted'], $result['successful'], $result['failed'], $result['latencies'], $result['cpu_seconds'])
+        || !is_int($result['attempted'])
+        || !is_int($result['successful'])
+        || !is_int($result['failed'])
+        || !is_array($result['latencies'])
+        || !is_numeric($result['cpu_seconds'])) {
         throw new RuntimeException('Invalid concurrent verification measurement.');
     }
     $latencies = [];
@@ -1198,9 +1199,10 @@ PHP;
     }
     $measurement = json_decode($payload, true, 32, JSON_THROW_ON_ERROR);
     if (!is_array($measurement)
-        || !is_bool($measurement['successful'] ?? null)
-        || !is_numeric($measurement['cpu_seconds'] ?? null)
-        || !is_numeric($measurement['memory_peak_mb'] ?? null)
+        || !isset($measurement['successful'], $measurement['cpu_seconds'], $measurement['memory_peak_mb'])
+        || !is_bool($measurement['successful'])
+        || !is_numeric($measurement['cpu_seconds'])
+        || !is_numeric($measurement['memory_peak_mb'])
     ) {
         throw new RuntimeException('Cold-start child returned invalid resource measurements.');
     }

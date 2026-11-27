@@ -131,6 +131,7 @@ final class AtomicTerminalStateTest extends TestCase
                     return false;
                 }
 
+                self::assertIsArray($value);
                 $state = $value;
 
                 return true;
@@ -143,6 +144,7 @@ final class AtomicTerminalStateTest extends TestCase
                     return false;
                 }
 
+                self::assertIsArray($replacement);
                 $state = $replacement;
 
                 return true;

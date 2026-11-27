@@ -61,8 +61,8 @@ selected, an atomic backend exception propagates and OTP does not retry the same
 mutation through locks. The sole transient exception is a native PDO insert
 rejected with SQLSTATE ``40001`` and MySQL/MariaDB error ``1213`` (the database
 rolled back the entire transaction). OTP re-reads authoritative state within the
-existing eight-attempt atomic budget; unknown commit outcomes always propagate. This prevents re-executing a mutation after an unknown
-commit outcome.
+existing eight-attempt atomic budget. Unknown commit outcomes always propagate,
+preventing re-execution of a mutation whose commit status is not known.
 
 Lock acquisition is bounded and any acquisition, ownership-refresh, read,
 write, or delete failure aborts the authentication operation with an exception.

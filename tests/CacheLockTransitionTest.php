@@ -53,6 +53,8 @@ final class CacheLockTransitionTest extends TestCase
             ) use (&$attempt, &$expectedStates, &$replacementStates): bool {
                 expect($key)->toBe('state-key')
                     ->and($ttl)->toBe(30);
+                self::assertIsArray($expected);
+                self::assertIsArray($replacement);
                 $expectedStates[] = $expected;
                 $replacementStates[] = $replacement;
                 $attempt++;
@@ -60,28 +62,28 @@ final class CacheLockTransitionTest extends TestCase
                 return $attempt === 2;
             });
 
-        $result = CacheLock::transition(
+        self::assertSame(1, CacheLock::transition(
             $cache,
             'state-key',
             'unused-lock-key',
             'test',
             static function (mixed $stored): array {
-                if (!is_array($stored) || !is_int($stored['remaining'] ?? null)) {
+                if (!is_array($stored) || !isset($stored['remaining']) || !is_int($stored['remaining'])) {
                     throw new RuntimeException('Invalid test state.');
                 }
                 $next = $stored;
-                $next['remaining']--;
+                $remaining = $stored['remaining'] - 1;
+                $next['remaining'] = $remaining;
 
                 return [
-                    'result' => $next['remaining'],
+                    'result' => $remaining,
                     'replacement' => $next,
                     'ttl' => 30,
                 ];
             },
-        );
+        ));
 
-        expect($result)->toBe(1)
-            ->and($expectedStates)->toBe([$initial, $winner])
+        expect($expectedStates)->toBe([$initial, $winner])
             ->and($replacementStates)->toBe([
                 ['v' => 1, 'remaining' => 2],
                 ['v' => 1, 'remaining' => 1],
@@ -111,11 +113,12 @@ final class CacheLockTransitionTest extends TestCase
             'unused-lock-key',
             'test',
             static function (mixed $stored): array {
-                if (!is_array($stored) || !is_int($stored['remaining'] ?? null)) {
+                if (!is_array($stored) || !isset($stored['remaining']) || !is_int($stored['remaining'])) {
                     throw new RuntimeException('Invalid test state.');
                 }
                 $next = $stored;
-                $next['remaining']--;
+                $remaining = $stored['remaining'] - 1;
+                $next['remaining'] = $remaining;
 
                 return [
                     'result' => false,

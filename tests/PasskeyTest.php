@@ -455,7 +455,7 @@ final class PasskeyTest extends TestCase
                     return false;
                 }
 
-                $state = $value;
+                $state = passkeyFixtureArray($value);
 
                 return true;
             },
@@ -467,7 +467,7 @@ final class PasskeyTest extends TestCase
                     return false;
                 }
 
-                $state = $replacement;
+                $state = passkeyFixtureArray($replacement);
 
                 return true;
             },

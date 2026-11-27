@@ -41,8 +41,8 @@ test('benchmark results retain measured memory and CPU for acceptance budgets', 
     if ($workload !== 'sustained' && !$process->isSuccessful()) {
         throw new \Symfony\Component\Process\Exception\ProcessFailedException($process);
     }
-    $document = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
-    $workloadResult = benchmarkResultArray(benchmarkResultArray(benchmarkResultArray($document)['workloads'] ?? null)[0] ?? null);
+    $document = benchmarkResultArray(json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR));
+    $workloadResult = benchmarkResultArray(benchmarkResultArray($document['workloads'] ?? null)[0] ?? null);
     $result = benchmarkResultArray($workloadResult['result'] ?? null);
     $memory = benchmarkResultArray($result['memory'] ?? null);
     $cpu = benchmarkResultArray($result['cpu'] ?? null);
