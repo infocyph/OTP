@@ -14,6 +14,10 @@ final class AtomicState
 {
     private const int MAX_ATOMIC_ATTEMPTS = 8;
 
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public static function advance(
         AuthenticationStateCacheInterface $cache,
         AtomicCacheInterface $atomic,
@@ -49,6 +53,10 @@ final class AtomicState
         throw new RuntimeException('Unable to advance ' . $stateName . ' state after atomic contention.');
     }
 
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public static function claim(
         AuthenticationStateCacheInterface $cache,
         AtomicCacheInterface $atomic,
@@ -81,6 +89,10 @@ final class AtomicState
         throw new RuntimeException($failure . ' after atomic contention.');
     }
 
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public static function consumeReserved(
         AuthenticationStateCacheInterface $cache,
         AtomicCacheInterface $atomic,
@@ -117,6 +129,8 @@ final class AtomicState
      *     failure?:string
      * } $transition
      * @return T
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public static function transition(
         AuthenticationStateCacheInterface $cache,

@@ -32,6 +32,9 @@ final readonly class TOTP
 
     private string $secret;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         string $secret,
@@ -63,6 +66,9 @@ final readonly class TOTP
         ];
     }
 
+    /**
+     * @throws \Exception
+     */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
@@ -150,6 +156,9 @@ final readonly class TOTP
         return SvgQrRenderer::render($this->getProvisioningUri($label, $issuer, $additionalParameters), $imageSize);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getRemainingSeconds(?int $timestamp = null): int
     {
         $timestamp ??= time();
@@ -160,6 +169,9 @@ final readonly class TOTP
         return $this->period - ($timestamp % $this->period);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getTimeStepFromTimestamp(int $timestamp): int
     {
         if ($timestamp < 0) {
@@ -250,6 +262,9 @@ final readonly class TOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,

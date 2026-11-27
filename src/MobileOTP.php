@@ -60,6 +60,9 @@ final readonly class MobileOTP
         return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getTimeStepFromTimestamp(int $timestamp, int $offsetSteps = 0): int
     {
         self::assertOffset($offsetSteps);
@@ -127,6 +130,9 @@ final readonly class MobileOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -134,6 +140,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertOffset(int $offsetSteps): void
     {
         if ($offsetSteps < -self::MAX_OFFSET_STEPS || $offsetSteps > self::MAX_OFFSET_STEPS) {
@@ -141,6 +150,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertPin(string $pin): void
     {
         if (strlen($pin) !== 4 || !ctype_digit($pin)) {
@@ -148,6 +160,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -163,6 +178,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertSecret(string $secret): void
     {
         if (strlen($secret) !== 16 || preg_match('/\A[0-9A-Fa-f]{16}\z/D', $secret) !== 1) {
@@ -170,6 +188,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertWindow(VerificationWindow $window): void
     {
         if ($window->past > self::MAX_WINDOW_STEPS || $window->future > self::MAX_WINDOW_STEPS) {

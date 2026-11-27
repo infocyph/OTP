@@ -10,6 +10,9 @@ final readonly class VerificationWindow
 {
     private const int MAX_TOTAL_WINDOWS = 100;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         public int $past = 0,
         public int $future = 0,

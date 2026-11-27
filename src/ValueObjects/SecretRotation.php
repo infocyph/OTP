@@ -10,6 +10,9 @@ use InvalidArgumentException;
 
 final readonly class SecretRotation
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         public string $currentSecret,

@@ -23,6 +23,9 @@ final readonly class GridOTP
 
     private const int STATE_VERSION = 1;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
         #[\SensitiveParameter]
@@ -61,6 +64,9 @@ final readonly class GridOTP
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function generateSecret(int $length = 12): string
     {
         if ($length < 8 || $length > 32) {
@@ -84,6 +90,9 @@ final readonly class GridOTP
         return self::uniqueSymbolCount($secret) >= $challengeSize;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function respond(
         GridChallenge $challenge,
         #[\SensitiveParameter]
@@ -103,6 +112,9 @@ final readonly class GridOTP
         return $response;
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public function issue(
         string $factorId,
         ?int $now = null,
@@ -138,6 +150,9 @@ final readonly class GridOTP
         return $this->verifyWithResult($factorId, $challenge, $response, $now, $runwire)->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verifyWithResult(
         string $factorId,
         GridChallenge $challenge,
@@ -165,6 +180,9 @@ final readonly class GridOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertChallengeSize(int $challengeSize, int $secretLength): void
     {
         if ($challengeSize < 6 || $challengeSize > 10 || $challengeSize > $secretLength) {
@@ -174,6 +192,9 @@ final readonly class GridOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -181,6 +202,9 @@ final readonly class GridOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertSecret(string $secret): void
     {
         $length = strlen($secret);
@@ -274,6 +298,7 @@ final readonly class GridOTP
      *     ttl?:int,
      *     failure?:string
      * }
+     * @throws \InvalidArgumentException
      */
     private function issueState(mixed $stored, string $id, ?int $now): array
     {
@@ -308,7 +333,10 @@ final readonly class GridOTP
         ];
     }
 
-    /** @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool} */
+    /**
+     * @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int,consumed:bool}
+     * @throws \RuntimeException
+     */
     private function requireState(mixed $state): array
     {
         if (!is_array($state) || count($state) !== 5) {

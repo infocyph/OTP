@@ -45,6 +45,7 @@ final class InMemoryRecoveryCodeStore implements RecoveryCodeStoreInterface
      * @param string $binding Subject binding identifier.
      * @param list<string> $hashedCodes Unique keyed code digests.
      * @param DateTimeImmutable $issuedAt Batch issuance timestamp.
+     * @throws \InvalidArgumentException
      */
     #[\Override]
     public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array

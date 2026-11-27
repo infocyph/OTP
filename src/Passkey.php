@@ -57,7 +57,10 @@ final readonly class Passkey
     /** @var positive-int Validated ceremony TTL converted once during construction. */
     private int $timeoutMilliseconds;
 
-    /** @param list<string> $allowedOrigins Exact WebAuthn origins, including scheme and optional port. */
+    /**
+     * @param list<string> $allowedOrigins Exact WebAuthn origins, including scheme and optional port.
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
         private string $rpId,
@@ -175,6 +178,9 @@ final readonly class Passkey
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function extractCredentialId(#[\SensitiveParameter] string $credentialJson): string
     {
         self::assertCredentialJsonLength($credentialJson);
@@ -186,6 +192,9 @@ final readonly class Passkey
         return self::encode($credential->rawId);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function finishAuthentication(
         string $binding,
         string $ceremonyId,
@@ -220,6 +229,9 @@ final readonly class Passkey
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function finishRegistration(
         string $binding,
         string $ceremonyId,
@@ -251,6 +263,9 @@ final readonly class Passkey
         self::assertByteLength($binding, self::MAX_BINDING_LENGTH, 'Passkey bindings must contain between 1 and 190 bytes.');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertByteLength(string $value, int $maximum, string $message): void
     {
         if ($value === '' || strlen($value) > $maximum) {
@@ -258,6 +273,9 @@ final readonly class Passkey
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertCeremonyId(string $ceremonyId): void
     {
         if (strlen(Base64Url::decode($ceremonyId, 'Passkey ceremony ID')) !== 16) {
@@ -270,6 +288,9 @@ final readonly class Passkey
         self::assertByteLength($json, self::MAX_CREDENTIAL_JSON_LENGTH, 'WebAuthn credential JSON must contain between 1 and 131072 bytes.');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertOrigin(string $origin): void
     {
         self::assertByteLength($origin, 2048, 'Passkey origins must contain between 1 and 2048 bytes.');
@@ -298,7 +319,10 @@ final readonly class Passkey
         }
     }
 
-    /** @param array<array-key, mixed> $origins */
+    /**
+     * @param array<array-key, mixed> $origins
+     * @throws \InvalidArgumentException
+     */
     private static function assertOrigins(array $origins): void
     {
         if (!array_is_list($origins) || $origins === [] || count($origins) > 16) {
@@ -315,6 +339,9 @@ final readonly class Passkey
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertRelyingParty(string $rpId): void
     {
         if (
@@ -332,6 +359,9 @@ final readonly class Passkey
         self::assertByteLength($userHandle, 64, 'Passkey user handles must contain between 1 and 64 bytes.');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertUserName(string $value, string $name): void
     {
         $message = $name . ' must be valid UTF-8 between 1 and 255 bytes.';
@@ -384,6 +414,9 @@ final readonly class Passkey
         return hash('sha256', "infocyph:otp:passkey:lock:v1\0" . $binding . "\0" . $ceremonyId);
     }
 
+    /**
+     * @throws \LogicException
+     */
     private static function requireDependency(): void
     {
         if (!self::isAvailable()) {
@@ -401,6 +434,7 @@ final readonly class Passkey
     /**
      * @param array<array-key, mixed> $recordsJson
      * @return list<\Webauthn\PublicKeyCredentialDescriptor>
+     * @throws \InvalidArgumentException
      */
     private function credentialDescriptors(array $recordsJson): array
     {
@@ -419,6 +453,9 @@ final readonly class Passkey
         return $descriptors;
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     private function deserializeCreationOptions(string $json): PublicKeyCredentialCreationOptions
     {
         try {
@@ -449,6 +486,11 @@ final readonly class Passkey
         return $credential instanceof PublicKeyCredential ? $credential : null;
     }
 
+    /**
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     private function deserializeMixed(string $json, string $type): mixed
     {
         return $this->serializer->deserialize($json, $type, 'json');
@@ -470,6 +512,7 @@ final readonly class Passkey
      * @template T of object
      * @param class-string<T> $type
      * @return T
+     * @throws \RuntimeException
      */
     private function deserializeStored(string $json, string $type, string $message): object
     {
@@ -557,6 +600,7 @@ final readonly class Passkey
      *     delete?:bool,
      *     failure?:string
      * }
+     * @throws \RuntimeException
      */
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {
@@ -598,6 +642,9 @@ final readonly class Passkey
         ];
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     private function issueCeremony(
         string $binding,
         string $type,
@@ -638,6 +685,7 @@ final readonly class Passkey
      *     ttl?:int,
      *     failure?:string
      * }
+     * @throws \InvalidArgumentException
      */
     private function issueState(
         mixed $stored,
@@ -710,7 +758,10 @@ final readonly class Passkey
         return ['state' => $state];
     }
 
-    /** @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool} */
+    /**
+     * @return array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}
+     * @throws \RuntimeException
+     */
     private function requireState(mixed $state): array
     {
         if (!is_array($state) || count($state) !== 6) {
@@ -748,6 +799,12 @@ final readonly class Passkey
         ];
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     private function serializeObject(object $value): string
     {
         $json = $this->serializer->serialize($value, 'json');

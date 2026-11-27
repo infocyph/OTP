@@ -31,6 +31,9 @@ final class OcraMessage
         return $message;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function hexToBytes(string $hex): string
     {
         if (strlen($hex) % 2 !== 0) {

@@ -25,6 +25,9 @@ final class LabelHelper
         return $formatted;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function normalizeAccountLabel(string $label): string
     {
         $label = trim($label);
@@ -36,6 +39,9 @@ final class LabelHelper
         return $label;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function normalizeIssuer(string $issuer): string
     {
         $issuer = trim($issuer);
@@ -51,6 +57,7 @@ final class LabelHelper
      * @param string $label Provisioning label.
      * @param ?string $issuer Optional issuer override.
      * @return array{issuer:?string,label:string} Parsed issuer/label parts.
+     * @throws \InvalidArgumentException
      */
     public static function parseLabel(string $label, ?string $issuer = null): array
     {
@@ -77,6 +84,9 @@ final class LabelHelper
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertText(string $value, string $field): void
     {
         if (
@@ -93,6 +103,7 @@ final class LabelHelper
      * @param string $decoded Decoded provisioning label.
      * @param ?string $queryIssuer Normalized query-string issuer.
      * @return array{issuer:?string,label:string} Parsed issuer/label parts.
+     * @throws \InvalidArgumentException
      */
     private static function parseIssuerLabel(string $decoded, ?string $queryIssuer): array
     {

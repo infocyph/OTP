@@ -12,6 +12,11 @@ use LogicException;
 /** @internal */
 final class RunwireState
 {
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Throwable
+     */
     public static function acquireLock(
         LockProviderInterface $locks,
         string $key,
@@ -54,6 +59,9 @@ final class RunwireState
         } while (true);
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {
         if ($runwire === null) {
@@ -80,6 +88,9 @@ final class RunwireState
         return max(0.0, $remaining);
     }
 
+    /**
+     * @throws \LogicException
+     */
     private static function validate(RunwireExecutionContext $runwire): void
     {
         $request = $runwire->request;

@@ -42,6 +42,9 @@ final class CacheLock
         return self::advanceWithLock($cache, $stateKey, $lockKey, $value, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function assertLockSafe(AuthenticationStateCacheInterface $cache): void
     {
         self::assertSafe($cache);
@@ -50,6 +53,9 @@ final class CacheLock
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function assertSafe(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         self::assertAuthenticationStateSafe($cache);
@@ -99,6 +105,9 @@ final class CacheLock
         return self::consumeOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function consumeReserved(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -119,6 +128,9 @@ final class CacheLock
         return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public static function ensureOwned(LockProviderInterface $locks, LockHandle $handle): void
     {
         if (!$locks->refresh($handle, self::LEASE_SECONDS)) {
@@ -126,6 +138,9 @@ final class CacheLock
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function reserveOnce(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -264,6 +279,9 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertAuthenticationStateSafe(AuthenticationStateCacheInterface $cache): void
     {
         if ($cache->isFailOpen()) {
@@ -368,6 +386,10 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private static function storeLocked(
         AuthenticationStateCacheInterface $cache,
         LockProviderInterface $locks,
@@ -389,6 +411,8 @@ final class CacheLock
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     private static function synchronizedKnownSafe(
         AuthenticationStateCacheInterface $cache,

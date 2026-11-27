@@ -57,3 +57,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 
 - Fixed real mock/stub subtype loss by preserving the input generic type; corrected the SQLite fixture's split generic annotations and interface overrides. Replaced truthiness of environment values with explicit checks (preserving a valid password of '0').
 - Clarified recovery-state trust-boundary shape, numeric operands, provisioning parsing and OCRA mandatory match; unified label return documentation. Added explicit interface overrides. TYPE/COMPAT/FLOW evidence pending hosted analysis; no exclusions or suppressions.
+
+### Batch E2 — source exception contracts
+
+- Mapped direct missing-throws diagnostics in the PHP 8.5 analysis of da8fa1e (run 45955159443) to their enclosing source methods and added precise PHPDoc declarations across 32 source files. This is a documentation-only pass: no exception catching, analyzer suppression, control-flow change or assertion weakening. Propagated caller contracts and other diagnostic categories still require hosted analysis and follow-up.

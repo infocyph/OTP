@@ -9,6 +9,9 @@ use InvalidArgumentException;
 
 final readonly class PasskeyResult
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function __construct(
         public bool $matched,
         public VerificationReason $reason,

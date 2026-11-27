@@ -33,7 +33,10 @@ final readonly class AotpResponse
         ];
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * @param array<string, mixed> $data
+     * @throws \InvalidArgumentException
+     */
     public static function fromArray(array $data): self
     {
         if (
@@ -58,6 +61,9 @@ final readonly class AotpResponse
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
         if (strlen(Base64Url::decode($value, $name)) !== $bytes) {

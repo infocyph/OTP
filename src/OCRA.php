@@ -30,6 +30,10 @@ final readonly class OCRA
 
     private OcraSuite $suite;
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     public function __construct(string $suite, #[\SensitiveParameter] private string $sharedKey)
     {
         if (strlen($sharedKey) < 16 || strlen($sharedKey) > 1024) {
@@ -55,11 +59,17 @@ final readonly class OCRA
         return new self($suite, SecretUtility::requireStrongBase32($secret));
     }
 
+    /**
+     * @throws \Exception
+     */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function sessionHex(#[\SensitiveParameter] string $hex): string
     {
         if ($hex === '' || !ctype_xdigit($hex)) {
@@ -301,6 +311,9 @@ final readonly class OCRA
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -335,6 +348,9 @@ final readonly class OCRA
         return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'OCRA counter', $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertChallenge(string $challenge, bool $composite = false): void
     {
         $length = $composite ? 128 : $this->suite->challengeLength;
@@ -349,6 +365,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertCounterInput(?int $counter): void
     {
         if ($this->suite->counterEnabled !== ($counter !== null) || ($counter !== null && $counter < 0)) {
@@ -356,6 +375,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertPinInput(?string $pin): void
     {
         if ($this->suite->usesPin() !== ($pin !== null) || ($pin !== null && ($pin === '' || strlen($pin) > 1024))) {
@@ -363,6 +385,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertSessionInput(?string $session): void
     {
         if ($this->suite->usesSession() !== ($session !== null)) {
@@ -373,6 +398,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertTimestampInput(?int $timestamp): void
     {
         if ($this->suite->usesTime() !== ($timestamp !== null) || ($timestamp !== null && $timestamp < 0)) {
@@ -380,6 +408,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertVerificationWindow(
         VerificationWindow $window,
         ?AuthenticationStateCacheInterface $cache,
@@ -409,6 +440,7 @@ final readonly class OCRA
     /**
      * @param string $challenge Validated operation challenge.
      * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
+     * @throws \RuntimeException
      */
     private function calculate(string $challenge, array $operation): string
     {
@@ -440,6 +472,9 @@ final readonly class OCRA
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function composeChallenge(string $first, string $second): string
     {
         $this->assertChallenge($first);

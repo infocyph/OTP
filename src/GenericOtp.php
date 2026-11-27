@@ -22,6 +22,9 @@ final readonly class GenericOtp
 
     private const int STATE_VERSION = 1;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
         #[\SensitiveParameter]
@@ -139,6 +142,9 @@ final readonly class GenericOtp
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertBinding(string $binding): void
     {
         if ($binding === '' || strlen($binding) > self::MAX_BINDING_LENGTH) {
@@ -181,6 +187,7 @@ final readonly class GenericOtp
     /**
      * @param mixed $state Untrusted state loaded from CacheLayer.
      * @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int}
+     * @throws \RuntimeException
      */
     private function requireState(mixed $state): array
     {

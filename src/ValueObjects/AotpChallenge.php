@@ -15,6 +15,9 @@ final readonly class AotpChallenge
 
     private const int MAX_CONTEXT_LENGTH = 4096;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         public string $id,
         public string $nonce,
@@ -45,7 +48,10 @@ final readonly class AotpChallenge
         ];
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * @param array<string, mixed> $data
+     * @throws \InvalidArgumentException
+     */
     public static function fromArray(array $data): self
     {
         if (
@@ -96,6 +102,9 @@ final readonly class AotpChallenge
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertAudience(string $audience): void
     {
         if (
@@ -110,6 +119,9 @@ final readonly class AotpChallenge
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertContext(string $context): void
     {
         if (
@@ -124,6 +136,9 @@ final readonly class AotpChallenge
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
         if (strlen(Base64Url::decode($value, $name)) !== $bytes) {

@@ -23,6 +23,9 @@ final readonly class RecoveryCodes
 
     private const float MIN_ENTROPY_BITS = 40.0;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         private RecoveryCodeStoreInterface $store,
         #[\SensitiveParameter]
@@ -72,6 +75,10 @@ final readonly class RecoveryCodes
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function generate(
         string $binding,
         int $count = 10,
@@ -126,6 +133,9 @@ final readonly class RecoveryCodes
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertBinding(string $binding): void
     {
         if ($binding === '' || strlen($binding) > 190) {
@@ -151,6 +161,7 @@ final readonly class RecoveryCodes
     /**
      * @param string $characterSet Caller-supplied ASCII alphabet.
      * @return non-empty-list<string>
+     * @throws \InvalidArgumentException
      */
     private static function characterSet(string $characterSet): array
     {
@@ -197,6 +208,7 @@ final readonly class RecoveryCodes
     /**
      * @param array{consumed:mixed,total:mixed,remaining:mixed,lastUsedAt:mixed} $state
      * @return array{consumed:bool,total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
+     * @throws \RuntimeException
      */
     private static function requireConsumptionState(array $state): array
     {
@@ -211,6 +223,7 @@ final readonly class RecoveryCodes
     /**
      * @param array<string, mixed> $state
      * @return array{total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
+     * @throws \RuntimeException
      */
     private static function requireMetadataState(array $state): array
     {

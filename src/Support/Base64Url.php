@@ -9,6 +9,9 @@ use InvalidArgumentException;
 /** @internal */
 final class Base64Url
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function decode(string $value, string $name = 'Value'): string
     {
         if (

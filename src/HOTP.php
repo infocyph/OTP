@@ -31,6 +31,9 @@ final readonly class HOTP
 
     private string $secret;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         string $secret,
@@ -57,6 +60,9 @@ final readonly class HOTP
         ];
     }
 
+    /**
+     * @throws \Exception
+     */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
@@ -226,6 +232,9 @@ final readonly class HOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -241,6 +250,9 @@ final readonly class HOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertVerificationConfiguration(
         int $counter,
         int $lookAhead,

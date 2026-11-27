@@ -24,6 +24,7 @@ final class ProvisioningUriBuilder
      * @param $ocraSuite OCRA suite string.
      * @phpstan-param array<string, bool> $include
      * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @throws \InvalidArgumentException
      */
     public static function build(
         string $type,
@@ -129,6 +130,7 @@ final class ProvisioningUriBuilder
     /**
      * @param $additionalParameters Additional query parameters.
      * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @throws \InvalidArgumentException
      */
     private static function assertAdditionalParameters(array $additionalParameters): void
     {
@@ -157,6 +159,9 @@ final class ProvisioningUriBuilder
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertCounter(string $type, ?int $counter): void
     {
         if ($type === 'hotp' && ($counter === null || $counter < 0)) {
@@ -167,6 +172,9 @@ final class ProvisioningUriBuilder
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertDigits(string $type, int $digits): void
     {
         if (($type === 'hotp' || $type === 'totp') && ($digits < 6 || $digits > 9)) {
@@ -177,6 +185,9 @@ final class ProvisioningUriBuilder
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertOcraSuite(
         string $type,
         ?string $ocraSuite,
@@ -197,6 +208,9 @@ final class ProvisioningUriBuilder
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertType(string $type): void
     {
         if (!in_array($type, ['hotp', 'totp', 'ocra'], true)) {
@@ -204,6 +218,9 @@ final class ProvisioningUriBuilder
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function normalizePeriod(string $type, ?int $period): ?int
     {
         if ($type !== 'totp') {

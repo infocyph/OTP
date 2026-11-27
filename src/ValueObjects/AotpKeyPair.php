@@ -31,6 +31,9 @@ final readonly class AotpKeyPair
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
         if (strlen(Base64Url::decode($value, $name)) !== $bytes) {

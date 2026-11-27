@@ -10,6 +10,9 @@ use InvalidArgumentException;
 
 final readonly class VerificationResult
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function __construct(
         public bool $matched,
         public VerificationReason $reason,
@@ -51,6 +54,9 @@ final readonly class VerificationResult
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function success(
         VerificationReason $reason = VerificationReason::Matched,
         ?int $matchedTimestep = null,

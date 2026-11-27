@@ -65,6 +65,9 @@ final readonly class AOTP
             && function_exists('sodium_memzero');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function respond(
         #[\SensitiveParameter]
         string $privateKey,
@@ -106,6 +109,10 @@ final readonly class AOTP
         return new AotpResponse($challenge->id, self::encode($signature));
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function issue(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -161,6 +168,11 @@ final readonly class AOTP
         return $this->verifyWithResult($cache, $factorId, $challenge, $response, $now, $runwire)->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function verifyWithResult(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -217,6 +229,9 @@ final readonly class AOTP
         return VerificationResult::success();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertAudience(string $audience): void
     {
         if (
@@ -231,6 +246,9 @@ final readonly class AOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertContext(string $context): void
     {
         if (
@@ -245,6 +263,9 @@ final readonly class AOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -252,7 +273,10 @@ final readonly class AOTP
         }
     }
 
-    /** @return non-empty-string */
+    /**
+     * @return non-empty-string
+     * @throws \InvalidArgumentException
+     */
     private static function decodeKey(string $key, int $bytes, string $name): string
     {
         $decoded = Base64Url::decode($key, $name);
@@ -263,7 +287,10 @@ final readonly class AOTP
         return $decoded;
     }
 
-    /** @return non-empty-string */
+    /**
+     * @return non-empty-string
+     * @throws \InvalidArgumentException
+     */
     private static function decodeSignature(string $signature): string
     {
         $decoded = Base64Url::decode($signature, 'AOTP signature');
@@ -287,6 +314,9 @@ final readonly class AOTP
         );
     }
 
+    /**
+     * @throws \LogicException
+     */
     private static function requireSodium(): void
     {
         if (!self::isAvailable()) {

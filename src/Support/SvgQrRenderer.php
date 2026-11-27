@@ -12,6 +12,10 @@ use InvalidArgumentException;
 
 final class SvgQrRenderer
 {
+    /**
+     * @throws \BaconQrCode\Exception\InvalidArgumentException
+     * @throws \InvalidArgumentException
+     */
     public static function render(#[\SensitiveParameter] string $payload, int $imageSize = 200): string
     {
         if ($payload === '' || strlen($payload) > 4096) {
