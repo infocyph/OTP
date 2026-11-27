@@ -110,6 +110,11 @@ final class OtpBench
 
     private TOTP $totpSha512;
 
+    public function __construct()
+    {
+        $this->setUp();
+    }
+
     public function setUp(): void
     {
         $options = new CacheOptions(

@@ -36,6 +36,11 @@ final class CacheLayer33ReplayBench
 
     private string $lockStateKey;
 
+    public function __construct()
+    {
+        $this->setUp();
+    }
+
     public function setUp(): void
     {
         $options = new CacheOptions(

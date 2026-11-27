@@ -23,6 +23,11 @@ final class PasskeyMobileBench
 
     private Passkey $passkey;
 
+    public function __construct()
+    {
+        $this->setUp();
+    }
+
     public function setUp(): void
     {
         $this->cache = Cache::memory(

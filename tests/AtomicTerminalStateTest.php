@@ -155,7 +155,6 @@ final class AtomicTerminalStateTest extends TestCase
 
         self::assertIsArray($state);
         expect($exhausted->matched)->toBeFalse()
-            ->and($state)->toBeArray()
             ->and($state['consumed'] ?? null)->toBeTrue()
             ->and($stale->matched)->toBeFalse()
             ->and($stale->reason)->toBe(VerificationReason::Replay);

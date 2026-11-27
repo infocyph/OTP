@@ -117,3 +117,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E15 — hostile recovery-store input fixtures
 
 - Keep every deliberately malformed recovery-store dataset, but use mock return callbacks instead of inaccurate implementation return contracts. Preserve the binding, hash, issuance and error assertions. Validate the Redis test process identifier. Hosted verification pending.
+
+### Batch E16 — benchmark fixture lifecycle and QA follow-up
+
+- Run 45966570611: PHPStan reduced to 3 findings; all three benchmark jobs and clean install succeeded, Pest passed; remaining QA failure is release-gate formatting. Initialize wait status, keep the explicit array assertion and remove its duplicate, normalize whitespace and strictly validate benchmark arguments/PID. Declare pcntl/posix development dependencies. Initialize benchmark fixtures at construction while retaining PHPBench reset hooks, and exercise the four actual fixtures from a discovery/reset test. No workload or regression threshold reduced. Psalm exception contracts and dynamic baseline autoload remain outstanding.

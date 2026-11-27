@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
+use Infocyph\OTP\Benchmarks\AotpGridBench;
+use Infocyph\OTP\Benchmarks\CacheLayer33ReplayBench;
+use Infocyph\OTP\Benchmarks\OtpBench;
+use Infocyph\OTP\Benchmarks\PasskeyMobileBench;
+use PhpBench\Attributes\BeforeMethods;
+use ReflectionClass;
+use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /** @return array<array-key, mixed> */
@@ -59,3 +68,23 @@ test('benchmark results retain measured memory and CPU for acceptance budgets', 
         }
     }
 })->with(['sustained', 'concurrent-verify', 'cold-start']);
+
+test('benchmark fixtures remain discoverable and executable after explicit reset', function (): void {
+    $aotp = new AotpGridBench();
+    $replay = new CacheLayer33ReplayBench();
+    $otp = new OtpBench();
+    $passkey = new PasskeyMobileBench();
+    foreach ([$aotp, $replay, $otp, $passkey] as $benchmark) {
+        $benchmark->setUp();
+        $reflection = new ReflectionClass($benchmark);
+        expect($reflection->getAttributes(BeforeMethods::class))->toHaveCount(1);
+    }
+
+    $aotp->benchAotpRoundTrip();
+    $aotp->benchGridRoundTrip();
+    $replay->benchAtomicCompareAndSet();
+    $replay->benchLockFallbackMonotonicAdvance();
+    $otp->benchGenericOtpGenerate();
+    $passkey->benchMobileOtpVerify();
+    $passkey->benchPasskeyBeginAuthentication();
+});

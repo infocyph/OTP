@@ -560,7 +560,6 @@ function runConcurrentVerificationWorkload(float $duration, int $repetitions): a
     return $workload;
 }
 
-
 /**
  * @return array{attempted:int,successful:int,failed:int,latencies:list<float>,elapsed:float,cpu_seconds:float,memory_start_mb:?float,memory_end_mb:?float,memory_peak_mb:?float,successful_rpm:float}
  * @throws Throwable
@@ -599,7 +598,7 @@ function measureConcurrentVerification(float $duration, int $repetition): array
             'memory_start_mb' => $memoryStart,
             'memory_end_mb' => $memoryEnd,
             'memory_peak_mb' => $memoryPeak,
-            'successful_rpm' => $elapsed > 0.0 ? ((float) $result['successful'] / $elapsed) * 60.0 : 0.0,
+            'successful_rpm' => $elapsed > 0.0 ? ((float) $result['successful'] / (float) $elapsed) * 60.0 : 0.0,
         ];
     } finally {
         foreach ($children as $pid) {
@@ -698,6 +697,7 @@ function countConcurrentResults(array $children, string $barrier): int
 function joinConcurrentWorkers(array $children): void
 {
     foreach ($children as $pid) {
+        $status = 0;
         if (pcntl_waitpid($pid, $status) !== $pid || !pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
             throw new RuntimeException('Concurrent verification worker exited unsuccessfully.');
         }
@@ -1009,7 +1009,7 @@ function measureOperation(callable $operation, float $duration, int $sampleInter
         'memory_start_mb' => (float) $memoryStart / 1_048_576.0,
         'memory_end_mb' => (float) memory_get_usage(true) / 1_048_576.0,
         'memory_peak_mb' => (float) memory_get_peak_usage(true) / 1_048_576.0,
-        'successful_rpm' => $elapsed > 0.0 ? ((float) $successful / $elapsed) * 60.0 : 0.0,
+        'successful_rpm' => $elapsed > 0.0 ? ((float) $successful / (float) $elapsed) * 60.0 : 0.0,
     ];
 }
 
@@ -1080,7 +1080,7 @@ function runColdStartWorkload(string $autoload, int $repetitions): array
                 'memory_start_mb' => null,
                 'memory_end_mb' => null,
                 'memory_peak_mb' => $memoryPeak,
-                'successful_rpm' => $elapsed > 0.0 ? ((float) $successful / $elapsed) * 60.0 : 0.0,
+                'successful_rpm' => $elapsed > 0.0 ? ((float) $successful / (float) $elapsed) * 60.0 : 0.0,
             ];
         },
         unstableStatus: 'unverified',

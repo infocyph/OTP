@@ -38,8 +38,10 @@
     "require-dev": {
         "ext-filter": "*",
         "ext-openssl": "*",
+        "ext-pcntl": "*",
         "ext-pdo": "*",
         "ext-pdo_sqlite": "*",
+        "ext-posix": "*",
         "ext-redis": "*",
         "ext-sodium": "*",
         "ext-xmlwriter": "*",
@@ -71,6 +73,7 @@
     },
     "autoload-dev": {
         "psr-4": {
+            "Infocyph\\OTP\\Benchmarks\\": "benchmarks/",
             "Infocyph\\OTP\\Tests\\": "tests/"
         }
     },

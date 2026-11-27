@@ -31,6 +31,11 @@ final class AotpGridBench
 
     private string $privateKey;
 
+    public function __construct()
+    {
+        $this->setUp();
+    }
+
     public function setUp(): void
     {
         $this->cache = Cache::memory(

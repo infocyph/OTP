@@ -16,15 +16,16 @@ use Infocyph\Runwire\Server;
 use Infocyph\Runwire\Supervisor\WorkerContext;
 
 $options = getopt('', ['autoload:', 'address:', 'ready-dir:']);
-if ($options === false
-    || !is_string($options['autoload'] ?? null)
-    || !is_file($options['autoload'])
-    || !is_string($options['address'] ?? null)
-    || !is_string($options['ready-dir'] ?? null)) {
+if ($options === false) {
+    throw new RuntimeException('Unable to parse HTTP benchmark arguments.');
+}
+$autoload = $options['autoload'] ?? null;
+$address = $options['address'] ?? null;
+$readyDirectory = $options['ready-dir'] ?? null;
+if (!is_string($autoload) || !is_file($autoload) || !is_string($address) || !is_string($readyDirectory)) {
     throw new RuntimeException('HTTP benchmark requires valid autoload, address and ready directory arguments.');
 }
-require $options['autoload'];
-$readyDirectory = $options['ready-dir'];
+require $autoload;
 $cacheOptions = new CacheOptions(
     integrityKey: str_repeat('i', 32),
     allowClosures: false,
@@ -35,7 +36,7 @@ $database = $readyDirectory . '/state.sqlite';
 $initializer = Cache::sqlite('otp-http-host', $database, $cacheOptions);
 $initializer->set('ready', true, 60);
 unset($initializer);
-$server = Server::http($options['address'], static function (HttpRequest $request, ResponseWriterInterface $writer): void {
+$server = Server::http($address, static function (HttpRequest $request, ResponseWriterInterface $writer): void {
     unset($request, $writer);
 
     throw new RuntimeException('Worker handler factory was not used.');
