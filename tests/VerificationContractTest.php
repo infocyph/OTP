@@ -37,6 +37,7 @@ final class VerificationContractTest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('credential failures remain structured results')]
     public function testCredentialFailuresRemainStructuredResults(): void

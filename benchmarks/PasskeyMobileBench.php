@@ -68,6 +68,8 @@ final class PasskeyMobileBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchMobileOtpVerify(): void
     {

@@ -140,3 +140,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E20 — remaining propagated exception contracts
 
 - Run 45967753545, PHP 8.5 analysis: PHPStan passed; Psalm 73 errors, all missing propagated exception contracts. Added exact declarations on source, test and benchmark methods from job 140400504521, without suppressions or behavior change. Five QA jobs passed; PHP 8.5 prefer-lowest failed only the benchmark smoke test's existing absolute p99 gate (202 tests passed). Standard benchmarks and clean install passed. Final head verification remains open.
+
+### Batch E21 — remaining caller contracts
+
+- Run 45968200172, PHP 8.5 job 140401963178: PHPStan passed; Psalm reduced to 47 errors, all propagated exceptions. Added exact method contracts; no suppressions or behavior changes. PHP 8.5 prefer-lowest QA passed on this head (previous p99 smoke failure did not recur). Benchmark PHP 8.6 encountered upstream GitHub codeload HTTP 429 during dependency download, not a code failure. All 51 inline review threads resolved by the code-scanning bot at inspection. Final matrix pending.

@@ -88,6 +88,7 @@ final readonly class MobileOTP
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function verify(
         #[\SensitiveParameter]

@@ -23,6 +23,7 @@ final class CacheLayer33FallbackSafetyTest extends TestCase
      * @throws \Exception
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('atomic provider returning null falls back to the coordinated lock path')]
     public function testAtomicProviderReturningNullFallsBackToTheCoordinatedLockPath(): void

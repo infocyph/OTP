@@ -26,6 +26,7 @@ final class StateKeyCompatibilityTest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('TOTP keeps the v1 replay-state key')]
     public function testTOTPKeepsTheV1ReplayStateKey(): void
@@ -110,6 +111,7 @@ final class StateKeyCompatibilityTest extends TestCase
     /**
      * @throws \InvalidArgumentException
      * @throws \TypeError
+     * @throws \RuntimeException
      */
     #[TestDox('non-counter OCRA keeps the v1 message replay-state key')]
     public function testNonCounterOCRAKeepsTheV1MessageReplayStateKey(): void

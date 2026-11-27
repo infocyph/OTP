@@ -21,6 +21,7 @@ final class CacheLayer33AtomicTest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('TOTP uses CacheLayer atomics without acquiring a replay lock')]
     public function testTOTPUsesCacheLayerAtomicsWithoutAcquiringAReplayLock(): void
@@ -58,6 +59,7 @@ final class CacheLayer33AtomicTest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('TOTP resolves an atomic CAS race as replay without state regression')]
     public function testTOTPResolvesAnAtomicCASRaceAsReplayWithoutStateRegression(): void
@@ -95,6 +97,7 @@ final class CacheLayer33AtomicTest extends TestCase
     /**
      * @throws \InvalidArgumentException
      * @throws \TypeError
+     * @throws \RuntimeException
      */
     #[TestDox('non-counter OCRA claims replay state with one atomic set-if-absent')]
     public function testNonCounterOCRAClaimsReplayStateWithOneAtomicSetIfAbsent(): void

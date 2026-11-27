@@ -255,6 +255,7 @@ final readonly class OCRA
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function verify(
         #[\SensitiveParameter]

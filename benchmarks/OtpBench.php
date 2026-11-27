@@ -716,6 +716,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerify(): void
     {
@@ -726,6 +728,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyFuture5(): void
     {
@@ -736,6 +739,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyFuture50(): void
     {
@@ -744,6 +748,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyInvalid(): void
     {
@@ -752,6 +758,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyMalformed(): void
     {
@@ -762,6 +770,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyPast5(): void
     {
@@ -772,6 +781,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyPast50(): void
     {
@@ -784,6 +794,7 @@ final class OtpBench
      * @throws \LogicException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyReplayAccepted(): void
     {
@@ -803,6 +814,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyReplayRejected(): void
     {
@@ -818,6 +830,7 @@ final class OtpBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchTotpVerifyWindow0(): void
     {

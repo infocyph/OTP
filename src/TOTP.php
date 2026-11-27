@@ -229,6 +229,7 @@ final readonly class TOTP
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function verify(
         #[\SensitiveParameter]

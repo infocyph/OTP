@@ -64,6 +64,7 @@ final class TOTPTest extends TestCase
      * @throws \Exception
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('TOTP keeps current-past-future search order and monotonic replay state')]
     public function testTOTPKeepsCurrentPastFutureSearchOrderAndMonotonicReplayState(): void
@@ -89,6 +90,7 @@ final class TOTPTest extends TestCase
      * @throws \Exception
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('TOTP enforces the complete monotonic sequence and maximum drift boundaries')]
     public function testTOTPEnforcesTheCompleteMonotonicSequenceAndMaximumDriftBoundaries(): void
@@ -175,6 +177,7 @@ final class TOTPTest extends TestCase
      * @throws \Exception
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('TOTP replay state TTL covers the complete verification window')]
     public function testTOTPReplayStateTTLCoversTheCompleteVerificationWindow(): void
@@ -204,6 +207,7 @@ final class TOTPTest extends TestCase
      * @throws \Exception
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[DataProvider('tOTPReplayTTLCoversEveryAcceptedWindowShapeCases')]
     #[TestDox('TOTP replay TTL covers every accepted window shape')]
@@ -232,6 +236,7 @@ final class TOTPTest extends TestCase
      * @throws \Exception
      * @throws \TypeError
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('TOTP replay state expires in the actual backend')]
     public function testTOTPReplayStateExpiresInTheActualBackend(): void
