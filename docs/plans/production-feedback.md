@@ -216,3 +216,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E27 — qualification namespace boundary
 
 - [46022042778](https://github.com/infocyph/OTP/actions/runs/46022042778) on b21dd0c passed all 36 cluster scenarios again. GitHub security review threads 5294–5297 report use of package-internal Concurrency from the global namespace in the new probe (two calls, class and method diagnostic each). Namespace the qualification script under Infocyph\\OTP\\QA and explicitly import global exception types. No detector exclusions, assertions or behavior changed. Final hosted verification pending.
+
+### Batch D3 — native monotonic protocol completion
+
+- Added 12 mandatory network-PDO scenarios (TOTP/HOTP/MobileOTP/counter OCRA × MySQL/MariaDB/PostgreSQL). Initially absent scalar state is claimed by four independent clients with exactly one winner; a separate factor generation races adjacent values, requires the higher value to win, reads the native monotonic record, rejects both older/equal credentials and verifies the first generation's record is unchanged. This qualifies the same native insert rollback and CAS ownership path used by all monotonic protocols, without altering production code or existing tests. DATA/SEC/FLOW verification pending.
+- Direct protocol coverage now includes all OTP families and Passkey, with recovery-store replacement/consumption already covered by its existing durable SQLite race. Foundation published consumer qualification remains externally blocked. No new skip directives, policy changes or performance exceptions.

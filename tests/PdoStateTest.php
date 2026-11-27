@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\Tests;
 
+use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\OTP\AOTP;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\GridOTP;
+use Infocyph\OTP\HOTP;
+use Infocyph\OTP\MobileOTP;
 use Infocyph\OTP\OCRA;
+use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
+use Infocyph\OTP\TOTP;
 use Infocyph\OTP\VerificationReason;
 use RuntimeException;
 
@@ -184,3 +189,76 @@ test('native PDO GridOTP keeps challenge ownership and consumption serializable'
         $cache->clear();
     }
 })->with(['MYSQL', 'MARIADB', 'POSTGRES']);
+
+test('native PDO monotonic OTP transitions elect one winner and never regress across factor generations', function (string $backend, string $factor): void {
+    $factory = CacheLayerState::pdoFactory($backend);
+    $cache = $factory();
+    $secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+    [$domain, $lowValue, $highValue] = match ($factor) {
+        'TOTP' => ['totp:timestep', 100, 101],
+        'HOTP' => ['hotp:counter', 42, 43],
+        'MobileOTP' => ['mobile:timestep', 300, 301],
+        'OCRA' => ['ocra:counter', 42, 43],
+        default => throw new RuntimeException('Unknown monotonic protocol fixture.'),
+    };
+    $stateKey = static fn (string $owner): string => hash('sha256', 'infocyph:otp:' . $domain . ":v1\0" . $owner);
+    $admit = static function (Cache $target, bool $higher, string $owner) use ($factor, $secret): VerificationResult {
+        $counter = $higher ? 43 : 42;
+        $time = $higher ? 3_030 : 3_000;
+        $mobileTime = $higher ? 3_010 : 3_000;
+
+        return match ($factor) {
+            'TOTP' => new TOTP($secret)->verifyWithWindow(
+                new TOTP($secret)->generate($time),
+                $time,
+                cache: $target,
+                factorId: $owner,
+            ),
+            'HOTP' => new HOTP($secret)->verifyWithResult(
+                new HOTP($secret)->generate($counter),
+                $counter,
+                cache: $target,
+                factorId: $owner,
+            ),
+            'MobileOTP' => new MobileOTP('0123456789abcdef', '1234')->verifyWithWindow(
+                new MobileOTP('0123456789abcdef', '1234')->generate($mobileTime),
+                $mobileTime,
+                cache: $target,
+                factorId: $owner,
+            ),
+            'OCRA' => new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', str_repeat('k', 32))->verifyWithResult(
+                new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', str_repeat('k', 32))->generate('12345678', $counter),
+                '12345678',
+                $counter,
+                cache: $target,
+                factorId: $owner,
+            ),
+            default => throw new RuntimeException('Unknown monotonic protocol fixture.'),
+        };
+    };
+
+    try {
+        expect($cache->get($stateKey('factor-v1')))->toBeNull();
+        $same = Concurrency::run(
+            static fn(): int => (int) $admit($factory(), false, 'factor-v1')->matched,
+            4,
+        );
+        $independent = $factory();
+        expect(array_sum($same))->toBe(1)
+            ->and($independent->get($stateKey('factor-v1')))->toBe($lowValue)
+            ->and($admit($independent, false, 'factor-v1')->replayDetected)->toBeTrue()
+            ->and($independent->get($stateKey('factor-v2')))->toBeNull();
+
+        $ordered = Concurrency::run(
+            static fn (int $worker): int => $admit($factory(), $worker === 1, 'factor-v2')->matched ? $worker + 1 : 0,
+            2,
+        );
+        expect($ordered)->toContain(2)
+            ->and($independent->get($stateKey('factor-v2')))->toBe($highValue)
+            ->and($admit($independent, false, 'factor-v2')->replayDetected)->toBeTrue()
+            ->and($admit($independent, true, 'factor-v2')->replayDetected)->toBeTrue()
+            ->and($independent->get($stateKey('factor-v1')))->toBe($lowValue);
+    } finally {
+        $cache->clear();
+    }
+})->with(['MYSQL', 'MARIADB', 'POSTGRES'])->with(['TOTP', 'HOTP', 'MobileOTP', 'OCRA']);
