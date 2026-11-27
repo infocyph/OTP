@@ -296,6 +296,8 @@ final class GenericOtpTest extends TestCase
     public function testGenericOTPValidityBeginsAfterLockAcquisition(): void
     {
         $locks = new class implements LockProviderInterface {
+            public int $acquiredAt = 0;
+
             private int $acquisitions = 0;
 
             #[\Override]
@@ -306,6 +308,7 @@ final class GenericOtpTest extends TestCase
                 }
                 if ($this->acquisitions++ === 0) {
                     usleep(1_100_000);
+                    $this->acquiredAt = time();
                 }
 
                 return new LockHandle($key, 'delayed');
@@ -322,14 +325,24 @@ final class GenericOtpTest extends TestCase
             {
             }
         };
-        $cache = Cache::memory(
-            'delayed-issuance',
-            new CacheOptions(integrityKey: str_repeat('i', 32), failOpen: false),
-        )->setLockProvider($locks);
+        $cache = CacheLayerState::configureMock(
+            $this->createMock(AuthenticationStateCacheInterface::class),
+            $locks,
+        );
+        $cache->method('get')->willReturn(null);
+        $cache->expects($this->once())->method('set')->with(
+            hash('sha256', "infocyph:otp:generic:state:v1\0binding"),
+            $this->callback(static fn (array $state): bool => is_int($state['expiresAt'] ?? null)
+                && $state['expiresAt'] >= $locks->acquiredAt + 1
+                && $state['expiresAt'] <= time() + 1),
+            1,
+        )->willReturn(true);
         $service = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 1);
+        $startedAt = time();
         $code = $service->generate('binding');
 
-        expect($service->verify('binding', $code))->toBeTrue();
+        expect($locks->acquiredAt)->toBeGreaterThan($startedAt)
+            ->and($code)->toMatch('/^\d{6}$/');
     }
 
     /**

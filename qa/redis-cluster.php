@@ -63,22 +63,38 @@ function admitClusterFactor(string $factor, bool $next, string $owner = 'factor'
 
     return match ($factor) {
         'hotp' => new HOTP($secret)->verifyWithResult(
-            new HOTP($secret)->generate($counter), $counter, cache: $cache, factorId: $owner,
+            new HOTP($secret)->generate($counter),
+            $counter,
+            cache: $cache,
+            factorId: $owner,
         )->matched,
         'totp' => new TOTP($secret)->verifyWithWindow(
-            new TOTP($secret)->generate($timestamp), $timestamp, $window, $cache, $owner,
+            new TOTP($secret)->generate($timestamp),
+            $timestamp,
+            $window,
+            $cache,
+            $owner,
         )->matched,
         'mobile' => new MobileOTP('0123456789abcdef', '1234')->verifyWithWindow(
             new MobileOTP('0123456789abcdef', '1234')->generate($timestamp),
-            $timestamp, $window, cache: $cache, factorId: $owner,
+            $timestamp,
+            $window,
+            cache: $cache,
+            factorId: $owner,
         )->matched,
         'ocra-counter' => new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', $key)->verifyWithResult(
             new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', $key)->generate($question, $counter),
-            $question, $counter, cache: $cache, factorId: $owner,
+            $question,
+            $counter,
+            cache: $cache,
+            factorId: $owner,
         )->matched,
         'ocra-challenge' => new OCRA('OCRA-1:HOTP-SHA256-8:QN08', $key)->verifyWithResult(
             new OCRA('OCRA-1:HOTP-SHA256-8:QN08', $key)->generate($question),
-            $question, cache: $cache, factorId: $owner, replayTtl: 600,
+            $question,
+            cache: $cache,
+            factorId: $owner,
+            replayTtl: 600,
         )->matched,
         default => throw new InvalidArgumentException('Unknown cluster factor.'),
     };
@@ -98,7 +114,7 @@ function requireClusterUnavailable(callable $admit): void
 {
     try {
         $admit();
-    } catch (CacheBackendException | RedisClusterException) {
+    } catch (CacheBackendException|RedisClusterException) {
         return;
     }
 
@@ -115,7 +131,8 @@ if (!in_array($phase, ['seed', 'offline', 'recover'], true)
 
 if ($factor === 'generic') {
     if ($phase === 'seed') {
-        echo clusterGeneric()->generate('factor');
+        $proof = clusterGeneric()->generate('factor');
+        requireClusterResult(fwrite(STDOUT, $proof) === strlen($proof), 'Unable to write private fixture proof.');
     } else {
         $proof = stream_get_contents(STDIN);
         if (!is_string($proof) || preg_match('/\A[0-9]{6}\z/D', $proof) !== 1) {
