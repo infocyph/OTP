@@ -75,3 +75,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 
 - Last complete run 45955976955: all six functional QA jobs passed, clean install and standard benchmarks passed; PHPStan 138, Psalm 669 (277 internal-access findings eliminated). Sustained gate failed roundtrip 2.12% and concurrent verification 15.46%; no threshold changes.
 - Separate valid ceremony state from failure decisions, narrow JSON/EC/signature test fixture values, and declare test-only extensions. Correct OCRA mandatory capture handling without changing valid suites. Hosted validation pending.
+
+### Batch E6 — benchmark measurement types
+
+- Declare the actual workload and repetition shapes, validate CPU usage and cold-start child result payloads, and reject empty measurements. Preserved workload, duration, repetitions and acceptance thresholds. Hosted verification pending.

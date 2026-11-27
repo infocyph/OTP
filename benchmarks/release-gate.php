@@ -152,16 +152,21 @@ function cpuModel(): string
     return php_uname('m');
 }
 
-function cpuSeconds(array $usage): float
+/** @param array<string, int>|false $usage */
+function cpuSeconds(array|false $usage): float
 {
-    return ((int) ($usage['ru_utime.tv_sec'] ?? 0))
-        + ((int) ($usage['ru_utime.tv_usec'] ?? 0)) / 1_000_000
-        + ((int) ($usage['ru_stime.tv_sec'] ?? 0))
-        + ((int) ($usage['ru_stime.tv_usec'] ?? 0)) / 1_000_000;
+    if ($usage === false) {
+        throw new RuntimeException('Unable to measure process CPU usage.');
+    }
+
+    return (float) ($usage['ru_utime.tv_sec'] ?? 0)
+        + (float) ($usage['ru_utime.tv_usec'] ?? 0) / 1_000_000.0
+        + (float) ($usage['ru_stime.tv_sec'] ?? 0)
+        + (float) ($usage['ru_stime.tv_usec'] ?? 0) / 1_000_000.0;
 }
 
 /**
- * @param list<float> $values
+ * @param non-empty-list<float> $values
  */
 function median(array $values): float
 {
@@ -191,11 +196,11 @@ function percentile(array $values, float $percentile): ?float
 
 /**
  * @param array<string, mixed> $metadata
- * @param list<float> $rpms
+ * @param non-empty-list<float> $rpms
  * @param list<float> $latencies
  * @param array{average_percent:?float,peak_percent:?float} $cpu
  * @param array{average_mb:?float,peak_mb:?float,growth_mb:?float} $memory
- * @return array<string, mixed>
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function buildWorkloadResult(
     string $name,
@@ -254,7 +259,7 @@ function buildWorkloadResult(
 }
 
 /**
- * @return array<string, mixed>
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runSustainedWorkload(float $duration, int $repetitions): array
 {
@@ -288,7 +293,7 @@ function runSustainedWorkload(float $duration, int $repetitions): array
 }
 
 /**
- * @return array<string, mixed>
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runRoundTripWorkload(float $duration, int $repetitions): array
 {
@@ -321,7 +326,9 @@ function runRoundTripWorkload(float $duration, int $repetitions): array
 }
 
 /**
- * @return array<string, mixed>
+ * @param array<string, mixed> $metadata
+ * @param callable(int): callable(): mixed $operationFactory
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runTimedWorkload(
     float $duration,
@@ -387,7 +394,9 @@ function runTimedWorkload(
 }
 
 /**
- * @return array<string, mixed>
+ * @param array<string, mixed> $metadata
+ * @param callable(int): array{attempted:int,successful:int,failed:int,latencies:list<float>,elapsed:float,cpu_seconds:?float,memory_start_mb:?float,memory_end_mb:?float,memory_peak_mb:?float,successful_rpm:float} $repetitionOperation
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runRepeatedWorkload(
     int $repetitions,
@@ -400,6 +409,9 @@ function runRepeatedWorkload(
     string $unstableStatus = 'unstable',
     int $concurrency = 1,
 ): array {
+    if ($repetitions < 1) {
+        throw new RuntimeException('Benchmark requires at least one repetition.');
+    }
     $rpms = [];
     $latencies = [];
     $attempted = 0;
@@ -436,8 +448,8 @@ function runRepeatedWorkload(
         }
     }
 
-    if ($failed !== 0) {
-        throw new RuntimeException('Representative benchmark recorded failed operations.');
+    if ($failed !== 0 || $rpms === []) {
+        throw new RuntimeException('Representative benchmark recorded failed operations or no measurements.');
     }
 
     $memoryGrowth = null;
@@ -478,7 +490,7 @@ function runRepeatedWorkload(
 }
 
 /**
- * @return array<string, mixed>
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runConcurrentVerificationWorkload(float $duration, int $repetitions): array
 {
@@ -702,7 +714,7 @@ function cleanupConcurrentBenchmark(string $database, string $barrier): void
 }
 
 /**
- * @return array<string, mixed>
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
 {
@@ -874,7 +886,7 @@ function benchmarkCacheOptions(): CacheOptions
 }
 
 /**
- * @return array<string, mixed>
+ * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runColdStartWorkload(string $autoload, int $repetitions): array
 {
@@ -986,9 +998,16 @@ PHP;
         throw new RuntimeException('Cold-start child failed before returning resource measurements.');
     }
     $measurement = json_decode($payload, true, 32, JSON_THROW_ON_ERROR);
+    if (!is_array($measurement)
+        || !is_bool($measurement['successful'] ?? null)
+        || !is_numeric($measurement['cpu_seconds'] ?? null)
+        || !is_numeric($measurement['memory_peak_mb'] ?? null)
+    ) {
+        throw new RuntimeException('Cold-start child returned invalid resource measurements.');
+    }
 
     return [
-        'successful' => $measurement['successful'] === true,
+        'successful' => $measurement['successful'],
         'cpu_seconds' => (float) $measurement['cpu_seconds'],
         'memory_peak_mb' => (float) $measurement['memory_peak_mb'],
     ];
