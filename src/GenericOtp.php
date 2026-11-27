@@ -148,14 +148,13 @@ final readonly class GenericOtp
         }
 
         $candidateDigest = $this->digest($binding, $otp);
-        $now = time();
 
         return CacheLock::transition(
             $this->cache,
             self::stateKey($binding),
             self::lockKey($binding),
             'generic OTP',
-            fn(mixed $stored): array => $this->verifyState($stored, $candidateDigest, $now),
+            fn(mixed $stored): array => $this->verifyState($stored, $candidateDigest, time()),
             $runwire,
         );
     }

@@ -234,6 +234,34 @@ final class GenericOtpTest extends TestCase
         expect($otp->verify('challenge', '654321'))->toBeFalse();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
+    #[TestDox('generic OTP rejects a proof whose absolute expiry passes during a delayed state read')]
+    public function testGenericOTPRejectsProofExpiredDuringStateRead(): void
+    {
+        $key = str_repeat('g', 32);
+        $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
+        $cache->expects($this->once())->method('get')->willReturnCallback(static function () use ($key): array {
+            $expiresAt = time() + 1;
+            sleep(1);
+
+            return [
+                'v' => 1,
+                'digest' => hash_hmac('sha256', "generic-otp\0" . 'challenge' . "\0" . '123456', $key),
+                'remainingAttempts' => 3,
+                'expiresAt' => $expiresAt,
+            ];
+        });
+        $cache->expects($this->once())->method('delete')->willReturn(true);
+        $cache->expects($this->never())->method('set');
+
+        expect((new GenericOtp($cache, $key))->verify('challenge', '123456'))->toBeFalse();
+    }
+
     #[TestDox('generic OTP cache failure never returns a code')]
     public function testGenericOTPCacheFailureNeverReturnsACode(): void
     {

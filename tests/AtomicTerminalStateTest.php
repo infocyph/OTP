@@ -100,6 +100,56 @@ final class AtomicTerminalStateTest extends TestCase
     /**
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
+     */
+    #[TestDox('atomic GenericOtp rechecks absolute expiry after a concurrent state transition')]
+    public function testAtomicGenericOtpRechecksExpiryAfterContention(): void
+    {
+        $key = str_repeat('g', 32);
+        $state = [
+            'v' => 1,
+            'digest' => hash_hmac('sha256', "generic-otp\0" . 'challenge' . "\0" . '123456', $key),
+            'remainingAttempts' => 3,
+            'expiresAt' => 0,
+        ];
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->method('authenticationStateLock')->willReturn(null);
+        $cache->expects($this->exactly(2))->method('get')->willReturnCallback(static function () use (&$state): array {
+            if ($state['expiresAt'] === 0) {
+                $state['expiresAt'] = time() + 1;
+            }
+
+            return $state;
+        });
+        $atomic->expects($this->never())->method('setIfAbsent');
+        $atomic->expects($this->exactly(2))->method('compareAndSet')->willReturnCallback(
+            static function (string $cacheKey, mixed $expected, mixed $replacement, mixed $ttl) use (&$state): bool {
+                unset($cacheKey, $expected, $replacement, $ttl);
+                if ($state['remainingAttempts'] === 3) {
+                    $state['remainingAttempts'] = 2;
+                    sleep(1);
+
+                    return false;
+                }
+
+                return true;
+            },
+        );
+
+        expect((new GenericOtp($cache, $key))->verify('challenge', '123456'))->toBeFalse();
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \Throwable
      */
