@@ -4,8 +4,8 @@ CacheLayer state and durable persistence
 OTP uses ``infocyph/cachelayer`` for package-owned authentication state.
 Recovery codes and Passkey credential records deliberately remain durable
 application data rather than authentication cache. For adapter-specific
-connection, TLS, cluster, and deployment options, consult the `CacheLayer 4.0
-documentation <https://github.com/infocyph/CacheLayer/tree/4.0>`_.
+connection, TLS, cluster, and deployment options, consult the `CacheLayer 4.1
+documentation <https://github.com/infocyph/CacheLayer/tree/4.1>`_.
 
 Required CacheLayer policy
 --------------------------
@@ -45,13 +45,13 @@ Every stateful operation receives one CacheLayer
 fail-closed, payload-integrity protected, and backed by one authoritative direct
 backend.
 
-TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 4.0 native atomics where
+TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 4.1 native atomics where
 their scalar transition maps safely to conditional mutation. If native atomics
 are not available, those paths use the lock provider returned by
 ``authenticationStateLock()``.
 
 ``GenericOtp``, ``GridOTP``, and ``Passkey`` mutate complete multi-field
-records as one serializable state machine. OTP uses CacheLayer 4.0 whole-record
+records as one serializable state machine. OTP uses CacheLayer 4.1 whole-record
 CAS when a safe atomic capability is available and otherwise uses the
 coordinated lock fallback. Backends that cannot provide either accepted atomic
 or lock semantics are rejected before authentication state is mutated.
@@ -86,9 +86,15 @@ Redis example
    );
 
 Use a primary/authoritative Redis connection. Replicas with lag are unsafe for
-verification reads. Configure memory so authentication keys are not evicted.
+verification reads. Redis Cluster must reject operations when authoritative
+state is unavailable; do not enable reads while the cluster is down. Redis
+replication is asynchronous: promotion can lose an acknowledged replay marker.
+An outage or recovery that cannot establish preservation of accepted state
+requires disabling verification for affected factors until state is reconciled
+or the factors are safely rotated. A successful healthy-cluster test is not
+proof of lossless failover. Configure memory so authentication keys are not evicted.
 HOTP and counter-OCRA state has no TTL and must survive restarts and failover.
-CacheLayer 4.0 Redis/Valkey adapters expose native atomic replay operations, so
+CacheLayer 4.1 Redis/Valkey adapters expose native atomic replay operations, so
 eligible scalar and whole-record transitions use that path without acquiring replay locks.
 
 PDO example

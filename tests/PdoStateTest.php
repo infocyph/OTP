@@ -95,3 +95,51 @@ test('native PDO OCRA claims an initially absent replay record once and isolates
         $cache->clear();
     }
 })->with(['MYSQL', 'MARIADB', 'POSTGRES']);
+
+test('native PDO GenericOtp preserves expiry and attempt ownership across independent writers', function (string $backend): void {
+    $factory = pdoStateFactory($backend);
+    $cache = $factory();
+    $independent = $factory();
+    $key = random_bytes(32);
+    $binding = 'native-pdo-expiry';
+    $stateKey = hash('sha256', "infocyph:otp:generic:state:v1\0" . $binding);
+    $otp = new GenericOtp($cache, $key, maxAttempts: 3);
+    $verifier = new GenericOtp($independent, $key, maxAttempts: 3);
+
+    try {
+        $proof = $otp->generate($binding);
+        $wrong = $proof === '000000' ? '000001' : '000000';
+        $initial = $independent->get($stateKey);
+        if (!is_array($initial) || !is_int($initial['expiresAt'] ?? null)) {
+            throw new RuntimeException('Missing native OTP expiry record.');
+        }
+
+        expect(Concurrency::run(
+            static fn(): int => (int) new GenericOtp($factory(), $key, maxAttempts: 3)->verify($binding, $wrong),
+            2,
+        ))->toBe([0, 0]);
+        $remaining = $independent->get($stateKey);
+        expect($remaining)->toBe(array_replace($initial, ['remainingAttempts' => 1]));
+
+        expect($verifier->verify($binding, $wrong))->toBeFalse()
+            ->and($otp->verify($binding, $proof))->toBeFalse();
+
+        $proof = $otp->generate($binding);
+        $expired = $independent->get($stateKey);
+        if (!is_array($expired)) {
+            throw new RuntimeException('Missing native OTP replacement record.');
+        }
+
+        // Keep the backend row live while its authenticated challenge is expired.
+        $expired['expiresAt'] = time() - 1;
+        expect($independent->set($stateKey, $expired, 300))->toBeTrue()
+            ->and($otp->verify($binding, $proof))->toBeFalse();
+
+        $proof = $otp->generate($binding);
+        expect($verifier->delete($binding))->toBeTrue()
+            ->and($otp->verify($binding, $proof))->toBeFalse()
+            ->and($independent->get($stateKey))->toBeNull();
+    } finally {
+        $cache->clear();
+    }
+})->with(['MYSQL', 'MARIADB', 'POSTGRES']);
