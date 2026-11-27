@@ -134,7 +134,8 @@ async def start_host(root, configuration, output_dir, label):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
-    command = [configuration.php, '-d', 'opcache.enable_cli=1', str(Path(__file__).with_name('http-host.php')),
+    command = [configuration.php, '-d', 'opcache.enable_cli=1', '-d', 'auto_prepend_file=' + str(root / 'vendor/autoload.php'),
+               str(Path(__file__).with_name('http-host.php')),
                '--autoload=' + str(root / 'vendor/autoload.php'), '--address=127.0.0.1:' + str(port),
                '--ready-dir=' + ready.name]
     log = (output_dir / (label + '-server.log')).open('w')

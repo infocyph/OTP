@@ -77,17 +77,92 @@ test('benchmark fixtures remain discoverable and executable after explicit reset
     $replay = new CacheLayer33ReplayBench();
     $otp = new OtpBench();
     $passkey = new PasskeyMobileBench();
-    foreach ([$aotp, $replay, $otp, $passkey] as $benchmark) {
-        $benchmark->setUp();
+    $suites = [
+        [$aotp, [
+            $aotp->benchAotpRoundTrip(...),
+            $aotp->benchAotpSign(...),
+            $aotp->benchGridRespond(...),
+            $aotp->benchGridRoundTrip(...),
+        ]],
+        [$replay, [
+            $replay->benchAtomicCompareAndSet(...),
+            $replay->benchAtomicMonotonicAdvance(...),
+            $replay->benchAtomicOneTimeClaim(...),
+            $replay->benchAtomicSetIfAbsent(...),
+            $replay->benchLockFallbackMonotonicAdvance(...),
+            $replay->benchLockFallbackOneTimeClaim(...),
+        ]],
+        [$otp, [
+            $otp->benchCacheLayerLockRoundTrip(...),
+            $otp->benchCacheLayerStateRoundTrip(...),
+            $otp->benchCooperativeLockContention(...),
+            $otp->benchGenericOtpConstruction(...),
+            $otp->benchGenericOtpGenerate(...),
+            $otp->benchGenericOtpGenerateWithRunwire(...),
+            $otp->benchGenericOtpVerify(...),
+            $otp->benchGenericOtpVerifyExhausted(...),
+            $otp->benchGenericOtpVerifyFailedAttempt(...),
+            $otp->benchGenericOtpVerifyMalformed(...),
+            $otp->benchGenericOtpVerifyMissing(...),
+            $otp->benchHotpGenerate(...),
+            $otp->benchHotpReplayAccepted(...),
+            $otp->benchHotpVerify(...),
+            $otp->benchHotpVerifyInvalid(...),
+            $otp->benchHotpVerifyLookAhead0(...),
+            $otp->benchHotpVerifyLookAhead100(...),
+            $otp->benchHotpVerifyLookAhead25(...),
+            $otp->benchHotpVerifyReplay(...),
+            $otp->benchOcraChallengeConsume(...),
+            $otp->benchOcraGenerate(...),
+            $otp->benchOcraGenerateChallenge(...),
+            $otp->benchOcraGenerateCounter(...),
+            $otp->benchOcraGenerateFullHmac(...),
+            $otp->benchOcraGenerateMutual(...),
+            $otp->benchOcraGeneratePin(...),
+            $otp->benchOcraGenerateSession(...),
+            $otp->benchOcraGenerateTime(...),
+            $otp->benchOcraVerify(...),
+            $otp->benchOcraVerifyInvalid(...),
+            $otp->benchProvisioningEnrollmentPayload(...),
+            $otp->benchProvisioningSvgRender(...),
+            $otp->benchProvisioningUriBuild(...),
+            $otp->benchProvisioningUriParse(...),
+            $otp->benchRecoveryConsume(...),
+            $otp->benchRecoveryConsumeInvalid(...),
+            $otp->benchRecoveryGenerate(...),
+            $otp->benchRecoveryGenerate100(...),
+            $otp->benchSecretCanonicalValidation(...),
+            $otp->benchSecretDecode(...),
+            $otp->benchSecretGeneration(...),
+            $otp->benchSecretNormalize(...),
+            $otp->benchTotpGenerate(...),
+            $otp->benchTotpGenerateSha1(...),
+            $otp->benchTotpGenerateSha256(...),
+            $otp->benchTotpGenerateSha512(...),
+            $otp->benchTotpVerify(...),
+            $otp->benchTotpVerifyFuture5(...),
+            $otp->benchTotpVerifyFuture50(...),
+            $otp->benchTotpVerifyInvalid(...),
+            $otp->benchTotpVerifyMalformed(...),
+            $otp->benchTotpVerifyPast5(...),
+            $otp->benchTotpVerifyPast50(...),
+            $otp->benchTotpVerifyReplayAccepted(...),
+            $otp->benchTotpVerifyReplayRejected(...),
+            $otp->benchTotpVerifyWindow0(...),
+        ]],
+        [$passkey, [
+            $passkey->benchMobileOtpGenerate(...),
+            $passkey->benchMobileOtpVerify(...),
+            $passkey->benchPasskeyBeginAuthentication(...),
+            $passkey->benchPasskeyBeginRegistration(...),
+        ]],
+    ];
+    foreach ($suites as [$benchmark, $subjects]) {
         $reflection = new ReflectionClass($benchmark);
         expect($reflection->getAttributes(BeforeMethods::class))->toHaveCount(1);
+        foreach ($subjects as $subject) {
+            $benchmark->setUp();
+            $subject();
+        }
     }
-
-    $aotp->benchAotpRoundTrip();
-    $aotp->benchGridRoundTrip();
-    $replay->benchAtomicCompareAndSet();
-    $replay->benchLockFallbackMonotonicAdvance();
-    $otp->benchGenericOtpGenerate();
-    $passkey->benchMobileOtpVerify();
-    $passkey->benchPasskeyBeginAuthentication();
 });

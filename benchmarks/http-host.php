@@ -25,7 +25,16 @@ $readyDirectory = $options['ready-dir'] ?? null;
 if (!is_string($autoload) || !is_file($autoload) || !is_string($address) || !is_string($readyDirectory)) {
     throw new RuntimeException('HTTP benchmark requires valid autoload, address and ready directory arguments.');
 }
-require $autoload;
+$autoload = realpath($autoload);
+if ($autoload === false) {
+    throw new RuntimeException('Unable to resolve benchmark autoload path.');
+}
+if (!in_array($autoload, get_included_files(), true)) {
+    if ($autoload !== realpath(__DIR__ . '/../vendor/autoload.php')) {
+        throw new RuntimeException('External benchmark autoload must be preloaded with PHP auto_prepend_file.');
+    }
+    require_once __DIR__ . '/../vendor/autoload.php';
+}
 $cacheOptions = new CacheOptions(
     integrityKey: str_repeat('i', 32),
     allowClosures: false,

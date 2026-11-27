@@ -73,21 +73,21 @@ jobs:
         shell: bash
         run: |
           mkdir -p perf
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/baseline.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
             --duration=15 \
             --repetitions=3 \
             --stable
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/candidate.json" \
             --release="$GITHUB_SHA" \
             --duration=15 \
             --repetitions=3 \
             --stable
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/baseline-roundtrip.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
@@ -95,7 +95,7 @@ jobs:
             --repetitions=3 \
             --stable \
             --workload=roundtrip
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/candidate-roundtrip.json" \
             --release="$GITHUB_SHA" \
@@ -103,7 +103,7 @@ jobs:
             --repetitions=3 \
             --stable \
             --workload=roundtrip
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/baseline-concurrent.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
@@ -111,7 +111,7 @@ jobs:
             --repetitions=3 \
             --stable \
             --workload=concurrent-verify
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/candidate-concurrent.json" \
             --release="$GITHUB_SHA" \
@@ -119,7 +119,7 @@ jobs:
             --repetitions=3 \
             --stable \
             --workload=concurrent-verify
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/cold-start.json" \
             --release="$GITHUB_SHA" \
@@ -132,7 +132,7 @@ jobs:
       - name: Run persistent Runwire lifecycle benchmark
         shell: bash
         run: |
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --output="$GITHUB_WORKSPACE/perf/runwire-lifecycle.json" \
             --release="$GITHUB_SHA" \

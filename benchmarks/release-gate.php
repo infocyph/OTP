@@ -66,7 +66,16 @@ if (!in_array($workloadName, ['cold-start', 'concurrent-verify', 'roundtrip', 'r
     throw new RuntimeException('--workload must be cold-start, concurrent-verify, roundtrip, runwire-lifecycle, or sustained.');
 }
 
-require $autoload;
+$autoload = realpath($autoload);
+if ($autoload === false) {
+    throw new RuntimeException('Unable to resolve benchmark autoload path.');
+}
+if (!in_array($autoload, get_included_files(), true)) {
+    if ($autoload !== realpath(__DIR__ . '/../vendor/autoload.php')) {
+        throw new RuntimeException('External benchmark autoload must be preloaded with PHP auto_prepend_file.');
+    }
+    require_once __DIR__ . '/../vendor/autoload.php';
+}
 
 $workload = match ($workloadName) {
     'cold-start' => runColdStartWorkload($autoload, $repetitions),
@@ -704,7 +713,7 @@ function joinConcurrentWorkers(array $children): void
 {
     foreach ($children as $pid) {
         $status = 0;
-        if (pcntl_waitpid($pid, $status) !== $pid || !pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+        if (pcntl_waitpid($pid, $status) !== $pid || !is_int($status) || !pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
             throw new RuntimeException('Concurrent verification worker exited unsuccessfully.');
         }
     }
