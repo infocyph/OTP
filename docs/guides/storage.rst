@@ -58,7 +58,10 @@ or lock semantics are rejected before authentication state is mutated.
 
 Capability selection is not runtime failover. Once an atomic capability is
 selected, an atomic backend exception propagates and OTP does not retry the same
-mutation through locks. This prevents re-executing a mutation after an unknown
+mutation through locks. The sole transient exception is a native PDO insert
+rejected with SQLSTATE ``40001`` and MySQL/MariaDB error ``1213`` (the database
+rolled back the entire transaction). OTP re-reads authoritative state within the
+existing eight-attempt atomic budget; unknown commit outcomes always propagate. This prevents re-executing a mutation after an unknown
 commit outcome.
 
 Lock acquisition is bounded and any acquisition, ownership-refresh, read,
@@ -306,7 +309,8 @@ codes, provisioning URIs, AOTP challenge context/signatures, or Passkey ceremony
 payloads.
 
 Atomic ``setIfAbsent()``/``compareAndSet()`` failures and bounded-contention
-exhaustion are operational failures and propagate. OTP never converts them to a
+exhaustion are operational failures and propagate, except for the confirmed PDO
+insert rollback described above. OTP does not convert an unknown outcome into a
 mismatch/replay result and never falls back to locks after an atomic operation
 has been selected.
 

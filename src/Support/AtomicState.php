@@ -6,7 +6,10 @@ namespace Infocyph\OTP\Support;
 
 use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\CacheLayer\Cache\Lock\PdoLockProvider;
+use Infocyph\CacheLayer\Exceptions\CacheBackendException;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
+use PDOException;
 use RuntimeException;
 
 /** @internal Atomic persistence, bounded CAS retries and precommit cancellation. */
@@ -34,7 +37,7 @@ final class AtomicState
             $current = $cache->get($stateKey);
             if ($current === null) {
                 CacheLock::checkpoint($runwire);
-                if ($atomic->setIfAbsent($stateKey, $value, $ttl)) {
+                if (self::insert($cache, $atomic, $stateKey, $value, $ttl)) {
                     return true;
                 }
 
@@ -72,7 +75,7 @@ final class AtomicState
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
             CacheLock::checkpoint($runwire);
-            if ($atomic->setIfAbsent($stateKey, $marker, $ttl)) {
+            if (self::insert($cache, $atomic, $stateKey, $marker, $ttl)) {
                 return true;
             }
             $current = $cache->get($stateKey);
@@ -162,7 +165,7 @@ final class AtomicState
             }
             CacheLock::checkpoint($runwire);
             $mutated = $current === null
-                ? $atomic->setIfAbsent($stateKey, $decision['replacement'], $ttl)
+                ? self::insert($cache, $atomic, $stateKey, $decision['replacement'], $ttl)
                 : $atomic->compareAndSet($stateKey, $current, $decision['replacement'], $ttl);
             if ($mutated) {
                 return $decision['result'];
@@ -170,5 +173,32 @@ final class AtomicState
         }
 
         throw new RuntimeException('Unable to transition ' . $stateName . ' state after atomic contention.');
+    }
+
+    /** @throws CacheBackendException */
+    private static function insert(
+        AuthenticationStateCacheInterface $cache,
+        AtomicCacheInterface $atomic,
+        string $stateKey,
+        mixed $value,
+        ?int $ttl,
+    ): bool {
+        try {
+            return $atomic->setIfAbsent($stateKey, $value, $ttl);
+        } catch (CacheBackendException $failure) {
+            $cause = $failure->getPrevious();
+            if (
+                !$cause instanceof PDOException
+                || ($cause->errorInfo[0] ?? null) !== '40001'
+                || !in_array($cause->errorInfo[1] ?? null, [1213, '1213'], true)
+                || !$cache->authenticationStateLock() instanceof PdoLockProvider
+            ) {
+                throw $failure;
+            }
+
+            // InnoDB rolled back the entire transaction on error 1213. Re-read
+            // authoritative state within the caller's existing bounded CAS loop.
+            return false;
+        }
     }
 }
