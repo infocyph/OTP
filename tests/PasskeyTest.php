@@ -569,7 +569,14 @@ final class PasskeyTest extends TestCase
             ->and($stale->replayDetected)->toBeTrue();
     }
 
+    /** @return list<array{string|null}> */
+    public static function assertionBackends(): array
+    {
+        return [[null], ['MYSQL'], ['MARIADB'], ['POSTGRES']];
+    }
+
     /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
      * @throws \InvalidArgumentException
      * @throws \LogicException
      * @throws \RuntimeException
@@ -580,10 +587,34 @@ final class PasskeyTest extends TestCase
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \Throwable
      */
+    #[DataProvider('assertionBackends')]
     #[TestDox('valid WebAuthn assertion fixture succeeds once and advances the credential counter')]
-    public function testValidWebAuthnAssertionFixtureSucceedsOnceAndAdvancesTheCredentialCounter(): void
+    public function testValidWebAuthnAssertionFixtureSucceedsOnceAndAdvancesTheCredentialCounter(?string $backend): void
     {
-        $cache = CacheLayerState::memory();
+        $factory = $backend === null ? null : CacheLayerState::pdoFactory($backend);
+        $cache = $factory === null ? CacheLayerState::memory() : $factory();
+
+        try {
+            $this->assertValidAuthentication($cache, $factory);
+        } finally {
+            $cache->clear();
+        }
+    }
+
+    /**
+     * @param (\Closure(): \Infocyph\CacheLayer\Cache\Cache)|null $factory
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Uid\Exception\InvalidArgumentException
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
+    private function assertValidAuthentication(AuthenticationStateCacheInterface $cache, ?\Closure $factory): void
+    {
         $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 60);
         $userHandle = 'fixture-user';
         $credentialId = random_bytes(32);
@@ -678,6 +709,12 @@ final class PasskeyTest extends TestCase
             ->and($mismatch->reason)->toBe(VerificationReason::Mismatch);
 
         $json = json_encode($response, JSON_THROW_ON_ERROR);
+        if ($factory !== null) {
+            $this->assertNativeAuthenticationRace($factory, $ceremony, $binding, $recordJson, $json);
+
+            return;
+        }
+
         $first = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 101);
         $second = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 102);
 
@@ -692,5 +729,64 @@ final class PasskeyTest extends TestCase
             'json',
         );
         expect($updated->counter)->toBe(101);
+    }
+
+    /**
+     * @param \Closure(): \Infocyph\CacheLayer\Cache\Cache $factory
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
+    private function assertNativeAuthenticationRace(
+        \Closure $factory,
+        PasskeyCeremony $ceremony,
+        string $binding,
+        string $recordJson,
+        string $json,
+    ): void {
+        $independent = $factory();
+        $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremony->id);
+        $initial = passkeyFixtureArray($independent->get($stateKey));
+        $service = new Passkey($independent, 'example.com', ['https://example.com'], ttlSeconds: 60);
+        expect($initial['consumed'] ?? null)->toBeFalse()
+            ->and($service->finishAuthentication('other-owner', $ceremony->id, $recordJson, $json, 101)->matched)->toBeFalse()
+            ->and($independent->get($stateKey))->toBe($initial);
+
+        $results = Concurrency::run(
+            static function () use ($factory, $binding, $ceremony, $recordJson, $json): int {
+                $result = new Passkey($factory(), 'example.com', ['https://example.com'], ttlSeconds: 60)
+                    ->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 101);
+                if (!$result->matched) {
+                    if (!$result->replayDetected || $result->reason !== VerificationReason::Replay) {
+                        throw new RuntimeException('The losing native assertion must report replay.');
+                    }
+
+                    return 0;
+                }
+
+                $serializer = new WebauthnSerializerFactory(AttestationStatementSupportManager::create())->create();
+                $updated = $serializer->deserialize(
+                    $result->credentialRecordJson ?? throw new RuntimeException('Missing verified credential record.'),
+                    CredentialRecord::class,
+                    'json',
+                );
+                if ($updated->counter !== 101) {
+                    throw new RuntimeException('The winning native assertion did not advance its credential counter.');
+                }
+
+                return 1;
+            },
+            4,
+        );
+        $consumed = passkeyFixtureArray($independent->get($stateKey));
+        $replay = $service->finishAuthentication($binding, $ceremony->id, $recordJson, $json, 102);
+        expect(array_sum($results))->toBe(1)
+            ->and($consumed['consumed'] ?? null)->toBeTrue()
+            ->and($consumed['expiresAt'] ?? null)->toBe($initial['expiresAt'] ?? null)
+            ->and($replay->reason)->toBe(VerificationReason::Replay)
+            ->and($replay->replayDetected)->toBeTrue();
     }
 }
