@@ -28,10 +28,14 @@ final class AtomicState
         ?RunwireExecutionContext $runwire,
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             $current = $cache->get($stateKey);
             if ($current === null) {
-                CacheLock::checkpoint($runwire);
+                if ($runwire !== null) {
+                    CacheLock::checkpoint($runwire);
+                }
                 if ($atomic->setIfAbsent($stateKey, $value, $ttl)) {
                     return true;
                 }
@@ -44,7 +48,9 @@ final class AtomicState
             if ($value <= $current) {
                 return false;
             }
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             if ($atomic->compareAndSet($stateKey, $current, $value, $ttl)) {
                 return true;
             }
@@ -67,7 +73,9 @@ final class AtomicState
         ?RunwireExecutionContext $runwire,
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             if ($atomic->setIfAbsent($stateKey, $marker, $ttl)) {
                 return true;
             }
@@ -102,7 +110,9 @@ final class AtomicState
         ?RunwireExecutionContext $runwire,
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             $current = $cache->get($stateKey);
             if ($current === null || $current === 1) {
                 return false;
@@ -110,7 +120,9 @@ final class AtomicState
             if ($current !== 0) {
                 throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
             }
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             if ($atomic->compareAndSet($stateKey, 0, 1, $ttl)) {
                 return true;
             }
@@ -141,7 +153,9 @@ final class AtomicState
         ?RunwireExecutionContext $runwire,
     ): mixed {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             $current = $cache->get($stateKey);
             $decision = $transition($current);
             if (!array_key_exists('replacement', $decision)) {
@@ -152,7 +166,9 @@ final class AtomicState
             if ($ttl !== null && $ttl < 1) {
                 throw new RuntimeException('Atomic authentication state transitions require a positive TTL.');
             }
-            CacheLock::checkpoint($runwire);
+            if ($runwire !== null) {
+                CacheLock::checkpoint($runwire);
+            }
             $mutated = $current === null
                 ? $atomic->setIfAbsent($stateKey, $decision['replacement'], $ttl)
                 : $atomic->compareAndSet($stateKey, $current, $decision['replacement'], $ttl);

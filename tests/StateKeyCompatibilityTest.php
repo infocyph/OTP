@@ -154,11 +154,7 @@ final class StateKeyCompatibilityTest extends TestCase
     #[TestDox('AOTP keeps its v1 challenge state key')]
     public function testAOTPKeepsItsV1ChallengeStateKey(): void
     {
-        if (!AOTP::isAvailable()) {
-            expect(AOTP::isAvailable())->toBeFalse();
-
-            return;
-        }
+        expect(AOTP::isAvailable())->toBeTrue();
 
         $cache = CacheLayerState::memory();
         $keyPair = AOTP::generateKeyPair();
@@ -189,11 +185,7 @@ final class StateKeyCompatibilityTest extends TestCase
     #[TestDox('Passkey keeps its v1 ceremony state key')]
     public function testPasskeyKeepsItsV1CeremonyStateKey(): void
     {
-        if (!Passkey::isAvailable()) {
-            expect(Passkey::isAvailable())->toBeFalse();
-
-            return;
-        }
+        expect(Passkey::isAvailable())->toBeTrue();
 
         $cache = CacheLayerState::memory();
         $ceremony = (new Passkey($cache, 'example.com', ['https://example.com']))

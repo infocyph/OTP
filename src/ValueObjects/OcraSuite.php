@@ -44,8 +44,7 @@ final readonly class OcraSuite
             match ($matches[4]) {
                 'A' => 'a',
                 'H' => 'h',
-                'N' => 'n',
-                default => throw new InvalidArgumentException('Invalid OCRA challenge format.'),
+                default => 'n',
             },
             (int) $matches[5],
             $matches[6] !== null ? strtolower($matches[6]) : null,

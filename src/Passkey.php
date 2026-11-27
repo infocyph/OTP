@@ -17,6 +17,7 @@ use RangeException;
 use RuntimeException;
 use Symfony\Component\Serializer\Exception\ExceptionInterface as SerializerException;
 use Symfony\Component\Serializer\SerializerInterface;
+use Throwable;
 use TypeError;
 use Webauthn\AttestationStatement\AttestationStatementSupportManager;
 use Webauthn\AuthenticatorAssertionResponse;
@@ -495,6 +496,16 @@ final readonly class Passkey
         return $this->deserializeStored($json, PublicKeyCredentialCreationOptions::class, 'Invalid stored passkey registration options.');
     }
 
+    private static function isMalformedCredentialFailure(Throwable $failure): bool
+    {
+        return $failure instanceof InvalidArgumentException
+            || $failure instanceof InvalidDataException
+            || $failure instanceof JsonException
+            || $failure instanceof RangeException
+            || $failure instanceof SerializerException
+            || $failure instanceof TypeError;
+    }
+
     private function deserializeCredential(string $json): ?PublicKeyCredential
     {
         if (!self::hasCredentialPayloadShape($json)) {
@@ -503,8 +514,12 @@ final readonly class Passkey
 
         try {
             $credential = $this->deserializeMixed($json, PublicKeyCredential::class);
-        } catch (InvalidArgumentException|InvalidDataException|JsonException|RangeException|SerializerException|TypeError) {
-            return null;
+        } catch (Throwable $failure) {
+            if (self::isMalformedCredentialFailure($failure)) {
+                return null;
+            }
+
+            throw $failure;
         }
 
         return $credential instanceof PublicKeyCredential ? $credential : null;
@@ -514,7 +529,6 @@ final readonly class Passkey
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
-     * @throws \Webauthn\Exception\InvalidDataException
      */
     private function deserializeMixed(string $json, string $type): mixed
     {

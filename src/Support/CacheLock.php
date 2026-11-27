@@ -464,13 +464,9 @@ final class CacheLock
     ): mixed {
         $locks = $cache->authenticationStateLock()
             ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
-        $handle = RunwireState::acquireLock(
-            $locks,
-            $key,
-            $runwire,
-            self::WAIT_SECONDS,
-            self::LEASE_SECONDS,
-        );
+        $handle = $runwire === null
+            ? $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
+            : RunwireState::acquireLock($locks, $key, $runwire, self::WAIT_SECONDS, self::LEASE_SECONDS);
         if ($handle === null) {
             self::checkpoint($runwire);
 

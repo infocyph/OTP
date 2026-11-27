@@ -124,15 +124,18 @@ final class GenericOtpTest extends TestCase
                 $key,
             ))->toThrow(InvalidArgumentException::class, 'authoritative direct backend')
             ->and(fn () => new GenericOtp($noCapability, $key))
-            ->toThrow(InvalidArgumentException::class, 'atomic or coordinated lock capability')
-            ->and(new GenericOtp(
-                new Cache(
-                    new ArrayCacheAdapter('atomic-only'),
-                    options: new CacheOptions(integrityKey: $integrityKey, failOpen: false),
-                ),
-                $key,
-            ))->toBeInstanceOf(GenericOtp::class)
-            ->and(new GenericOtp(CacheLayerState::memory(), $key))->toBeInstanceOf(GenericOtp::class);
+            ->toThrow(InvalidArgumentException::class, 'atomic or coordinated lock capability');
+
+        $atomicService = new GenericOtp(
+            new Cache(
+                new ArrayCacheAdapter('atomic-only'),
+                options: new CacheOptions(integrityKey: $integrityKey, failOpen: false),
+            ),
+            $key,
+        );
+        $ordinaryService = new GenericOtp(CacheLayerState::memory(), $key);
+        expect($atomicService->verify('atomic', $atomicService->generate('atomic')))->toBeTrue()
+            ->and($ordinaryService->verify('ordinary', $ordinaryService->generate('ordinary')))->toBeTrue();
     }
 
     #[TestDox('generic OTP HMAC is bound to challenge and key')]

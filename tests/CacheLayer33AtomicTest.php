@@ -150,6 +150,6 @@ final class CacheLayer33AtomicTest extends TestCase
         $cache->method('atomic')->willReturn($atomic);
         $cache->expects($this->never())->method('authenticationStateLock');
 
-        expect(new GenericOtp($cache, str_repeat('g', 32)))->toBeInstanceOf(GenericOtp::class);
+        expect(fn () => new GenericOtp($cache, str_repeat('g', 32)))->not->toThrow(\InvalidArgumentException::class);
     }
 }

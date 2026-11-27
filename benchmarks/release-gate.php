@@ -68,7 +68,7 @@ $workload = match ($workloadName) {
     default => runSustainedWorkload($duration, $repetitions),
 };
 $environmentStable = $stableEnvironment
-    && ($workload['result']['stability']['status'] ?? null) === 'stable';
+    && $workload['result']['stability']['status'] === 'stable';
 $document = [
     'schema_version' => 1,
     'generated_at' => gmdate('c'),
@@ -152,17 +152,23 @@ function cpuModel(): string
     return php_uname('m');
 }
 
-/** @param array<string, int>|false $usage */
+/** @param array<array-key, mixed>|false $usage */
 function cpuSeconds(array|false $usage): float
 {
     if ($usage === false) {
         throw new RuntimeException('Unable to measure process CPU usage.');
     }
 
-    return (float) ($usage['ru_utime.tv_sec'] ?? 0)
-        + (float) ($usage['ru_utime.tv_usec'] ?? 0) / 1_000_000.0
-        + (float) ($usage['ru_stime.tv_sec'] ?? 0)
-        + (float) ($usage['ru_stime.tv_usec'] ?? 0) / 1_000_000.0;
+    $seconds = 0.0;
+    foreach (['ru_utime.tv_sec', 'ru_utime.tv_usec', 'ru_stime.tv_sec', 'ru_stime.tv_usec'] as $key) {
+        $value = $usage[$key] ?? null;
+        if (!is_int($value)) {
+            throw new RuntimeException('Invalid process CPU usage measurement.');
+        }
+        $seconds += str_ends_with($key, '.tv_usec') ? $value / 1_000_000.0 : (float) $value;
+    }
+
+    return $seconds;
 }
 
 /**
@@ -277,7 +283,7 @@ function runSustainedWorkload(float $duration, int $repetitions): array
         WARMUP_OPERATIONS,
         STABILITY_SPREAD_PERCENT,
         100,
-        static function (int $repetition): callable {
+        static function (int $repetition): \Closure {
             $cache = Cache::memory('otp-release-generate-' . $repetition, benchmarkCacheOptions());
             $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
 
@@ -311,7 +317,7 @@ function runRoundTripWorkload(float $duration, int $repetitions): array
         WARMUP_OPERATIONS,
         STABILITY_SPREAD_PERCENT,
         100,
-        static function (int $repetition): callable {
+        static function (int $repetition): \Closure {
             $cache = Cache::memory('otp-release-roundtrip-' . $repetition, benchmarkCacheOptions());
             $otp = new GenericOtp($cache, str_repeat('g', 32), ttlSeconds: 60);
 
@@ -327,7 +333,7 @@ function runRoundTripWorkload(float $duration, int $repetitions): array
 
 /**
  * @param array<string, mixed> $metadata
- * @param callable(int): callable(): mixed $operationFactory
+ * @param callable(int): \Closure $operationFactory
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
  */
 function runTimedWorkload(
@@ -448,7 +454,7 @@ function runRepeatedWorkload(
         }
     }
 
-    if ($failed !== 0 || $rpms === []) {
+    if ($failed !== 0) {
         throw new RuntimeException('Representative benchmark recorded failed operations or no measurements.');
     }
 
@@ -746,7 +752,7 @@ function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
         RUNWIRE_WARMUP_OPERATIONS,
         RUNWIRE_STABILITY_SPREAD_PERCENT,
         20,
-        static function (int $repetition): callable {
+        static function (int $repetition): \Closure {
             $capabilities = new \Infocyph\Runwire\RuntimeCapabilities(
                 driver: \Infocyph\Runwire\Runtime\Enum\RuntimeDriver::NATIVE,
                 persistentProcess: true,

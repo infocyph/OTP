@@ -407,7 +407,6 @@ final class RunwireIntegrationTest extends TestCase
 
         expect($result[0])->toBe('cancelled')
             ->and($result[1])->toMatch('/\A\d{6}\z/D')
-            ->and($result[2])->toBeInstanceOf(RunwireExecutionContext::class)
             ->and($result[2]->request)->toBe($liveRequest)
             ->and(RunwireIntegration::runtime())->toBeNull();
     }

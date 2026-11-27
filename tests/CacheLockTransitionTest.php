@@ -61,7 +61,9 @@ final class CacheLockTransitionTest extends TestCase
             'unused-lock-key',
             'test',
             static function (mixed $stored): array {
-                expect($stored)->toBeArray();
+                if (!is_array($stored) || !is_int($stored['remaining'] ?? null)) {
+                    throw new RuntimeException('Invalid test state.');
+                }
                 $next = $stored;
                 $next['remaining']--;
 
@@ -104,7 +106,9 @@ final class CacheLockTransitionTest extends TestCase
             'unused-lock-key',
             'test',
             static function (mixed $stored): array {
-                expect($stored)->toBeArray();
+                if (!is_array($stored) || !is_int($stored['remaining'] ?? null)) {
+                    throw new RuntimeException('Invalid test state.');
+                }
                 $next = $stored;
                 $next['remaining']--;
 
