@@ -61,3 +61,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E2 — source exception contracts
 
 - Mapped direct missing-throws diagnostics in the PHP 8.5 analysis of da8fa1e (run 45955159443) to their enclosing source methods and added precise PHPDoc declarations across 32 source files. This is a documentation-only pass: no exception catching, analyzer suppression, control-flow change or assertion weakening. Propagated caller contracts and other diagnostic categories still require hosted analysis and follow-up.
+
+### Batch E3 — hosted QA follow-up
+
+- Run [45955469231](https://github.com/infocyph/OTP/actions/runs/45955469231): PHPStan 137 findings (previously 179); Psalm 987 (previously 1000). Pest passed on PHP 8.5 prefer-stable; Pint flagged one missing blank line in Passkey, corrected here. Earlier native PDO regression tests passed on all three database engines. Final certification remains open.
+- OTP-002 historical cluster jobs 139376823288, 139376823683, 139376826426 and 139376822095 terminated with Docker container-not-running errors (CacheLayer 4.0.3); these do not establish an OTP defect. Real cluster requalification remains outstanding.

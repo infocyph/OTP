@@ -563,6 +563,7 @@ final readonly class Passkey
         $expectedUserHandle = $state['userHandle'] ?? $record->userHandle;
 
         $options = $this->deserializeRequestOptions($state['optionsJson']);
+
         try {
             $updated = $this->assertionValidator->check(
                 $record,
