@@ -20,6 +20,7 @@ final class CacheLayer33AtomicTest extends TestCase
      * @throws \Exception
      * @throws \InvalidArgumentException
      * @throws \TypeError
+     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     #[TestDox('TOTP uses CacheLayer atomics without acquiring a replay lock')]
     public function testTOTPUsesCacheLayerAtomicsWithoutAcquiringAReplayLock(): void
@@ -56,6 +57,7 @@ final class CacheLayer33AtomicTest extends TestCase
      * @throws \Exception
      * @throws \InvalidArgumentException
      * @throws \TypeError
+     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     #[TestDox('TOTP resolves an atomic CAS race as replay without state regression')]
     public function testTOTPResolvesAnAtomicCASRaceAsReplayWithoutStateRegression(): void

@@ -80,6 +80,9 @@ final class PasskeyMobileBench
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchPasskeyBeginAuthentication(): void
@@ -93,6 +96,9 @@ final class PasskeyMobileBench
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchPasskeyBeginRegistration(): void

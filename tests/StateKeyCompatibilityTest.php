@@ -24,6 +24,8 @@ final class StateKeyCompatibilityTest extends TestCase
 {
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     #[TestDox('TOTP keeps the v1 replay-state key')]
     public function testTOTPKeepsTheV1ReplayStateKey(): void
@@ -178,6 +180,7 @@ final class StateKeyCompatibilityTest extends TestCase
      * @throws \LogicException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('AOTP keeps its v1 challenge state key')]
     public function testAOTPKeepsItsV1ChallengeStateKey(): void
@@ -227,6 +230,7 @@ final class StateKeyCompatibilityTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Throwable
      */
     #[TestDox('Passkey keeps its v1 ceremony state key')]
     public function testPasskeyKeepsItsV1CeremonyStateKey(): void

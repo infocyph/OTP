@@ -560,11 +560,17 @@ final class OtpBench
         $this->ocraTime->generate('12345678', timestamp: 1_716_532_624);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchOcraVerify(): void
     {
         $this->ocra->verify($this->ocraCode, '12345678', 0, '1234');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchOcraVerifyInvalid(): void
     {
         $this->ocra->verify('00000000', '12345678', 0, '1234');
@@ -718,6 +724,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyFuture5(): void
     {
@@ -726,6 +734,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyFuture50(): void
     {
@@ -750,6 +760,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyPast5(): void
     {
@@ -758,6 +770,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyPast50(): void
     {
@@ -768,6 +782,8 @@ final class OtpBench
      * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
      * @throws \InvalidArgumentException
      * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyReplayAccepted(): void
     {
@@ -785,6 +801,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyReplayRejected(): void
     {
@@ -798,6 +816,8 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function benchTotpVerifyWindow0(): void
     {

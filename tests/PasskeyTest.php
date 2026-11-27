@@ -81,6 +81,8 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('passkey registration creates discoverable user-verified options')]
     public function testPasskeyRegistrationCreatesDiscoverableUserVerifiedOptions(): void
@@ -122,6 +124,8 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('passkey authentication supports discoverable credentials')]
     public function testPasskeyAuthenticationSupportsDiscoverableCredentials(): void

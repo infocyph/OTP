@@ -36,6 +36,8 @@ final class AotpGridBench
      * @throws \InvalidArgumentException
      * @throws \LogicException
      * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     public function __construct()
     {
@@ -75,6 +77,7 @@ final class AotpGridBench
      * @throws \LogicException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchAotpRoundTrip(): void

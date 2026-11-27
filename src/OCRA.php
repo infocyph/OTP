@@ -281,6 +281,7 @@ final readonly class OCRA
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function verifyMutual(
         #[\SensitiveParameter]
@@ -311,6 +312,7 @@ final readonly class OCRA
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function verifyWithResult(
         #[\SensitiveParameter]
@@ -615,6 +617,7 @@ final readonly class OCRA
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     private function isReplay(
         AuthenticationStateCacheInterface $cache,

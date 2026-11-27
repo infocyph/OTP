@@ -136,3 +136,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 - Run 45967250591: PHPStan 1, Psalm 131 (PHP 8.5); five functional QA jobs and three standard benchmarks passed, sixth QA and sustained gate still running at inspection. Document actual remaining propagated exceptions from job 140399026663, remove unused hostile-fixture exception declaration, and isolate wait-status validation in a mixed boundary helper so both analyzers agree. No suppressions. Verify the new head before closure.
 - Synchronize current migration guidance with Runwire 4.0.1, CacheLayer 4.1, WebAuthn 5.3.17, and PDO state writer drain requirement. Keep historical release guidance intact.
 - Dependency matrix and Passkey regression verified by complete run 45966876266; mark A and F implemented and verified. Other gates remain open.
+
+### Batch E20 — remaining propagated exception contracts
+
+- Run 45967753545, PHP 8.5 analysis: PHPStan passed; Psalm 73 errors, all missing propagated exception contracts. Added exact declarations on source, test and benchmark methods from job 140400504521, without suppressions or behavior change. Five QA jobs passed; PHP 8.5 prefer-lowest failed only the benchmark smoke test's existing absolute p99 gate (202 tests passed). Standard benchmarks and clean install passed. Final head verification remains open.
