@@ -10,6 +10,7 @@ use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\CacheLayer\Cache\Lock\MemcachedLockProvider;
+use Infocyph\CacheLayer\Cache\Lock\PdoLockProvider;
 use Infocyph\CacheLayer\Cache\Lock\RedisLockProvider;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use InvalidArgumentException;
@@ -154,7 +155,9 @@ final class CacheLock
 
         $locks = $cache->authenticationStateLock();
 
-        return $locks === null || self::lockRequiresAtomic($locks) ? $atomic : null;
+        return $locks === null || $locks instanceof PdoLockProvider || self::lockRequiresAtomic($locks)
+            ? $atomic
+            : null;
     }
 
     /**

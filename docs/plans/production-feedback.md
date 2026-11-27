@@ -41,3 +41,9 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch F — WebAuthn assertion fixture
 
 - Replaced the legacy assertion fixture (attested-credential-data flag set during authentication, omitted crossOrigin) with an ES256 signature over the actual issued challenge, correct RP hash, UP/UV flags and counter. Added invalid-signature rejection before valid authentication and replay rejection after consumption. No production validation weakened. FLOW-02/SEC: hosted test pending; do not close until confirmed.
+
+### Batch B — PDO native state coordination
+
+- Historical PostgreSQL job 139376679657: installed CacheLayer 4.0.3, GenericOtp generation failed in the whole-record advisory-lock path. Compared CacheLayer 4.0.3 and 4.1 PdoLockProvider blobs (identical); precise advisory failure cause is not established.
+- CacheLayer 4.1 exposes native conditional PDO mutations, with row locks/transactions and corrected PostgreSQL binary payload binding. Select that supported capability before any lock attempt, not as a runtime fallback. No state format/key change, and no mixed old/new writers; deployment guidance added.
+- Added mandatory real MySQL, MariaDB and PostgreSQL independent-connection replay tests in the hosted matrix. SEC/DATA/FLOW/PERF evidence pending; upstream advisory lock issue remains separately unconfirmed, as do durable recovery/rotation scenarios.

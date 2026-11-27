@@ -106,10 +106,18 @@ PDO example
        options: $options,
    );
 
-When the selected adapter does not expose CacheLayer's atomic capability, OTP
-uses the lock returned by the authentication-state cache. Test the target
-engine's lock behavior. SQLite is useful for local integration tests; production
-multi-host deployments normally require a network database or Redis.
+With CacheLayer 4.1, OTP selects native PDO conditional mutations for whole-record
+state when available, instead of taking a separate advisory lock. A dedicated
+PDO connection must be outside an application-owned transaction so CacheLayer
+can own the atomic transaction. Otherwise the operation fails closed; an atomic
+failure is never retried through the lock path.
+
+Stop all old OTP workers sharing a PDO state namespace before deploying this
+change. Older lock-coordinated writers cannot safely run concurrently with the
+new CAS-coordinated writers. Existing state formats and keys are unchanged.
+When an adapter does not expose native atomics, OTP retains the coordinated
+lock path. SQLite is useful for local integration tests; production multi-host
+deployments normally require a network database or Redis.
 
 Local development example
 -------------------------
