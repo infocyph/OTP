@@ -7,11 +7,17 @@ namespace Infocyph\OTP\Tests;
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\CacheLayer\Cache\CacheOptions;
 use Infocyph\OTP\GenericOtp;
+use Infocyph\OTP\OCRA;
 use Infocyph\OTP\Support\CacheLock;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use RuntimeException;
 
-test('native PDO OTP state is shared and consumed exactly once across connections', function (string $backend): void {
+/**
+ * @return \Closure(): Cache
+ * @throws \RuntimeException
+ */
+function pdoStateFactory(string $backend): \Closure
+{
     $dsn = getenv('IC_' . $backend . '_DSN');
     $username = getenv('IC_' . $backend . '_USER');
     $password = getenv('IC_' . $backend . '_PASSWORD');
@@ -25,7 +31,11 @@ test('native PDO OTP state is shared and consumed exactly once across connection
         allowObjects: false,
         failOpen: false,
     );
-    $factory = static fn(): Cache => Cache::pdo($namespace, $dsn, $username, $password, options: $options);
+    return static fn(): Cache => Cache::pdo($namespace, $dsn, $username, $password, options: $options);
+}
+
+test('native PDO OTP state is shared and consumed exactly once across connections', function (string $backend): void {
+    $factory = pdoStateFactory($backend);
     $cache = $factory();
     $key = random_bytes(32);
     $binding = 'native-pdo-replay';
@@ -49,6 +59,37 @@ test('native PDO OTP state is shared and consumed exactly once across connection
         $replacement = $otp->generate($binding);
         expect(new GenericOtp($independent, $key)->verify($binding, $replacement))->toBeTrue()
             ->and($otp->verify($binding, $replacement))->toBeFalse();
+    } finally {
+        $cache->clear();
+    }
+})->with(['MYSQL', 'MARIADB', 'POSTGRES']);
+
+test('native PDO OCRA claims an initially absent replay record once and isolates replacement factors', function (string $backend): void {
+    $factory = pdoStateFactory($backend);
+    $cache = $factory();
+    $ocra = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', '12345678901234567890');
+    $challenge = '00000000';
+    $proof = $ocra->generate($challenge);
+    $stateKey = '05736871982693a8886385eabc65c0c0bb1f63f5c0bcc6d29c68b7ab05d00503';
+
+    try {
+        expect($cache->get($stateKey))->toBeNull();
+        $results = Concurrency::run(
+            static fn(): int => (int) $ocra->verifyWithResult(
+                $proof,
+                $challenge,
+                cache: $factory(),
+                factorId: 'factor-v1',
+                replayTtl: 300,
+            )->matched,
+            4,
+        );
+        $independent = $factory();
+        expect(array_sum($results))->toBe(1)
+            ->and($independent->get($stateKey))->toBe(1)
+            ->and($ocra->verifyWithResult($proof, $challenge, cache: $independent, factorId: 'factor-v1', replayTtl: 300)->matched)->toBeFalse()
+            ->and($ocra->verifyWithResult($proof, $challenge, cache: $independent, factorId: 'factor-v2', replayTtl: 300)->matched)->toBeTrue()
+            ->and($ocra->verifyWithResult($proof, $challenge, cache: $cache, factorId: 'factor-v2', replayTtl: 300)->matched)->toBeFalse();
     } finally {
         $cache->clear();
     }
