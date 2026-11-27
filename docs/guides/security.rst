@@ -113,17 +113,19 @@ payload-integrity protected, authoritative CacheLayer backend for package-owned
 authentication state. Tiered/non-authoritative or fail-open authentication state
 is rejected.
 
-TOTP, HOTP, OCRA, MobileOTP, and AOTP prefer CacheLayer 4.0 native atomic state
+TOTP, HOTP, OCRA, MobileOTP, and AOTP prefer CacheLayer 4.1 native atomic state
 where their transition maps cleanly to CAS/set-if-absent. Backends without native
 atomics require the coordinated lock fallback. Atomic capability selection is
 not runtime failover: once an atomic mutation is selected, an exception
 propagates and is never retried through a lock after an unknown commit outcome.
 
 ``GenericOtp``, ``GridOTP``, and ``Passkey`` also mutate multi-field records
-as one serializable transition. OTP uses CacheLayer 4.0 whole-record CAS when the
+as one serializable transition. OTP uses CacheLayer 4.1 whole-record CAS when the
 backend exposes a safe atomic capability and otherwise uses the coordinated lock
 fallback. It never falls back after an atomic operation has been selected and
-may have committed.
+may have committed. Only a native PDO insert with SQLSTATE ``40001`` and
+InnoDB error ``1213`` is eligible for a bounded retry, because the transaction
+was rolled back. See :doc:`storage` for the deployment and recovery boundary.
 
 AOTP first reserves an issued challenge and then atomically consumes that exact
 reservation after signature verification. Signature validity is checked before a

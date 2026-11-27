@@ -195,7 +195,7 @@ Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
 Use different keys for these two purposes. Both APIs accept 16–1024 key bytes.
 Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA/AOTP/MobileOTP calls require
 a configured fail-closed, payload-integrity protected, authoritative CacheLayer
-authentication-state cache. CacheLayer 4.0 native atomics are preferred for
+authentication-state cache. CacheLayer 4.1 native atomics are preferred for
 scalar and whole-record transitions. GenericOtp, GridOTP, and Passkey use
 whole-record CAS when available; a coordinated lock is the fallback when the
 selected backend does not expose a safe atomic capability. Start with
