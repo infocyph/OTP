@@ -47,6 +47,9 @@ function passkeyFixtureString(mixed $value): string
     return $value;
 }
 
+/**
+ * @throws \RuntimeException
+ */
 function passkeyRegistrationResponse(): string
 {
     $response = '{"id":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY","type":"public-key","rawId":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY=","response":{"clientDataJSON":"ew0KCSJ0eXBlIiA6ICJ3ZWJhdXRobi5jcmVhdGUiLA0KCSJjaGFsbGVuZ2UiIDogIlhLQURrWlNXOUI0aDBGZWs4S2JoUXVuM200ZGZKWU4zY2k5d2RYRE5KdlUiLA0KCSJvcmlnaW4iIDogImh0dHBzOi8vd2ViYXV0aG4uc3BvbWt5LWxhYnMuY29tIiwNCgkidG9rZW5CaW5kaW5nIiA6IA0KCXsNCgkJInN0YXR1cyIgOiAic3VwcG9ydGVkIg0KCX0NCn0","attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVkBZ5YE6oKCTpikraFLRGLQ1zqOxGkTDakbGTB0WSKfdKNZRQAAAABgKLAXsdRMArSzr82vyWuyACBaxUSBWmUWEuRF3rzJbcoAjJUn3RmxA4cWOcvvViKtJqQBAwM5AQAgWQEAv5VUWjpRGBvp2zawiX2JKC9WSDvVxlLfqNqU1EYsdN6iNg16FFF/0EHkt7tJz9wkwC3Cx5vYFyblUw7UF5m8qS579OcGRjvb6MHj+MQFuOKCoowBMY/VjuF+TT14deKMuWtShT2MCab1gtfnkuGAlEcu2CASvAwtbEPKZ2JkaouWWaJ3hDOYTXWYgCgtM5DqqnN9JUZjXrgmAfQC82SYh6ZAV+MQ2s4RG2jP/dvEt235oFSIkr3JEqhStQvJ+CFmjVk67oFtofcISax44CynCd2Lr89inWU1B0JwSB1oyuLPq5HCQuSmFed/piGjVfFgCbN0tCXJkAGufkDXE3J4xSFDAQAB"}}';
@@ -147,6 +150,8 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('malformed passkey responses do not consume a ceremony')]
     public function testMalformedPasskeyResponsesDoNotConsumeACeremony(): void
@@ -182,6 +187,7 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('embedded malformed WebAuthn JSON and CBOR remain non-consuming malformed results')]
     public function testEmbeddedMalformedWebAuthnJSONAndCBORRemainNonConsumingMalformedResults(): void
@@ -240,6 +246,7 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('consumed passkey ceremony state reports replay before parsing another response')]
     public function testConsumedPasskeyCeremonyStateReportsReplayBeforeParsingAnotherResponse(): void
@@ -267,6 +274,7 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('expired passkey ceremony is rejected and deleted')]
     public function testExpiredPasskeyCeremonyIsRejectedAndDeleted(): void
@@ -309,6 +317,7 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('malformed WebAuthn payload corpus remains a non-consuming credential failure')]
     public function testMalformedWebAuthnPayloadCorpusRemainsANonConsumingCredentialFailure(): void
@@ -365,6 +374,7 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('valid WebAuthn registration fixture succeeds once and then reports replay')]
     public function testValidWebAuthnRegistrationFixtureSucceedsOnceAndThenReportsReplay(): void
@@ -410,6 +420,8 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('expired atomic passkey ceremony remains terminal for a stale valid registration')]
     public function testExpiredAtomicPasskeyCeremonyRemainsTerminalForAStaleValidRegistration(): void
@@ -495,6 +507,8 @@ final class PasskeyTest extends TestCase
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('valid WebAuthn assertion fixture succeeds once and advances the credential counter')]
     public function testValidWebAuthnAssertionFixtureSucceedsOnceAndAdvancesTheCredentialCounter(): void

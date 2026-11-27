@@ -208,6 +208,9 @@ final class GenericOtpTest extends TestCase
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('failed generic OTP attempts never extend absolute expiration')]
     public function testFailedGenericOTPAttemptsNeverExtendAbsoluteExpiration(): void

@@ -287,6 +287,7 @@ final readonly class HOTP
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,

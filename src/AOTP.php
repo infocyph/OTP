@@ -121,6 +121,8 @@ final readonly class AOTP
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
      * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Throwable
      */
     public function issue(
         AuthenticationStateCacheInterface $cache,
@@ -186,6 +188,8 @@ final readonly class AOTP
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \LogicException
+     * @throws \Throwable
      */
     public function verifyWithResult(
         AuthenticationStateCacheInterface $cache,

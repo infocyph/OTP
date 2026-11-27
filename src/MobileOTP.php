@@ -105,6 +105,8 @@ final readonly class MobileOTP
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public function verifyWithWindow(
         #[\SensitiveParameter]
@@ -214,6 +216,7 @@ final readonly class MobileOTP
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,

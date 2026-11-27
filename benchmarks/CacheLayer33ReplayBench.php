@@ -107,6 +107,7 @@ final class CacheLayer33ReplayBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchAtomicMonotonicAdvance(): void
     {
@@ -125,6 +126,7 @@ final class CacheLayer33ReplayBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchAtomicOneTimeClaim(): void
     {
@@ -148,6 +150,7 @@ final class CacheLayer33ReplayBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchLockFallbackMonotonicAdvance(): void
     {
@@ -166,6 +169,7 @@ final class CacheLayer33ReplayBench
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchLockFallbackOneTimeClaim(): void
     {

@@ -11,6 +11,9 @@ use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\Tests\Support\RedisState;
 use Infocyph\OTP\TOTP;
 
+/**
+ * @throws \RuntimeException
+ */
 function redisTestPid(): int
 {
     $pid = getmypid();

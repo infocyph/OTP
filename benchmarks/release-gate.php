@@ -287,6 +287,7 @@ function buildWorkloadResult(
 
 /**
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runSustainedWorkload(float $duration, int $repetitions): array
 {
@@ -321,6 +322,7 @@ function runSustainedWorkload(float $duration, int $repetitions): array
 
 /**
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runRoundTripWorkload(float $duration, int $repetitions): array
 {
@@ -629,6 +631,10 @@ function measureConcurrentVerification(float $duration, int $repetition): array
 /**
  * @param array<int, int> $children
  * @throws RuntimeException
+ * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+ * @throws \InvalidArgumentException
+ * @throws \LogicException
+ * @throws \Throwable
  */
 function startConcurrentWorkers(array &$children, string $database, string $namespace, string $barrier, float $duration): void
 {
@@ -705,6 +711,11 @@ function countConcurrentResults(array $children, string $barrier): int
     return $ready;
 }
 
+function workerExitedSuccessfully(mixed $status): bool
+{
+    return is_int($status) && pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0;
+}
+
 /**
  * @param array<int, int> $children
  * @throws RuntimeException
@@ -713,7 +724,7 @@ function joinConcurrentWorkers(array $children): void
 {
     foreach ($children as $pid) {
         $status = 0;
-        if (pcntl_waitpid($pid, $status) !== $pid || !is_int($status) || !pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+        if (pcntl_waitpid($pid, $status) !== $pid || !workerExitedSuccessfully($status)) {
             throw new RuntimeException('Concurrent verification worker exited unsuccessfully.');
         }
     }
@@ -993,6 +1004,7 @@ function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
  *     memory_peak_mb:float,
  *     successful_rpm:float
  * }
+ * @throws \RuntimeException
  */
 function measureOperation(callable $operation, float $duration, int $sampleInterval): array
 {
@@ -1056,6 +1068,7 @@ function benchmarkCacheOptions(): CacheOptions
 
 /**
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runColdStartWorkload(string $autoload, int $repetitions): array
 {

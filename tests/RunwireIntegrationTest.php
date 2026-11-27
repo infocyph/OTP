@@ -34,6 +34,7 @@ final class RunwireIntegrationTest extends TestCase
      * @throws \LogicException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('state operations keep the synchronous path when no Runwire context is supplied')]
     public function testStateOperationsKeepTheSynchronousPathWhenNoRunwireContextIsSupplied(): void
@@ -346,6 +347,7 @@ final class RunwireIntegrationTest extends TestCase
      * @throws \LogicException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('a committed atomic mutation is not reclassified by cancellation raised during the commit')]
     public function testACommittedAtomicMutationIsNotReclassifiedByCancellationRaisedDuringTheCommit(): void

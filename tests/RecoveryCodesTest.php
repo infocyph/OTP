@@ -107,7 +107,6 @@ test('same recovery text hashes differently for different bindings', function ()
         }
 
         /**
-         * @throws \RuntimeException
          */
         #[\Override]
         public function metadata(string $binding): array

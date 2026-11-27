@@ -436,6 +436,7 @@ final class CacheLock
     /**
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     private static function storeLocked(
         AuthenticationStateCacheInterface $cache,

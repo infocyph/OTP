@@ -202,6 +202,7 @@ final class StateKeyCompatibilityTest extends TestCase
      * @throws \LogicException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('GridOTP keeps its v1 challenge state key')]
     public function testGridOTPKeepsItsV1ChallengeStateKey(): void

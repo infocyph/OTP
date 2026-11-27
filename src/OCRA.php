@@ -253,6 +253,9 @@ final readonly class OCRA
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verify(
         #[\SensitiveParameter]
         string $otp,
@@ -369,6 +372,7 @@ final readonly class OCRA
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     private function advanceCounter(
         AuthenticationStateCacheInterface $cache,
@@ -524,6 +528,7 @@ final readonly class OCRA
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     private function consumeMessage(
         AuthenticationStateCacheInterface $cache,
@@ -606,6 +611,11 @@ final readonly class OCRA
         return $this->findDriftMatch($otp, $challenge, $operation, $window, $timestamp, $timeStep);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function isReplay(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -704,6 +714,7 @@ final readonly class OCRA
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     private function verifyChallenge(
         string $otp,

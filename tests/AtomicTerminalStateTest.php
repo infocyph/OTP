@@ -100,6 +100,8 @@ final class AtomicTerminalStateTest extends TestCase
     /**
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[TestDox('atomic GridOTP attempt-exhaustion tombstone rejects a valid response from a stale timestamp')]
     public function testAtomicGridOTPAttemptExhaustionTombstoneRejectsAValidResponseFromAStaleTimestamp(): void

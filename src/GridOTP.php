@@ -147,6 +147,9 @@ final readonly class GridOTP
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function verify(
         string $factorId,

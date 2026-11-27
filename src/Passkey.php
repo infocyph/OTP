@@ -112,6 +112,9 @@ final readonly class Passkey
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     public function beginAuthentication(
         string $binding,
@@ -151,6 +154,9 @@ final readonly class Passkey
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     public function beginRegistration(
         string $binding,
@@ -196,6 +202,7 @@ final readonly class Passkey
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Throwable
      */
     public function extractCredentialId(#[\SensitiveParameter] string $credentialJson): string
     {
@@ -596,6 +603,7 @@ final readonly class Passkey
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      * @throws \InvalidArgumentException
+     * @throws \Throwable
      */
     private function finishAuthenticationState(
         mixed $stored,
@@ -664,6 +672,7 @@ final readonly class Passkey
      * @throws \RuntimeException
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \InvalidArgumentException
+     * @throws \Throwable
      */
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {

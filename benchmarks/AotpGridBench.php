@@ -47,6 +47,8 @@ final class AotpGridBench
      * @throws \InvalidArgumentException
      * @throws \LogicException
      * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     public function setUp(): void
     {
@@ -112,6 +114,8 @@ final class AotpGridBench
     /**
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchGridRoundTrip(): void

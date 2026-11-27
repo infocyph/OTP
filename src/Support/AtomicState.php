@@ -18,6 +18,7 @@ final class AtomicState
      * @throws \Infocyph\Runwire\Exception\CancelledException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     public static function advance(
         AuthenticationStateCacheInterface $cache,
@@ -58,6 +59,7 @@ final class AtomicState
      * @throws \Infocyph\Runwire\Exception\CancelledException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     public static function claim(
         AuthenticationStateCacheInterface $cache,
@@ -95,6 +97,7 @@ final class AtomicState
      * @throws \Infocyph\Runwire\Exception\CancelledException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     public static function consumeReserved(
         AuthenticationStateCacheInterface $cache,
@@ -135,6 +138,7 @@ final class AtomicState
      * @throws \Infocyph\Runwire\Exception\CancelledException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     public static function transition(
         AuthenticationStateCacheInterface $cache,

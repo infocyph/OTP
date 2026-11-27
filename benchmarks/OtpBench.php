@@ -336,6 +336,9 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchGenericOtpVerify(): void
@@ -345,6 +348,9 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchGenericOtpVerifyExhausted(): void
@@ -354,6 +360,9 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[Revs(1)]
     public function benchGenericOtpVerifyFailedAttempt(): void
@@ -363,6 +372,9 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchGenericOtpVerifyMalformed(): void
     {
@@ -371,6 +383,9 @@ final class OtpBench
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function benchGenericOtpVerifyMissing(): void
     {
@@ -399,26 +414,41 @@ final class OtpBench
         $this->hotp->verifyWithResult($this->hotpCode, 5, cache: $cache, factorId: 'bench-user');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchHotpVerify(): void
     {
         $this->hotp->verify($this->hotpCode, 5, 3);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchHotpVerifyInvalid(): void
     {
         $this->hotp->verify('000000', 5, 3);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchHotpVerifyLookAhead0(): void
     {
         $this->hotp->verify($this->hotpCode, 5);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchHotpVerifyLookAhead100(): void
     {
         $this->hotp->verify($this->hotpLookAhead100Code, 0, 100);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchHotpVerifyLookAhead25(): void
     {
         $this->hotp->verify($this->hotpLookAhead25Code, 0, 25);
@@ -460,6 +490,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGenerate(): void
     {
@@ -468,6 +499,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGenerateChallenge(): void
     {
@@ -476,6 +508,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGenerateCounter(): void
     {
@@ -484,6 +517,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGenerateFullHmac(): void
     {
@@ -501,6 +535,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGeneratePin(): void
     {
@@ -509,6 +544,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGenerateSession(): void
     {
@@ -517,6 +553,7 @@ final class OtpBench
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function benchOcraGenerateTime(): void
     {

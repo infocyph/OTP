@@ -21,12 +21,12 @@ Follow [PHPForge engineering principles](https://github.com/infocyph/PHPForge/bl
 
 ## OTP implementation tracker — 2026-11-27
 
-- [ ] A: Runwire ^4.0.1, CacheLayer ^4.1, compatible dependency updates and PHP 8.6 matrix.
+- [x] A: Runwire ^4.0.1, CacheLayer ^4.1, compatible dependency updates and PHP 8.6 matrix.
 - [ ] B: PDO lock ownership and native atomic state.
 - [ ] C: Distributed topology and replay.
 - [ ] D: Protocol coverage and cross-owner recovery qualification.
 - [ ] E: PHPStan (179) and Psalm (940) findings on baseline f40d42e; root-cause fixes, no suppressions.
-- [ ] F: Prefer-stable Passkey regression (WebAuthn 5.3.15 baseline).
+- [x] F: Prefer-stable Passkey regression (WebAuthn 5.3.15 baseline).
 - [ ] G: Documentation and migration updates.
 - [ ] H: Hosted QA, security and sustained performance gates.
 
@@ -130,3 +130,9 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E18 — explicit benchmark entry points
 
 - Run 45966876266: all six functional QA jobs, clean install, and three standard benchmark jobs passed. PHPStan had two process-status findings, corrected with runtime type validation. Psalm identified 28 private properties reachable only through PHPBench reflection; the smoke test now explicitly exercises every measured subject after its normal reset hook. Dynamic external autoload includes replaced with verified PHP CLI auto_prepend_file for paired runs; the local autoloader remains a fixed-path include. This prevents accidental candidate/baseline autoload substitution. No workload, thresholds, or authentication checks removed. Hosted certification pending.
+
+### Batch E19/G — final diagnostic propagation and migration guidance
+
+- Run 45967250591: PHPStan 1, Psalm 131 (PHP 8.5); five functional QA jobs and three standard benchmarks passed, sixth QA and sustained gate still running at inspection. Document actual remaining propagated exceptions from job 140399026663, remove unused hostile-fixture exception declaration, and isolate wait-status validation in a mixed boundary helper so both analyzers agree. No suppressions. Verify the new head before closure.
+- Synchronize current migration guidance with Runwire 4.0.1, CacheLayer 4.1, WebAuthn 5.3.17, and PDO state writer drain requirement. Keep historical release guidance intact.
+- Dependency matrix and Passkey regression verified by complete run 45966876266; mark A and F implemented and verified. Other gates remain open.
