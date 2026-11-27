@@ -60,6 +60,7 @@ test('duplicate recovery alphabet characters are normalized before entropy check
 
 test('recovery consume uses mutation state without a fallible metadata follow-up', function () {
     $store = new class implements \Infocyph\OTP\Contracts\RecoveryCodeStoreInterface {
+        #[\Override]
         public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
         {
             expect($binding)->not->toBeEmpty()
@@ -68,11 +69,13 @@ test('recovery consume uses mutation state without a fallible metadata follow-up
             return ['consumed' => true, 'total' => 2, 'remaining' => 1, 'lastUsedAt' => $usedAt];
         }
 
+        #[\Override]
         public function metadata(string $binding): array
         {
             throw new RuntimeException('Metadata must not be queried after consume for ' . $binding . '.');
         }
 
+        #[\Override]
         public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
         {
             expect($binding)->not->toBeEmpty();
@@ -92,6 +95,7 @@ test('same recovery text hashes differently for different bindings', function ()
         /** @var array<string, string> */
         public array $seen = [];
 
+        #[\Override]
         public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
         {
             $this->seen[$binding] = $hashedCode;
@@ -99,6 +103,7 @@ test('same recovery text hashes differently for different bindings', function ()
             return ['consumed' => false, 'total' => 0, 'remaining' => 0, 'lastUsedAt' => $usedAt];
         }
 
+        #[\Override]
         public function metadata(string $binding): array
         {
             $this->seen[$binding] ??= '';
@@ -106,6 +111,7 @@ test('same recovery text hashes differently for different bindings', function ()
             return ['total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
         }
 
+        #[\Override]
         public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
         {
             $this->seen[$binding] ??= '';
@@ -126,6 +132,7 @@ test('recovery codes reject impossible custom-store consumption state', function
         {
         }
 
+        #[\Override]
         public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
         {
             expect($binding)->toBe('user-1')
@@ -135,6 +142,7 @@ test('recovery codes reject impossible custom-store consumption state', function
             return $this->state;
         }
 
+        #[\Override]
         public function metadata(string $binding): array
         {
             expect($binding)->toBe('user-1');
@@ -142,6 +150,7 @@ test('recovery codes reject impossible custom-store consumption state', function
             return ['total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
         }
 
+        #[\Override]
         public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
         {
             expect($binding)->not->toBeEmpty()
@@ -170,6 +179,7 @@ test('recovery codes reject impossible custom-store replacement state', function
         {
         }
 
+        #[\Override]
         public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
         {
             expect($binding)->not->toBeEmpty()
@@ -179,6 +189,7 @@ test('recovery codes reject impossible custom-store replacement state', function
             return ['consumed' => false, 'total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
         }
 
+        #[\Override]
         public function metadata(string $binding): array
         {
             expect($binding)->not->toBeEmpty();
@@ -186,6 +197,7 @@ test('recovery codes reject impossible custom-store replacement state', function
             return ['total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
         }
 
+        #[\Override]
         public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
         {
             expect($binding)->toBe('user-1')

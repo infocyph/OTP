@@ -13,6 +13,7 @@ use Infocyph\OTP\TOTP;
 use Infocyph\OTP\VerificationReason;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class VerificationContractTest extends TestCase
 {

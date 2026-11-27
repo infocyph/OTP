@@ -83,3 +83,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E7 — explicit PHPUnit test contexts
 
 - Migrated 13 mock-bearing test files to ordinary PHPUnit test classes, retaining every test body, descriptive TestDox name and dataset. This removes reliance on Pest's dynamically rebound closure `$this` (181 UndefinedMagicMethod diagnostics), without suppressing the analyzer or changing expectations. Pest continues to run PHPUnit tests. Hosted test count and behavior must be verified before closure.
+
+### Batch E8 — state decision and test contract follow-up
+
+- Replaced ambiguous Passkey union return with explicit nullable state/transition slots; retained malformed, expired, replay and mismatch semantics. Retained runtime serializer type validation through the mixed boundary. Added missing exception imports in the namespaced PHPUnit tests, interface override attributes, and concrete test fixture validation for benchmark output, grid and concurrent OTP issuance. Hosted verification pending.

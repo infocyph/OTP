@@ -13,7 +13,7 @@ test('TOTP rotation preserves digits period and algorithm in replacement enrollm
     $next = TOTP::generateSecret();
     $rotation = (new TOTP($current, digits: 8, period: 60, algorithm: 'sha256'))
         ->planRotation($next, 'alice@example.com', 'Example', 60, 1_000);
-    $parsed = ProvisioningUriParser::parse($rotation->nextEnrollment?->uri ?? '');
+    $parsed = ProvisioningUriParser::parse($rotation->nextEnrollment->uri);
 
     expect($rotation->currentSecret)->toBe($current)
         ->and($rotation->nextSecret)->toBe($next)
@@ -30,7 +30,7 @@ test('HOTP rotation preserves algorithm digits and replacement counter', functio
     $next = HOTP::generateSecret();
     $rotation = (new HOTP($current, digits: 8, algorithm: 'sha256'))
         ->planRotation($next, 'alice@example.com', 'Example', initialCounter: 42);
-    $parsed = ProvisioningUriParser::parse($rotation->nextEnrollment?->uri ?? '');
+    $parsed = ProvisioningUriParser::parse($rotation->nextEnrollment->uri);
 
     expect($parsed->type)->toBe('hotp')
         ->and($parsed->secret)->toBe($next)
@@ -45,7 +45,7 @@ test('OCRA rotation preserves the complete authoritative suite', function () {
     $next = OCRA::generateSecret(32);
     $rotation = OCRA::fromBase32($suite, $current)
         ->planRotation($next, 'alice@example.com', 'Example');
-    $parsed = ProvisioningUriParser::parse($rotation->nextEnrollment?->uri ?? '');
+    $parsed = ProvisioningUriParser::parse($rotation->nextEnrollment->uri);
 
     expect($parsed->type)->toBe('ocra')
         ->and($parsed->secret)->toBe($next)

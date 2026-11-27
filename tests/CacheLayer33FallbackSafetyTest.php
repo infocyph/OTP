@@ -11,8 +11,10 @@ use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\OTP\OCRA;
 use Infocyph\OTP\TOTP;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class CacheLayer33FallbackSafetyTest extends TestCase
 {

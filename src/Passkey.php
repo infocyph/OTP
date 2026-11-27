@@ -518,7 +518,7 @@ final readonly class Passkey
     private function deserializeStored(string $json, string $type, string $message): object
     {
         try {
-            $value = $this->serializer->deserialize($json, $type, 'json');
+            $value = $this->deserializeMixed($json, $type);
         } catch (SerializerException $failure) {
             throw new RuntimeException($message, previous: $failure);
         }
@@ -545,11 +545,10 @@ final readonly class Passkey
         int $now,
     ): array {
         $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_AUTHENTICATION, $now);
-        if (isset($decision['state'])) {
-            $state = $decision['state'];
-        } else {
-            return $decision;
+        if ($decision['transition'] !== null) {
+            return $decision['transition'];
         }
+        $state = $decision['state'] ?? throw new LogicException('Missing verified passkey state.');
 
         $credential = $this->deserializeCredential($credentialJson);
         if ($credential === null || !($credential->response instanceof AuthenticatorAssertionResponse)) {
@@ -608,11 +607,10 @@ final readonly class Passkey
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {
         $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_REGISTRATION, $now);
-        if (isset($decision['state'])) {
-            $state = $decision['state'];
-        } else {
-            return $decision;
+        if ($decision['transition'] !== null) {
+            return $decision['transition'];
         }
+        $state = $decision['state'] ?? throw new LogicException('Missing verified passkey state.');
 
         $credential = $this->deserializeCredential($credentialJson);
         if ($credential === null || !($credential->response instanceof AuthenticatorAttestationResponse)) {
@@ -725,21 +723,15 @@ final readonly class Passkey
 
     /**
      * @return array{
-     *     state:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
-     *     result?:never
-     * }|array{
-     *     state?:never,
-     *     result:PasskeyResult,
-     *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
-     *     ttl?:int,
-     *     delete?:bool,
-     *     failure?:string
+     *     state:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}|null,
+     *     transition:array{result:PasskeyResult,replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},ttl?:int,delete?:bool,failure?:string}|null
      * }
+     * @throws \RuntimeException
      */
     private function loadStateDecision(mixed $stored, string $expectedType, int $now): array
     {
         if ($stored === null) {
-            return ['result' => PasskeyResult::mismatch()];
+            return ['state' => null, 'transition' => ['result' => PasskeyResult::mismatch()]];
         }
         $state = $this->requireState($stored);
         if ($state['expiresAt'] <= $now) {
@@ -747,21 +739,24 @@ final readonly class Passkey
             $state['expiresAt'] = $now;
 
             return [
-                'result' => PasskeyResult::mismatch(),
-                'replacement' => $state,
-                'ttl' => 1,
-                'delete' => true,
-                'failure' => 'Unable to delete passkey ceremony state.',
+                'state' => null,
+                'transition' => [
+                    'result' => PasskeyResult::mismatch(),
+                    'replacement' => $state,
+                    'ttl' => 1,
+                    'delete' => true,
+                    'failure' => 'Unable to delete passkey ceremony state.',
+                ],
             ];
         }
         if ($state['consumed']) {
-            return ['result' => PasskeyResult::replay()];
+            return ['state' => null, 'transition' => ['result' => PasskeyResult::replay()]];
         }
         if ($state['type'] !== $expectedType) {
-            return ['result' => PasskeyResult::mismatch()];
+            return ['state' => null, 'transition' => ['result' => PasskeyResult::mismatch()]];
         }
 
-        return ['state' => $state];
+        return ['state' => $state, 'transition' => null];
     }
 
     /**

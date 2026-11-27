@@ -402,8 +402,10 @@ final class GenericOtpTest extends TestCase
         sort($race);
         expect($race)->toBeIn([[0, 2], [1, 2]]);
         $newCode = file_get_contents($newCodePath);
-        expect($newCode)->toBeString()
-            ->and($otp->verify($binding, $newCode))->toBeTrue()
+        if (!is_string($newCode)) {
+            throw new RuntimeException('Concurrent issuance did not return a proof.');
+        }
+        expect($otp->verify($binding, $newCode))->toBeTrue()
             ->and($otp->verify($binding, $newCode))->toBeFalse();
 
         unlink($newCodePath);

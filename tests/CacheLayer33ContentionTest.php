@@ -8,8 +8,10 @@ use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\TOTP;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class CacheLayer33ContentionTest extends TestCase
 {

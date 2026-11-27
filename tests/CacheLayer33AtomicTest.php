@@ -12,6 +12,7 @@ use Infocyph\OTP\OCRA;
 use Infocyph\OTP\TOTP;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class CacheLayer33AtomicTest extends TestCase
 {
