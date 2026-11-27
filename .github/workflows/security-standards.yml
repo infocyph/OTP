@@ -39,6 +39,22 @@ jobs:
     secrets:
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
 
+  documentation:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    name: Documentation build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install documentation dependencies
+        run: python -m pip install -r docs/requirements.txt
+      - name: Build Sphinx documentation
+        run: python -m sphinx -W --keep-going -b html docs "$RUNNER_TEMP/otp-docs"
+
   sustained-performance:
     if: github.event_name == 'pull_request'
     name: Sustained performance gate
