@@ -20,9 +20,29 @@ use Webauthn\Denormalizer\WebauthnSerializerFactory;
 use Webauthn\PublicKeyCredentialDescriptor;
 use Webauthn\TrustPath\EmptyTrustPath;
 
+/** @return array<array-key, mixed> */
+function passkeyFixtureArray(mixed $value): array
+{
+    if (!is_array($value)) {
+        throw new RuntimeException('Expected a passkey fixture array.');
+    }
+
+    return $value;
+}
+
+function passkeyFixtureString(mixed $value): string
+{
+    if (!is_string($value)) {
+        throw new RuntimeException('Expected a passkey fixture string.');
+    }
+
+    return $value;
+}
+
 $registrationResponse = static function (): string {
     $response = '{"id":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY","type":"public-key","rawId":"WsVEgVplFhLkRd68yW3KAIyVJ90ZsQOHFjnL71YirSY=","response":{"clientDataJSON":"ew0KCSJ0eXBlIiA6ICJ3ZWJhdXRobi5jcmVhdGUiLA0KCSJjaGFsbGVuZ2UiIDogIlhLQURrWlNXOUI0aDBGZWs4S2JoUXVuM200ZGZKWU4zY2k5d2RYRE5KdlUiLA0KCSJvcmlnaW4iIDogImh0dHBzOi8vd2ViYXV0aG4uc3BvbWt5LWxhYnMuY29tIiwNCgkidG9rZW5CaW5kaW5nIiA6IA0KCXsNCgkJInN0YXR1cyIgOiAic3VwcG9ydGVkIg0KCX0NCn0","attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVkBZ5YE6oKCTpikraFLRGLQ1zqOxGkTDakbGTB0WSKfdKNZRQAAAABgKLAXsdRMArSzr82vyWuyACBaxUSBWmUWEuRF3rzJbcoAjJUn3RmxA4cWOcvvViKtJqQBAwM5AQAgWQEAv5VUWjpRGBvp2zawiX2JKC9WSDvVxlLfqNqU1EYsdN6iNg16FFF/0EHkt7tJz9wkwC3Cx5vYFyblUw7UF5m8qS579OcGRjvb6MHj+MQFuOKCoowBMY/VjuF+TT14deKMuWtShT2MCab1gtfnkuGAlEcu2CASvAwtbEPKZ2JkaouWWaJ3hDOYTXWYgCgtM5DqqnN9JUZjXrgmAfQC82SYh6ZAV+MQ2s4RG2jP/dvEt235oFSIkr3JEqhStQvJ+CFmjVk67oFtofcISax44CynCd2Lr89inWU1B0JwSB1oyuLPq5HCQuSmFed/piGjVfFgCbN0tCXJkAGufkDXE3J4xSFDAQAB"}}';
-    $responseData = json_decode($response, true, 32, JSON_THROW_ON_ERROR);
+    $responseData = passkeyFixtureArray(json_decode($response, true, 32, JSON_THROW_ON_ERROR));
+    $responseData['response'] = passkeyFixtureArray($responseData['response'] ?? null);
     $clientData = json_encode([
         'type' => 'webauthn.create',
         'challenge' => 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU',
@@ -51,18 +71,21 @@ test('passkey registration creates discoverable user-verified options', function
         'Alice',
         now: 1_700_000_000,
     );
-    $options = json_decode($ceremony->optionsJson, true, 512, JSON_THROW_ON_ERROR);
+    $options = passkeyFixtureArray(json_decode($ceremony->optionsJson, true, 512, JSON_THROW_ON_ERROR));
+    $rp = passkeyFixtureArray($options['rp'] ?? null);
+    $user = passkeyFixtureArray($options['user'] ?? null);
+    $selection = passkeyFixtureArray($options['authenticatorSelection'] ?? null);
 
     expect($ceremony->type)->toBe(PasskeyCeremony::TYPE_REGISTRATION)
         ->and($ceremony->expiresAt)->toBe(1_700_000_300)
-        ->and($options['rp']['id'] ?? null)->toBe('example.com')
-        ->and($options['user']['name'] ?? null)->toBe('alice@example.com')
-        ->and($options['authenticatorSelection']['residentKey'] ?? null)->toBe('required')
-        ->and($options['authenticatorSelection']['userVerification'] ?? null)->toBe('required')
+        ->and($rp['id'] ?? null)->toBe('example.com')
+        ->and($user['name'] ?? null)->toBe('alice@example.com')
+        ->and($selection['residentKey'] ?? null)->toBe('required')
+        ->and($selection['userVerification'] ?? null)->toBe('required')
         ->and($options['attestation'] ?? null)->toBe('none');
 
-    if (array_key_exists('name', $options['rp'])) {
-        expect($options['rp']['name'])->toBe('example.com');
+    if (array_key_exists('name', $rp)) {
+        expect($rp['name'])->toBe('example.com');
     }
 });
 
@@ -76,7 +99,7 @@ test('passkey authentication supports discoverable credentials', function () {
         'user-42:passkey:authentication',
         now: 1_700_000_000,
     );
-    $options = json_decode($ceremony->optionsJson, true, 512, JSON_THROW_ON_ERROR);
+    $options = passkeyFixtureArray(json_decode($ceremony->optionsJson, true, 512, JSON_THROW_ON_ERROR));
 
     expect($ceremony->type)->toBe(PasskeyCeremony::TYPE_AUTHENTICATION)
         ->and($options['rpId'] ?? null)->toBe('example.com')
@@ -150,9 +173,8 @@ test('embedded malformed WebAuthn JSON and CBOR remain non-consuming malformed r
         );
 
         expect($result->reason)->toBe(VerificationReason::Malformed);
-        $state = $cache->get($stateKey);
-        expect($state)->toBeArray()
-            ->and($state['consumed'] ?? null)->toBeFalse();
+        $state = passkeyFixtureArray($cache->get($stateKey));
+        expect($state['consumed'] ?? null)->toBeFalse();
     }
 });
 
@@ -161,8 +183,7 @@ test('consumed passkey ceremony state reports replay before parsing another resp
     $service = new Passkey($cache, 'example.com', ['https://example.com'], ttlSeconds: 60);
     $ceremony = $service->beginRegistration('binding', 'user-handle', 'alice', 'Alice', now: 100);
     $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0binding\0" . $ceremony->id);
-    $state = $cache->get($stateKey);
-    expect($state)->toBeArray();
+    $state = passkeyFixtureArray($cache->get($stateKey));
     $state['consumed'] = true;
     $cache->set($stateKey, $state, 60);
 
@@ -229,9 +250,8 @@ test('malformed WebAuthn payload corpus remains a non-consuming credential failu
         $result = $service->finishRegistration('malformed-binding', $ceremony->id, $payload, 101);
 
         expect($result->reason)->toBe(VerificationReason::Malformed);
-        $state = $cache->get($stateKey);
-        expect($state)->toBeArray()
-            ->and($state['consumed'] ?? null)->toBeFalse();
+        $state = passkeyFixtureArray($cache->get($stateKey));
+        expect($state['consumed'] ?? null)->toBeFalse();
     }
 
     $sentinel = '{"id":"raw-secret-sentinel","rawId":"different-secret-sentinel","type":"public-key","response":{"clientDataJSON":"e30","attestationObject":"e30"}}';
@@ -262,9 +282,9 @@ test('valid WebAuthn registration fixture succeeds once and then reports replay'
         now: 100,
     );
     $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremony->id);
-    $state = $cache->get($stateKey);
-    expect($state)->toBeArray();
-    $options = json_decode($state['optionsJson'], true, 32, JSON_THROW_ON_ERROR);
+    $state = passkeyFixtureArray($cache->get($stateKey));
+    $state = passkeyFixtureArray($state);
+    $options = passkeyFixtureArray(json_decode(passkeyFixtureString($state['optionsJson'] ?? null), true, 32, JSON_THROW_ON_ERROR));
     $options['challenge'] = 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU';
     $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
     expect($cache->set($stateKey, $state, 60))->toBeTrue();
@@ -339,8 +359,8 @@ test('expired atomic passkey ceremony remains terminal for a stale valid registr
         now: 100,
     );
 
-    expect($state)->toBeArray();
-    $options = json_decode($state['optionsJson'], true, 32, JSON_THROW_ON_ERROR);
+    $state = passkeyFixtureArray($state);
+    $options = passkeyFixtureArray(json_decode(passkeyFixtureString($state['optionsJson'] ?? null), true, 32, JSON_THROW_ON_ERROR));
     $options['challenge'] = 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU';
     $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
 
@@ -348,8 +368,7 @@ test('expired atomic passkey ceremony remains terminal for a stale valid registr
     $stale = $service->finishRegistration($binding, $ceremony->id, $registrationResponse(), 101);
 
     expect($expired->reason)->toBe(VerificationReason::Mismatch)
-        ->and($state)->toBeArray()
-        ->and($state['consumed'] ?? null)->toBeTrue()
+        ->and(passkeyFixtureArray($state)['consumed'] ?? null)->toBeTrue()
         ->and($stale->matched)->toBeFalse()
         ->and($stale->reason)->toBe(VerificationReason::Replay)
         ->and($stale->replayDetected)->toBeTrue();
@@ -368,8 +387,9 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
         throw new RuntimeException('Unable to create the WebAuthn assertion fixture key.');
     }
     $details = openssl_pkey_get_details($privateKey);
-    $x = $details['ec']['x'] ?? null;
-    $y = $details['ec']['y'] ?? null;
+    $ec = passkeyFixtureArray(passkeyFixtureArray($details)['ec'] ?? null);
+    $x = $ec['x'] ?? null;
+    $y = $ec['y'] ?? null;
     if (!is_string($x) || !is_string($y) || strlen($x) > 32 || strlen($y) > 32) {
         throw new RuntimeException('Invalid P-256 assertion fixture public key.');
     }
@@ -410,6 +430,7 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
     if (!openssl_sign($authenticatorData . hash('sha256', $clientData, true), $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
         throw new RuntimeException('Unable to sign the WebAuthn assertion fixture.');
     }
+    $signature = passkeyFixtureString($signature);
     $encode = static fn(string $value): string => rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
     $response = [
         'id' => $encode($credentialId),
@@ -437,7 +458,7 @@ test('valid WebAuthn assertion fixture succeeds once and advances the credential
     if (!openssl_sign($authenticatorData . hash('sha256', $clientData . "\0", true), $wrongSignature, $privateKey, OPENSSL_ALGO_SHA256)) {
         throw new RuntimeException('Unable to sign the negative WebAuthn assertion fixture.');
     }
-    $invalid['response']['signature'] = $encode($wrongSignature);
+    $invalid['response']['signature'] = $encode(passkeyFixtureString($wrongSignature));
     $mismatch = $service->finishAuthentication(
         $binding,
         $ceremony->id,

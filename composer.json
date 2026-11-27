@@ -36,6 +36,11 @@
         "paragonie/constant_time_encoding": "^3.1.5"
     },
     "require-dev": {
+        "ext-filter": "*",
+        "ext-openssl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*",
+        "ext-redis": "*",
         "ext-sodium": "*",
         "ext-xmlwriter": "*",
         "infocyph/phpforge": "dev-main@dev",

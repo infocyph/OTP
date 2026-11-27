@@ -70,3 +70,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E4 — test namespace contracts
 
 - Run [45955741826](https://github.com/infocyph/OTP/actions/runs/45955741826), PHP 8.5: PHPStan 138, Psalm 946, including 277 internal class/method findings caused by root-namespace tests accessing library-owned internals. Moved the 16 affected test files into `Infocyph\\OTP\\Tests` with explicit global class imports. No analyzer exemptions or production API changes. Hosted verification pending.
+
+### Batch E5 — Passkey and OCRA trust-boundary contracts
+
+- Last complete run 45955976955: all six functional QA jobs passed, clean install and standard benchmarks passed; PHPStan 138, Psalm 669 (277 internal-access findings eliminated). Sustained gate failed roundtrip 2.12% and concurrent verification 15.46%; no threshold changes.
+- Separate valid ceremony state from failure decisions, narrow JSON/EC/signature test fixture values, and declare test-only extensions. Correct OCRA mandatory capture handling without changing valid suites. Hosted validation pending.

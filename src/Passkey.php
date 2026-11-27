@@ -490,6 +490,7 @@ final readonly class Passkey
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Webauthn\Exception\InvalidDataException
      */
     private function deserializeMixed(string $json, string $type): mixed
     {
@@ -544,10 +545,11 @@ final readonly class Passkey
         int $now,
     ): array {
         $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_AUTHENTICATION, $now);
-        if (isset($decision['result'])) {
+        if (isset($decision['state'])) {
+            $state = $decision['state'];
+        } else {
             return $decision;
         }
-        $state = $decision['state'];
 
         $credential = $this->deserializeCredential($credentialJson);
         if ($credential === null || !($credential->response instanceof AuthenticatorAssertionResponse)) {
@@ -606,10 +608,11 @@ final readonly class Passkey
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {
         $decision = $this->loadStateDecision($stored, PasskeyCeremony::TYPE_REGISTRATION, $now);
-        if (isset($decision['result'])) {
+        if (isset($decision['state'])) {
+            $state = $decision['state'];
+        } else {
             return $decision;
         }
-        $state = $decision['state'];
 
         $credential = $this->deserializeCredential($credentialJson);
         if ($credential === null || !($credential->response instanceof AuthenticatorAttestationResponse)) {
@@ -722,8 +725,10 @@ final readonly class Passkey
 
     /**
      * @return array{
-     *     state:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool}
+     *     state:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
+     *     result?:never
      * }|array{
+     *     state?:never,
      *     result:PasskeyResult,
      *     replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},
      *     ttl?:int,

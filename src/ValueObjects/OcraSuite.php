@@ -27,7 +27,7 @@ final readonly class OcraSuite
      */
     public static function parse(string $suite): self
     {
-        if (preg_match(self::PATTERN, $suite, $matches, PREG_UNMATCHED_AS_NULL) !== 1 || !isset($matches[4])) {
+        if (preg_match(self::PATTERN, $suite, $matches, PREG_UNMATCHED_AS_NULL) !== 1) {
             throw new InvalidArgumentException('Invalid OCRA suite.');
         }
 
@@ -41,7 +41,12 @@ final readonly class OcraSuite
             'sha' . $matches[1],
             (int) $matches[2],
             $matches[3] !== null,
-            strtolower($matches[4]),
+            match ($matches[4]) {
+                'A' => 'a',
+                'H' => 'h',
+                'N' => 'n',
+                default => throw new InvalidArgumentException('Invalid OCRA challenge format.'),
+            },
             (int) $matches[5],
             $matches[6] !== null ? strtolower($matches[6]) : null,
             $sessionLength,
