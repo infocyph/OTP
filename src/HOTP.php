@@ -62,12 +62,16 @@ final readonly class HOTP
 
     /**
      * @throws \Exception
+     * @throws \TypeError
      */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function generate(int $counter): string
     {
         return OtpMath::hotpFromBinary($this->binarySecret, $counter, $this->digits, $this->algorithm);
@@ -80,6 +84,7 @@ final readonly class HOTP
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the same URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function getEnrollmentPayload(
         string $label,
@@ -105,6 +110,7 @@ final readonly class HOTP
      * @param string $issuer Issuer name; colons are not allowed.
      * @param int $initialCounter Initial non-negative HOTP counter.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUri(
         string $label,
@@ -136,6 +142,8 @@ final readonly class HOTP
      * @param int $initialCounter Initial non-negative HOTP counter.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \BaconQrCode\Exception\InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUriQR(
         string $label,
@@ -160,6 +168,7 @@ final readonly class HOTP
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function planRotation(
         #[\SensitiveParameter]
@@ -196,6 +205,9 @@ final readonly class HOTP
         return $this->verifyWithResult($otp, $counter, $lookAhead)->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verifyWithResult(
         #[\SensitiveParameter]
         string $otp,

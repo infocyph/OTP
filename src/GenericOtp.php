@@ -60,6 +60,9 @@ final readonly class GenericOtp
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
     {
         self::assertBinding($binding);
@@ -84,6 +87,9 @@ final readonly class GenericOtp
         }, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function generate(string $binding, ?RunwireExecutionContext $runwire = null): string
     {
         self::assertBinding($binding);
@@ -118,6 +124,9 @@ final readonly class GenericOtp
         return $otp;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verify(
         string $binding,
         #[\SensitiveParameter]
@@ -217,6 +226,7 @@ final readonly class GenericOtp
      *     delete?:bool,
      *     failure?:string
      * }
+     * @throws \RuntimeException
      */
     private function verifyState(mixed $stored, string $candidateDigest, int $now): array
     {

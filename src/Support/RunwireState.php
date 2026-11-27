@@ -61,6 +61,7 @@ final class RunwireState
 
     /**
      * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \LogicException
      */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {

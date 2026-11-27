@@ -33,6 +33,10 @@ final readonly class AOTP
     /** @var non-empty-string */
     private string $binaryPublicKey;
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     public function __construct(
         string $publicKey,
         private string $audience,
@@ -42,6 +46,9 @@ final readonly class AOTP
         self::assertAudience($audience);
     }
 
+    /**
+     * @throws \LogicException
+     */
     public static function generateKeyPair(): AotpKeyPair
     {
         self::requireSodium();
@@ -67,6 +74,7 @@ final readonly class AOTP
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \LogicException
      */
     public static function respond(
         #[\SensitiveParameter]
@@ -157,6 +165,11 @@ final readonly class AOTP
         throw new RuntimeException('Unable to reserve a unique AOTP challenge.');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function verify(
         AuthenticationStateCacheInterface $cache,
         string $factorId,

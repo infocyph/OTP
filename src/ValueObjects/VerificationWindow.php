@@ -25,6 +25,9 @@ final readonly class VerificationWindow
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function symmetric(int $window): self
     {
         return new self($window, $window);

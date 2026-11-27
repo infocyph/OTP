@@ -60,6 +60,7 @@ final readonly class Passkey
     /**
      * @param list<string> $allowedOrigins Exact WebAuthn origins, including scheme and optional port.
      * @throws \InvalidArgumentException
+     * @throws \LogicException
      */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
@@ -103,7 +104,14 @@ final readonly class Passkey
             && class_exists(WebauthnSerializerFactory::class);
     }
 
-    /** @param list<string> $credentialRecordsJson Serialized WebAuthn CredentialRecord values used as allowCredentials. */
+    /**
+     * @param list<string> $credentialRecordsJson Serialized WebAuthn CredentialRecord values used as allowCredentials.
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     public function beginAuthentication(
         string $binding,
         array $credentialRecordsJson = [],
@@ -135,7 +143,14 @@ final readonly class Passkey
         );
     }
 
-    /** @param list<string> $existingCredentialRecordsJson Serialized WebAuthn CredentialRecord values used as excludeCredentials. */
+    /**
+     * @param list<string> $existingCredentialRecordsJson Serialized WebAuthn CredentialRecord values used as excludeCredentials.
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     public function beginRegistration(
         string $binding,
         #[\SensitiveParameter]
@@ -258,6 +273,9 @@ final readonly class Passkey
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertBinding(string $binding): void
     {
         self::assertByteLength($binding, self::MAX_BINDING_LENGTH, 'Passkey bindings must contain between 1 and 190 bytes.');
@@ -283,6 +301,9 @@ final readonly class Passkey
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertCredentialJsonLength(string $json): void
     {
         self::assertByteLength($json, self::MAX_CREDENTIAL_JSON_LENGTH, 'WebAuthn credential JSON must contain between 1 and 131072 bytes.');
@@ -354,6 +375,9 @@ final readonly class Passkey
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertUserHandle(string $userHandle): void
     {
         self::assertByteLength($userHandle, 64, 'Passkey user handles must contain between 1 and 64 bytes.');
@@ -497,6 +521,9 @@ final readonly class Passkey
         return $this->serializer->deserialize($json, $type, 'json');
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     private function deserializeRecord(string $json): CredentialRecord
     {
         self::assertCredentialJsonLength($json);
@@ -504,6 +531,9 @@ final readonly class Passkey
         return $this->deserializeStored($json, CredentialRecord::class, 'Invalid persisted passkey credential record.');
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     private function deserializeRequestOptions(string $json): PublicKeyCredentialRequestOptions
     {
         return $this->deserializeStored($json, PublicKeyCredentialRequestOptions::class, 'Invalid stored passkey authentication options.');
@@ -537,6 +567,10 @@ final readonly class Passkey
      *     delete?:bool,
      *     failure?:string
      * }
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
      */
     private function finishAuthenticationState(
         mixed $stored,
@@ -603,6 +637,7 @@ final readonly class Passkey
      *     failure?:string
      * }
      * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      */
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {

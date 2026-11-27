@@ -87,3 +87,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E8 — state decision and test contract follow-up
 
 - Replaced ambiguous Passkey union return with explicit nullable state/transition slots; retained malformed, expired, replay and mismatch semantics. Retained runtime serializer type validation through the mixed boundary. Added missing exception imports in the namespaced PHPUnit tests, interface override attributes, and concrete test fixture validation for benchmark output, grid and concurrent OTP issuance. Hosted verification pending.
+
+### Batch E9 — propagated source exception contracts
+
+- Mapped the latest completed analysis (run 45963698829) to the actual source methods and added documented propagated exceptions across 21 source files. No change to behavior or suppression. The PHPUnit conversion eliminated magic-method diagnostics but introduced missing-throws findings in the explicit test methods; those remain to be addressed with accurate contracts. Hosted verification pending.

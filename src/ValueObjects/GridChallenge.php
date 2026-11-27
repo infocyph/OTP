@@ -24,6 +24,7 @@ final readonly class GridChallenge
     /**
      * @param array<array-key, string> $grid
      * @param list<int> $positions One-based secret positions in response order.
+     * @throws \InvalidArgumentException
      */
     public function __construct(
         public string $id,

@@ -82,6 +82,9 @@ final readonly class GridOTP
         return implode('', self::shuffleSecure($symbols));
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function hasSufficientDiversity(string $secret, int $challengeSize = 6): bool
     {
         self::assertSecret($secret);
@@ -114,6 +117,7 @@ final readonly class GridOTP
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function issue(
         string $factorId,
@@ -139,6 +143,9 @@ final readonly class GridOTP
         throw new RuntimeException('Unable to reserve a unique GridOTP challenge.');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verify(
         string $factorId,
         GridChallenge $challenge,
@@ -379,6 +386,8 @@ final readonly class GridOTP
      *     delete?:bool,
      *     failure?:string
      * }
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     private function verifyState(
         mixed $stored,

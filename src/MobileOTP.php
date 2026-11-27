@@ -27,6 +27,9 @@ final readonly class MobileOTP
 
     private string $secret;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         string $secret,
@@ -53,6 +56,9 @@ final readonly class MobileOTP
         return bin2hex(random_bytes(8));
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function generate(?int $timestamp = null, int $offsetSteps = 0): string
     {
         $step = $this->getTimeStepFromTimestamp($timestamp ?? time(), $offsetSteps);
@@ -78,6 +84,9 @@ final readonly class MobileOTP
         return $step + $offsetSteps;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verify(
         #[\SensitiveParameter]
         string $otp,
@@ -94,6 +103,9 @@ final readonly class MobileOTP
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verifyWithWindow(
         #[\SensitiveParameter]
         string $otp,

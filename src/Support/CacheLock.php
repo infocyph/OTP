@@ -24,6 +24,11 @@ final class CacheLock
 
     private const float WAIT_SECONDS = 1.0;
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public static function advance(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -79,6 +84,9 @@ final class CacheLock
         return null;
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {
         if ($runwire === null) {
@@ -88,6 +96,11 @@ final class CacheLock
         RunwireState::checkpoint($runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public static function consumeOnce(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -107,6 +120,8 @@ final class CacheLock
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public static function consumeReserved(
         AuthenticationStateCacheInterface $cache,
@@ -140,6 +155,8 @@ final class CacheLock
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
      */
     public static function reserveOnce(
         AuthenticationStateCacheInterface $cache,
@@ -161,6 +178,9 @@ final class CacheLock
         return self::reserveOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function stateAtomic(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         $atomic = self::assertSafe($cache);
@@ -179,6 +199,9 @@ final class CacheLock
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function synchronized(
         AuthenticationStateCacheInterface $cache,
@@ -202,6 +225,9 @@ final class CacheLock
      *     failure?:string
      * } $transition
      * @return T
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function transition(
         AuthenticationStateCacheInterface $cache,
@@ -251,6 +277,10 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function advanceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -300,6 +330,10 @@ final class CacheLock
         return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function consumeOnceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -327,6 +361,10 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function consumeReservedWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -359,6 +397,10 @@ final class CacheLock
         return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function reserveOnceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,

@@ -90,6 +90,7 @@ final class ProvisioningUriBuilder
      * @param $qrSvg Optional rendered QR SVG.
      * @phpstan-param array<string, bool> $include
      * @phpstan-param array<string, scalar|null> $additionalParameters
+     * @throws \InvalidArgumentException
      */
     public static function enrollmentPayload(
         string $type,

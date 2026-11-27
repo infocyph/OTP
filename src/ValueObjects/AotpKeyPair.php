@@ -13,6 +13,9 @@ final readonly class AotpKeyPair
 
     private const int PUBLIC_KEY_BYTES = 32;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         public string $publicKey,
         #[\SensitiveParameter]

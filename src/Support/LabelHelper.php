@@ -10,6 +10,9 @@ final class LabelHelper
 {
     private const int MAX_LABEL_LENGTH = 255;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function formatLabel(string $label, ?string $issuer = null): string
     {
         $label = self::normalizeAccountLabel($label);

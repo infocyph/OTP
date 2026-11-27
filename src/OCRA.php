@@ -54,6 +54,10 @@ final readonly class OCRA
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     public static function fromBase32(string $suite, #[\SensitiveParameter] string $secret): self
     {
         return new self($suite, SecretUtility::requireStrongBase32($secret));
@@ -61,6 +65,7 @@ final readonly class OCRA
 
     /**
      * @throws \Exception
+     * @throws \TypeError
      */
     public static function generateSecret(int $bytes = 20): string
     {
@@ -84,6 +89,9 @@ final readonly class OCRA
         return $session;
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public function generate(
         string $challenge,
         ?int $counter = null,
@@ -98,6 +106,10 @@ final readonly class OCRA
         return $this->calculate($challenge, $operation);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function generateMutual(
         string $clientChallenge,
         string $serverChallenge,
@@ -114,6 +126,9 @@ final readonly class OCRA
         return $this->calculate($challenge, $operation);
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public function generateSignature(
         string $signatureChallenge,
         ?int $counter = null,
@@ -134,6 +149,7 @@ final readonly class OCRA
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the same URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function getEnrollmentPayload(
         string $label,
@@ -157,6 +173,7 @@ final readonly class OCRA
      * @param string $label Account label without an issuer prefix.
      * @param string $issuer Issuer name; colons are not allowed.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUri(string $label, string $issuer, array $additionalParameters = []): string
     {
@@ -178,6 +195,8 @@ final readonly class OCRA
      * @param string $issuer Issuer name; colons are not allowed.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \BaconQrCode\Exception\InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUriQR(
         string $label,
@@ -202,6 +221,7 @@ final readonly class OCRA
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function planRotation(
         #[\SensitiveParameter]
@@ -253,6 +273,9 @@ final readonly class OCRA
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verifyMutual(
         #[\SensitiveParameter]
         string $otp,
@@ -586,6 +609,7 @@ final readonly class OCRA
      * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
      * @param int $offset Candidate timestep offset.
      * @return array{message:string,offset:int}|null
+     * @throws \RuntimeException
      */
     private function matchTimeOffset(string $otp, string $challenge, array $operation, int $offset): ?array
     {
@@ -609,6 +633,7 @@ final readonly class OCRA
      * @param ?int $timestamp Suite timestamp input.
      * @param bool $composite Whether the challenge was explicitly composed for mutual authentication.
      * @return array{counter:?int,pinDigest:?string,session:?string,timestamp:?int}
+     * @throws \InvalidArgumentException
      */
     private function prepareOperation(
         string $challenge,
@@ -659,6 +684,9 @@ final readonly class OCRA
         return strlen($otp) === $length && ctype_xdigit($otp);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function verifyChallenge(
         string $otp,
         string $challenge,

@@ -15,6 +15,9 @@ final readonly class AotpResponse
 
     private const int SIGNATURE_BYTES = 64;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         public string $challengeId,
         #[\SensitiveParameter]

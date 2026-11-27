@@ -48,6 +48,9 @@ final class OcraMessage
         return $bytes;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function decimalToBinary(string $decimal): string
     {
         $decimal = ltrim($decimal, '0');

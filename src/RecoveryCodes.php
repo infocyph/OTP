@@ -45,6 +45,10 @@ final readonly class RecoveryCodes
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function consume(string $binding, #[\SensitiveParameter] string $code): RecoveryCodeConsumptionResult
     {
         self::assertBinding($binding);
@@ -249,6 +253,9 @@ final readonly class RecoveryCodes
         return hash_hmac('sha256', "recovery-code\0" . $binding . "\0" . $code, $this->key);
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     private function invalidResult(string $binding): RecoveryCodeConsumptionResult
     {
         $state = self::requireMetadataState($this->store->metadata($binding));
