@@ -101,3 +101,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E11 — fixture exception contracts
 
 - Record propagated exceptions reported by Psalm on unchanged explicit PHPUnit methods and test support methods. No ignore rules added. Hosted verification pending.
+
+### Batch E12 — runtime contracts and source complexity
+
+- Run 45964581553: PHPStan 22, Psalm 663; clean install and standard benchmarks pass; all QA jobs blocked by Passkey method ordering. Reordered the static helper and removed redundant list checks (required string keys already exclude lists). Consolidated conditional atomic cancellation checks through the existing null-aware checkpoint, preserving precommit cancellation and retry bounds. Declared the real cancellation contract on GenericOtp generation. Hosted verification pending; sustained performance must be remeasured.

@@ -88,7 +88,10 @@ final readonly class GenericOtp
     }
 
     /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function generate(string $binding, ?RunwireExecutionContext $runwire = null): string
     {

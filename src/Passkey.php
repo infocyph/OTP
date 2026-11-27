@@ -408,7 +408,7 @@ final readonly class Passkey
         } catch (JsonException) {
             return false;
         }
-        if (!is_array($data) || array_is_list($data)) {
+        if (!is_array($data)) {
             return false;
         }
 
@@ -420,7 +420,6 @@ final readonly class Passkey
             || $data['rawId'] === ''
             || ($data['type'] ?? null) !== 'public-key'
             || !is_array($response)
-            || array_is_list($response)
             || !is_string($response['clientDataJSON'] ?? null)
             || $response['clientDataJSON'] === ''
         ) {
@@ -432,6 +431,16 @@ final readonly class Passkey
                 is_string($response['authenticatorData'] ?? null)
                 && is_string($response['signature'] ?? null)
             );
+    }
+
+    private static function isMalformedCredentialFailure(Throwable $failure): bool
+    {
+        return $failure instanceof InvalidArgumentException
+            || $failure instanceof InvalidDataException
+            || $failure instanceof JsonException
+            || $failure instanceof RangeException
+            || $failure instanceof SerializerException
+            || $failure instanceof TypeError;
     }
 
     private static function lockKey(string $binding, string $ceremonyId): string
@@ -494,16 +503,6 @@ final readonly class Passkey
         }
 
         return $this->deserializeStored($json, PublicKeyCredentialCreationOptions::class, 'Invalid stored passkey registration options.');
-    }
-
-    private static function isMalformedCredentialFailure(Throwable $failure): bool
-    {
-        return $failure instanceof InvalidArgumentException
-            || $failure instanceof InvalidDataException
-            || $failure instanceof JsonException
-            || $failure instanceof RangeException
-            || $failure instanceof SerializerException
-            || $failure instanceof TypeError;
     }
 
     private function deserializeCredential(string $json): ?PublicKeyCredential
