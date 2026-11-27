@@ -7,6 +7,7 @@ namespace Infocyph\OTP\Tests;
 use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
+use Infocyph\OTP\AOTP;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\GridOTP;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
@@ -246,6 +247,43 @@ final class AtomicTerminalStateTest extends TestCase
         $cache->expects($this->never())->method('set');
 
         expect(new GridOTP($cache, $secret)->verifyWithResult('factor', $challenge, $response)->reason)
+            ->toBe(VerificationReason::Mismatch);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
+    #[TestDox('AOTP rejects expired reservations after the authoritative consumption read')]
+    public function testAotpRechecksImplicitDeadlineBeforeAtomicConsumption(): void
+    {
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->method('authenticationStateLock')->willReturn(null);
+        $atomic->expects($this->never())->method('compareAndSet');
+        $reads = 0;
+        $cache->expects($this->exactly(2))->method('get')->willReturnCallback(static function () use (&$reads): int {
+            if (++$reads === 2) {
+                usleep(2_100_000);
+            }
+
+            return 0;
+        });
+
+        $keys = AOTP::generateKeyPair();
+        $aotp = new AOTP($keys->publicKey, 'login.example.com');
+        $challenge = $aotp->issue(CacheLayerState::memory(), 'factor', 'login', ttlSeconds: 2);
+        $response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com', 'login', $challenge->issuedAt);
+
+        expect($aotp->verifyWithResult($cache, 'factor', $challenge, $response)->reason)
             ->toBe(VerificationReason::Mismatch);
     }
 }

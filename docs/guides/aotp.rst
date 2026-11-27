@@ -198,6 +198,10 @@ State and replay behavior
 state write fails, no usable challenge is returned. After a valid signature,
 verification atomically transitions the reservation from ``0`` to ``1``.
 Concurrent valid submissions therefore have exactly one successful consumer.
+Implicit verification rechecks the signed expiry after state access and before
+consumption, including atomic retries. Explicit timestamps retain their
+caller-supplied semantics.
+
 The consumed marker remains until the original challenge expiry so duplicates
 from a valid signer can be reported as ``VerificationReason::Replay``.
 

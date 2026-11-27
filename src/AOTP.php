@@ -204,15 +204,15 @@ final readonly class AOTP
         self::assertFactorId($factorId);
         CacheLock::assertSafe($cache);
         CacheLock::checkpoint($runwire);
-        $now ??= time();
-        if ($now < 0) {
+        $verificationTime = $now ?? time();
+        if ($verificationTime < 0) {
             throw new InvalidArgumentException('AOTP verification timestamp must be non-negative.');
         }
         if (
             !hash_equals($challenge->id, $response->challengeId)
             || !hash_equals($this->audience, $challenge->audience)
-            || $challenge->issuedAt > $now
-            || $challenge->expiresAt <= $now
+            || $challenge->issuedAt > $verificationTime
+            || $challenge->expiresAt <= $verificationTime
         ) {
             return VerificationResult::mismatch();
         }
@@ -230,11 +230,15 @@ final readonly class AOTP
         if (!sodium_crypto_sign_verify_detached($signature, $challenge->signingPayload(), $this->binaryPublicKey)) {
             return VerificationResult::mismatch();
         }
+        $verificationTime = $now ?? time();
+        if ($challenge->expiresAt <= $verificationTime) {
+            return VerificationResult::mismatch();
+        }
         if ($state === 1) {
             return VerificationResult::replay();
         }
 
-        $ttl = max(1, $challenge->expiresAt - $now);
+        $ttl = $challenge->expiresAt - $verificationTime;
         if (!CacheLock::consumeReserved(
             $cache,
             $stateKey,
@@ -242,8 +246,11 @@ final readonly class AOTP
             $ttl,
             'AOTP challenge',
             $runwire,
+            $now === null ? $challenge->expiresAt : null,
         )) {
-            return VerificationResult::replay();
+            return $challenge->expiresAt <= ($now ?? time())
+                ? VerificationResult::mismatch()
+                : VerificationResult::replay();
         }
 
         return VerificationResult::success();

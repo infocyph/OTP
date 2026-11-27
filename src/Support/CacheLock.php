@@ -134,6 +134,7 @@ final class CacheLock
         int $ttl,
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
+        ?int $expiresAt = null,
     ): bool {
         self::checkpoint($runwire);
         if ($ttl < 1) {
@@ -141,10 +142,10 @@ final class CacheLock
         }
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
-            return AtomicState::consumeReserved($cache, $atomic, $stateKey, $ttl, $stateName, $runwire);
+            return AtomicState::consumeReserved($cache, $atomic, $stateKey, $ttl, $stateName, $runwire, $expiresAt);
         }
 
-        return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
+        return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire, $expiresAt);
     }
 
     /**
@@ -377,11 +378,12 @@ final class CacheLock
         int $ttl,
         string $stateName,
         ?RunwireExecutionContext $runwire,
+        ?int $expiresAt,
     ): bool {
         return self::synchronizedKnownSafe(
             $cache,
             $lockKey,
-            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName, $runwire): bool {
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName, $runwire, $expiresAt): bool {
                 $current = $cache->get($stateKey);
                 if ($current === null || $current === 1) {
                     return false;
@@ -389,7 +391,15 @@ final class CacheLock
                 if ($current !== 0) {
                     throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
                 }
-                self::storeLocked($cache, $locks, $handle, $stateKey, 1, $ttl, 'Unable to consume reserved ' . $stateName . '.', $runwire);
+                self::checkpoint($runwire);
+                self::ensureOwned($locks, $handle);
+                $remaining = $expiresAt === null ? $ttl : $expiresAt - time();
+                if ($remaining < 1) {
+                    return false;
+                }
+                if (!$cache->set($stateKey, 1, $remaining)) {
+                    throw new RuntimeException('Unable to consume reserved ' . $stateName . '.');
+                }
 
                 return true;
             },

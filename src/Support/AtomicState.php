@@ -109,6 +109,7 @@ final class AtomicState
         int $ttl,
         string $stateName,
         ?RunwireExecutionContext $runwire,
+        ?int $expiresAt = null,
     ): bool {
         for ($attempt = 0; $attempt < self::MAX_ATOMIC_ATTEMPTS; $attempt++) {
             CacheLock::checkpoint($runwire);
@@ -120,7 +121,11 @@ final class AtomicState
                 throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
             }
             CacheLock::checkpoint($runwire);
-            if ($atomic->compareAndSet($stateKey, 0, 1, $ttl)) {
+            $remaining = $expiresAt === null ? $ttl : $expiresAt - time();
+            if ($remaining < 1) {
+                return false;
+            }
+            if ($atomic->compareAndSet($stateKey, 0, 1, $remaining)) {
                 return true;
             }
         }
