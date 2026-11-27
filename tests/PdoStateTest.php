@@ -226,14 +226,13 @@ test('native PDO monotonic OTP transitions elect one winner and never regress ac
                 cache: $target,
                 factorId: $owner,
             ),
-            'OCRA' => new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', str_repeat('k', 32))->verifyWithResult(
+            default => new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', str_repeat('k', 32))->verifyWithResult(
                 new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', str_repeat('k', 32))->generate('12345678', $counter),
                 '12345678',
                 $counter,
                 cache: $target,
                 factorId: $owner,
             ),
-            default => throw new RuntimeException('Unknown monotonic protocol fixture.'),
         };
     };
 
