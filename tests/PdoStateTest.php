@@ -4,39 +4,18 @@ declare(strict_types=1);
 
 namespace Infocyph\OTP\Tests;
 
-use Infocyph\CacheLayer\Cache\Cache;
-use Infocyph\CacheLayer\Cache\CacheOptions;
+use Infocyph\OTP\AOTP;
 use Infocyph\OTP\GenericOtp;
+use Infocyph\OTP\GridOTP;
 use Infocyph\OTP\OCRA;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
+use Infocyph\OTP\VerificationReason;
 use RuntimeException;
 
-/**
- * @return \Closure(): Cache
- * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
- * @throws \RuntimeException
- */
-function pdoStateFactory(string $backend): \Closure
-{
-    $dsn = getenv('IC_' . $backend . '_DSN');
-    $username = getenv('IC_' . $backend . '_USER');
-    $password = getenv('IC_' . $backend . '_PASSWORD');
-    if (!is_string($dsn) || $dsn === '' || !is_string($username) || !is_string($password)) {
-        throw new RuntimeException('The configured native PDO OTP test service is required.');
-    }
-    $namespace = 'otp-pdo-' . bin2hex(random_bytes(8));
-    $options = new CacheOptions(
-        integrityKey: random_bytes(32),
-        allowClosures: false,
-        allowObjects: false,
-        failOpen: false,
-    );
-    return static fn(): Cache => Cache::pdo($namespace, $dsn, $username, $password, options: $options);
-}
-
 test('native PDO OTP state is shared and consumed exactly once across connections', function (string $backend): void {
-    $factory = pdoStateFactory($backend);
+    $factory = CacheLayerState::pdoFactory($backend);
     $cache = $factory();
     $key = random_bytes(32);
     $binding = 'native-pdo-replay';
@@ -66,7 +45,7 @@ test('native PDO OTP state is shared and consumed exactly once across connection
 })->with(['MYSQL', 'MARIADB', 'POSTGRES']);
 
 test('native PDO OCRA claims an initially absent replay record once and isolates replacement factors', function (string $backend): void {
-    $factory = pdoStateFactory($backend);
+    $factory = CacheLayerState::pdoFactory($backend);
     $cache = $factory();
     $ocra = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', '12345678901234567890');
     $challenge = '00000000';
@@ -97,7 +76,7 @@ test('native PDO OCRA claims an initially absent replay record once and isolates
 })->with(['MYSQL', 'MARIADB', 'POSTGRES']);
 
 test('native PDO GenericOtp preserves expiry and attempt ownership across independent writers', function (string $backend): void {
-    $factory = pdoStateFactory($backend);
+    $factory = CacheLayerState::pdoFactory($backend);
     $cache = $factory();
     $independent = $factory();
     $key = random_bytes(32);
@@ -138,6 +117,69 @@ test('native PDO GenericOtp preserves expiry and attempt ownership across indepe
         expect($verifier->delete($binding))->toBeTrue()
             ->and($otp->verify($binding, $proof))->toBeFalse()
             ->and($independent->get($stateKey))->toBeNull();
+    } finally {
+        $cache->clear();
+    }
+})->with(['MYSQL', 'MARIADB', 'POSTGRES']);
+
+test('native PDO AOTP reserves and consumes a signed challenge for exactly one owner', function (string $backend): void {
+    $factory = CacheLayerState::pdoFactory($backend);
+    $cache = $factory();
+    $keys = AOTP::generateKeyPair();
+    $aotp = new AOTP($keys->publicKey, 'login.example.com');
+    try {
+        $challenge = $aotp->issue($cache, 'factor-v1', 'login:flow-a', now: 1_000);
+        $response = AOTP::respond($keys->privateKey, $challenge, 'login.example.com', 'login:flow-a', now: 1_001);
+        $stateKey = hash('sha256', "infocyph:otp:aotp:state:v1\0factor-v1\0" . hash('sha256', $challenge->signingPayload(), true));
+        $independent = $factory();
+        expect($independent->get($stateKey))->toBe(0)
+            ->and($aotp->verify($independent, 'factor-v2', $challenge, $response, 1_001))->toBeFalse()
+            ->and($independent->get($stateKey))->toBe(0);
+
+        $results = Concurrency::run(
+            static fn(): int => (int) $aotp->verify($factory(), 'factor-v1', $challenge, $response, 1_001),
+            4,
+        );
+        expect(array_sum($results))->toBe(1)
+            ->and($independent->get($stateKey))->toBe(1)
+            ->and($aotp->verifyWithResult($independent, 'factor-v1', $challenge, $response, 1_002)->reason)
+            ->toBe(VerificationReason::Replay);
+    } finally {
+        $cache->clear();
+    }
+})->with(['MYSQL', 'MARIADB', 'POSTGRES']);
+
+test('native PDO GridOTP keeps challenge ownership and consumption serializable', function (string $backend): void {
+    $factory = CacheLayerState::pdoFactory($backend);
+    $cache = $factory();
+    $secret = GridOTP::generateSecret();
+    $grid = new GridOTP($cache, $secret);
+    try {
+        $challenge = $grid->issue('factor-v1', now: 1_000);
+        $response = GridOTP::respond($challenge, $secret);
+        $stateKey = hash('sha256', "infocyph:otp:gridotp:state:v1\0factor-v1\0" . $challenge->id);
+        $independent = $factory();
+        $initial = $independent->get($stateKey);
+        if (!is_array($initial)) {
+            throw new RuntimeException('Expected a native GridOTP challenge record.');
+        }
+        expect($initial['consumed'] ?? null)->toBeFalse()
+            ->and(new GridOTP($independent, $secret)->verify('factor-v2', $challenge, $response, 1_001))->toBeFalse()
+            ->and($independent->get($stateKey))->toBe($initial);
+
+        $results = Concurrency::run(
+            static fn(): int => (int) new GridOTP($factory(), $secret)->verify('factor-v1', $challenge, $response, 1_001),
+            4,
+        );
+        $consumed = $independent->get($stateKey);
+        if (!is_array($consumed)) {
+            throw new RuntimeException('Expected a native GridOTP consumed record.');
+        }
+        expect(array_sum($results))->toBe(1)
+            ->and($consumed['consumed'] ?? null)->toBeTrue()
+            ->and($consumed['expiresAt'] ?? null)->toBe($initial['expiresAt'] ?? null)
+            ->and(new GridOTP($independent, $secret)->verifyWithResult('factor-v1', $challenge, $response, 1_002)->reason)
+            ->toBe(VerificationReason::Replay);
     } finally {
         $cache->clear();
     }

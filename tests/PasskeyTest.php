@@ -9,9 +9,11 @@ use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Passkey;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
+use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\ValueObjects\PasskeyCeremony;
 use Infocyph\OTP\VerificationReason;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -68,6 +70,70 @@ function passkeyRegistrationResponse(): string
 
 final class PasskeyTest extends TestCase
 {
+    /** @return list<array{string}> */
+    public static function nativePdoBackends(): array
+    {
+        return [['MYSQL'], ['MARIADB'], ['POSTGRES']];
+    }
+
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
+    #[DataProvider('nativePdoBackends')]
+    #[TestDox('native PDO passkey registration permits exactly one completion for $backend')]
+    public function testNativePdoRegistrationRace(string $backend): void
+    {
+        $factory = CacheLayerState::pdoFactory($backend);
+        $cache = $factory();
+        $binding = 'fixture-native-registration';
+        $rp = 'webauthn.spomky-labs.com';
+        $origins = ['https://webauthn.spomky-labs.com'];
+
+        try {
+            $service = new Passkey($cache, $rp, $origins, ttlSeconds: 60);
+            $ceremony = $service->beginRegistration(
+                $binding,
+                'f6eabc4b-b92b-4c24-867c-efcba88cc94f',
+                'test@example.com',
+                'Test User',
+                now: 100,
+            );
+            $stateKey = hash('sha256', "infocyph:otp:passkey:state:v1\0" . $binding . "\0" . $ceremony->id);
+            $independent = $factory();
+            $state = passkeyFixtureArray($independent->get($stateKey));
+            $options = passkeyFixtureArray(json_decode(passkeyFixtureString($state['optionsJson'] ?? null), true, 32, JSON_THROW_ON_ERROR));
+            $options['challenge'] = 'XKADkZSW9B4h0Fek8KbhQun3m4dfJYN3ci9wdXDNJvU';
+            $state['optionsJson'] = json_encode($options, JSON_THROW_ON_ERROR);
+            expect($independent->set($stateKey, $state, 60))->toBeTrue();
+
+            $response = passkeyRegistrationResponse();
+            expect($service->finishRegistration('other-owner', $ceremony->id, $response, 101)->matched)->toBeFalse()
+                ->and($independent->get($stateKey))->toBe($state);
+            $results = Concurrency::run(
+                static fn(): int => (int) new Passkey($factory(), $rp, $origins, ttlSeconds: 60)
+                    ->finishRegistration($binding, $ceremony->id, $response, 101)->matched,
+                4,
+            );
+            $consumed = passkeyFixtureArray($independent->get($stateKey));
+            $replay = $service->finishRegistration($binding, $ceremony->id, $response, 102);
+            expect(array_sum($results))->toBe(1)
+                ->and($consumed['consumed'] ?? null)->toBeTrue()
+                ->and($consumed['expiresAt'] ?? null)->toBe($state['expiresAt'] ?? null)
+                ->and($replay->reason)->toBe(VerificationReason::Replay)
+                ->and($replay->replayDetected)->toBeTrue();
+        } finally {
+            $cache->clear();
+        }
+    }
+
     #[TestDox('passkey dependency is available in the development matrix')]
     public function testPasskeyDependencyIsAvailableInTheDevelopmentMatrix(): void
     {
