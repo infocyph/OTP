@@ -113,3 +113,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 ### Batch E14 — benchmark process and measurement contracts
 
 - Split repeat aggregation, worker launch/barrier/sample/join and independent result decoding into bounded helpers; validate CLI and process identifiers and reject malformed measurement records instead of silently converting them. Retained four workers, original timings, workloads, resource sampling and acceptance limits. Added lock overrides. Hosted performance and QA verification pending.
+
+### Batch E15 — hostile recovery-store input fixtures
+
+- Keep every deliberately malformed recovery-store dataset, but use mock return callbacks instead of inaccurate implementation return contracts. Preserve the binding, hash, issuance and error assertions. Validate the Redis test process identifier. Hosted verification pending.

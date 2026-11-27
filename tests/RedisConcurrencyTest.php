@@ -16,7 +16,7 @@ beforeEach(function () {
 });
 
 test('Redis serializes generic OTP success and failed-attempt races', function () {
-    $namespace = 'otp-redis-generic-' . getmypid() . '-' . bin2hex(random_bytes(8));
+    $namespace = 'otp-redis-generic-' . (getmypid() ?: throw new \RuntimeException('Unable to identify Redis test process.')) . '-' . bin2hex(random_bytes(8));
     RedisState::cache($namespace)->clear();
     $key = str_repeat('g', 32);
     $binding = 'redis-generic-factor';
@@ -41,7 +41,7 @@ test('Redis serializes generic OTP success and failed-attempt races', function (
 })->group('redis');
 
 test('Redis serializes TOTP HOTP and OCRA replay races', function (string $primitive) {
-    $namespace = 'otp-redis-' . strtolower($primitive) . '-' . getmypid() . '-' . bin2hex(random_bytes(8));
+    $namespace = 'otp-redis-' . strtolower($primitive) . '-' . (getmypid() ?: throw new \RuntimeException('Unable to identify Redis test process.')) . '-' . bin2hex(random_bytes(8));
     RedisState::cache($namespace)->clear();
     $totpSecret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
     $totpCode = (new TOTP($totpSecret))->generate(2_000_000_000);
@@ -72,7 +72,7 @@ test('Redis serializes TOTP HOTP and OCRA replay races', function (string $primi
 })->with(['TOTP', 'HOTP', 'OCRA'])->group('redis');
 
 test('Redis atomics never regress monotonic state in higher-lower races', function (string $primitive) {
-    $namespace = 'otp-redis-order-' . strtolower($primitive) . '-' . getmypid() . '-' . bin2hex(random_bytes(8));
+    $namespace = 'otp-redis-order-' . strtolower($primitive) . '-' . (getmypid() ?: throw new \RuntimeException('Unable to identify Redis test process.')) . '-' . bin2hex(random_bytes(8));
     RedisState::cache($namespace)->clear();
     $totpSecret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
     $ocraKey = '12345678901234567890123456789012';
