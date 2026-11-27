@@ -69,6 +69,9 @@ test('recovery consume uses mutation state without a fallible metadata follow-up
             return ['consumed' => true, 'total' => 2, 'remaining' => 1, 'lastUsedAt' => $usedAt];
         }
 
+        /**
+         * @throws \RuntimeException
+         */
         #[\Override]
         public function metadata(string $binding): array
         {
@@ -103,6 +106,9 @@ test('same recovery text hashes differently for different bindings', function ()
             return ['consumed' => false, 'total' => 0, 'remaining' => 0, 'lastUsedAt' => $usedAt];
         }
 
+        /**
+         * @throws \RuntimeException
+         */
         #[\Override]
         public function metadata(string $binding): array
         {

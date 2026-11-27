@@ -210,6 +210,9 @@ final readonly class Passkey
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function finishAuthentication(
         string $binding,
@@ -247,6 +250,9 @@ final readonly class Passkey
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function finishRegistration(
         string $binding,
@@ -469,6 +475,7 @@ final readonly class Passkey
      * @param array<array-key, mixed> $recordsJson
      * @return list<\Webauthn\PublicKeyCredentialDescriptor>
      * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     private function credentialDescriptors(array $recordsJson): array
     {
@@ -505,6 +512,9 @@ final readonly class Passkey
         return $this->deserializeStored($json, PublicKeyCredentialCreationOptions::class, 'Invalid stored passkey registration options.');
     }
 
+    /**
+     * @throws \Throwable
+     */
     private function deserializeCredential(string $json): ?PublicKeyCredential
     {
         if (!self::hasCredentialPayloadShape($json)) {
@@ -536,6 +546,7 @@ final readonly class Passkey
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     private function deserializeRecord(string $json): CredentialRecord
     {
@@ -584,6 +595,7 @@ final readonly class Passkey
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
      * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     * @throws \InvalidArgumentException
      */
     private function finishAuthenticationState(
         mixed $stored,
@@ -651,6 +663,7 @@ final readonly class Passkey
      * }
      * @throws \RuntimeException
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \InvalidArgumentException
      */
     private function finishRegistrationState(mixed $stored, string $credentialJson, int $now): array
     {
@@ -694,6 +707,8 @@ final readonly class Passkey
 
     /**
      * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     private function issueCeremony(
         string $binding,
@@ -775,6 +790,7 @@ final readonly class Passkey
      *     transition:array{result:PasskeyResult,replacement?:array{v:int,type:string,optionsJson:string,userHandle:?string,expiresAt:int,consumed:bool},ttl?:int,delete?:bool,failure?:string}|null
      * }
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     private function loadStateDecision(mixed $stored, string $expectedType, int $now): array
     {

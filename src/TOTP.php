@@ -298,6 +298,11 @@ final readonly class TOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -316,6 +321,7 @@ final readonly class TOTP
      * @param int $currentStep Current moving-factor timestep.
      * @param VerificationWindow $window Accepted past and future drift.
      * @return array{step:int,offset:int}|null
+     * @throws \InvalidArgumentException
      */
     private function findMatch(string $otp, int $currentStep, VerificationWindow $window): ?array
     {

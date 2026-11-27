@@ -210,6 +210,11 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,
         string $factorId,

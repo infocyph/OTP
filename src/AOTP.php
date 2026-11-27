@@ -120,6 +120,7 @@ final readonly class AOTP
     /**
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     public function issue(
         AuthenticationStateCacheInterface $cache,

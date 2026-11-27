@@ -103,6 +103,7 @@ final class OCRATest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     #[TestDox('non-counter OCRA rejects irrelevant counters and cannot vary replay identity')]
     public function testNonCounterOCRARejectsIrrelevantCountersAndCannotVaryReplayIdentity(): void
@@ -136,6 +137,7 @@ final class OCRATest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     #[TestDox('counter OCRA advances monotonically and exposes next counter')]
     public function testCounterOCRAAdvancesMonotonicallyAndExposesNextCounter(): void
@@ -195,6 +197,7 @@ final class OCRATest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     #[TestDox('OCRA time verification supports explicit bounded drift and replay')]
     public function testOCRATimeVerificationSupportsExplicitBoundedDriftAndReplay(): void
@@ -284,6 +287,7 @@ final class OCRATest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     #[TestDox('concurrent counter OCRA verification accepts one request')]
     public function testConcurrentCounterOCRAVerificationAcceptsOneRequest(): void
@@ -316,6 +320,7 @@ final class OCRATest extends TestCase
      * @throws \InvalidArgumentException
      * @throws \TypeError
      * @throws \RuntimeException
+     * @throws \LogicException
      */
     #[TestDox('concurrent challenge OCRA verification accepts one request')]
     public function testConcurrentChallengeOCRAVerificationAcceptsOneRequest(): void

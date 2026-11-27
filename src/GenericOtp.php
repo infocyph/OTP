@@ -62,6 +62,9 @@ final readonly class GenericOtp
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
     {
@@ -129,6 +132,9 @@ final readonly class GenericOtp
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function verify(
         string $binding,

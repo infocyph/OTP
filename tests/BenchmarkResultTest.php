@@ -13,7 +13,10 @@ use ReflectionClass;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
-/** @return array<array-key, mixed> */
+/**
+ * @return array<array-key, mixed>
+ * @throws \RuntimeException
+ */
 function benchmarkResultArray(mixed $value): array
 {
     if (!is_array($value)) {

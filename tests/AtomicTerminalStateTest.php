@@ -17,6 +17,9 @@ final class AtomicTerminalStateTest extends TestCase
 {
     /**
      * @throws \InvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     #[TestDox('atomic GenericOtp terminal tombstone rejects a delayed verifier with an earlier timestamp')]
     public function testAtomicGenericOtpTerminalTombstoneRejectsADelayedVerifierWithAnEarlierTimestamp(): void

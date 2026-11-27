@@ -23,11 +23,21 @@ final class PasskeyMobileBench
 
     private Passkey $passkey;
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     public function __construct()
     {
         $this->setUp();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     public function setUp(): void
     {
         $this->cache = Cache::memory(
@@ -48,22 +58,42 @@ final class PasskeyMobileBench
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchMobileOtpGenerate(): void
     {
         $this->mobileOtp->generate(1_234_567_890);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchMobileOtpVerify(): void
     {
         $this->mobileOtp->verify($this->mobileOtpCode, 1_234_567_890);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     #[Revs(1)]
     public function benchPasskeyBeginAuthentication(): void
     {
         $this->passkey->beginAuthentication('bench:passkey:auth');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     #[Revs(1)]
     public function benchPasskeyBeginRegistration(): void
     {

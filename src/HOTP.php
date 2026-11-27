@@ -200,6 +200,9 @@ final readonly class HOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verify(#[\SensitiveParameter] string $otp, int $counter, int $lookAhead = 0): bool
     {
         return $this->verifyWithResult($otp, $counter, $lookAhead)->matched;
@@ -280,6 +283,11 @@ final readonly class HOTP
         self::assertReplayConfiguration($cache, $factorId);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -292,6 +300,9 @@ final readonly class HOTP
         return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'HOTP replay', $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function findMatchingCounter(string $otp, int $counter, int $lookAhead): ?int
     {
         for ($offset = 0; $offset <= $lookAhead; $offset++) {

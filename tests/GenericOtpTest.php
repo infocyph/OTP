@@ -53,6 +53,14 @@ final class GenericOtpTest extends TestCase
     ];
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('generic OTP is atomic, single-use, and decrements failed attempts')]
     public function testGenericOTPIsAtomicSingleUseAndDecrementsFailedAttempts(): void
     {
@@ -71,6 +79,14 @@ final class GenericOtpTest extends TestCase
             ->and($otp->verify('challenge-2', $second))->toBeFalse();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('issuing another generic OTP atomically revokes the previous one')]
     public function testIssuingAnotherGenericOTPAtomicallyRevokesThePreviousOne(): void
     {
@@ -83,6 +99,10 @@ final class GenericOtpTest extends TestCase
             ->and($otp->verify('challenge', $second))->toBeTrue();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     */
     #[TestDox('generic OTP requires safe key and bounded configuration')]
     public function testGenericOTPRequiresSafeKeyAndBoundedConfiguration(): void
     {
@@ -97,6 +117,14 @@ final class GenericOtpTest extends TestCase
             ->toThrow(InvalidArgumentException::class);
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('authentication state policy rejects unsafe CacheLayer configurations')]
     public function testAuthenticationStatePolicyRejectsUnsafeCacheLayerConfigurations(): void
     {
@@ -138,6 +166,14 @@ final class GenericOtpTest extends TestCase
             ->and($ordinaryService->verify('ordinary', $ordinaryService->generate('ordinary')))->toBeTrue();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('generic OTP HMAC is bound to challenge and key')]
     public function testGenericOTPHMACIsBoundToChallengeAndKey(): void
     {
@@ -151,6 +187,14 @@ final class GenericOtpTest extends TestCase
             ->and($keyA->verify('binding-a', $code))->toBeTrue();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('malformed generic OTP input does not consume an attempt')]
     public function testMalformedGenericOTPInputDoesNotConsumeAnAttempt(): void
     {
@@ -162,6 +206,9 @@ final class GenericOtpTest extends TestCase
             ->and($otp->verify('challenge', $code))->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('failed generic OTP attempts never extend absolute expiration')]
     public function testFailedGenericOTPAttemptsNeverExtendAbsoluteExpiration(): void
     {
@@ -202,6 +249,12 @@ final class GenericOtpTest extends TestCase
             ->toThrow(RuntimeException::class, 'Unable to store generic OTP state.');
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('lock release cleanup preserves failures and committed results')]
     public function testLockReleaseCleanupPreservesFailuresAndCommittedResults(): void
     {
@@ -228,6 +281,14 @@ final class GenericOtpTest extends TestCase
             ->toMatch('/^\d{6}$/');
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('generic OTP validity begins after lock acquisition')]
     public function testGenericOTPValidityBeginsAfterLockAcquisition(): void
     {
@@ -268,7 +329,12 @@ final class GenericOtpTest extends TestCase
         expect($service->verify('binding', $code))->toBeTrue();
     }
 
-    /** @param array<string, mixed> $state */
+    /**
+     * @param array<string, mixed> $state
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     */
     #[DataProvider('genericOTPRejectsImpossibleCachedStateCases')]
     #[TestDox('generic OTP rejects impossible cached state')]
     public function testGenericOTPRejectsImpossibleCachedState(array $state): void
@@ -281,6 +347,9 @@ final class GenericOtpTest extends TestCase
             ->toThrow(RuntimeException::class, 'Invalid generic OTP state');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('generic OTP read and successful-consumption delete failures fail closed')]
     public function testGenericOTPReadAndSuccessfulConsumptionDeleteFailuresFailClosed(): void
     {
@@ -306,6 +375,14 @@ final class GenericOtpTest extends TestCase
             ->toThrow(RuntimeException::class, 'Unable to delete generic OTP state.');
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('generic OTP deletion is scoped and expired records are rejected')]
     public function testGenericOTPDeletionIsScopedAndExpiredRecordsAreRejected(): void
     {
@@ -360,6 +437,15 @@ final class GenericOtpTest extends TestCase
             ->toThrow(RuntimeException::class, 'The OTP state lock was lost before mutation.');
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Cache\Lock\UnsupportedPdoLockDriver
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('generic OTP transitions remain atomic across processes')]
     public function testGenericOTPTransitionsRemainAtomicAcrossProcesses(): void
     {

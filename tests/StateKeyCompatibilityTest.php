@@ -22,6 +22,9 @@ use PHPUnit\Framework\TestCase;
 
 final class StateKeyCompatibilityTest extends TestCase
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('TOTP keeps the v1 replay-state key')]
     public function testTOTPKeepsTheV1ReplayStateKey(): void
     {
@@ -46,6 +49,9 @@ final class StateKeyCompatibilityTest extends TestCase
             ->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('HOTP keeps the v1 replay-state key')]
     public function testHOTPKeepsTheV1ReplayStateKey(): void
     {
@@ -69,6 +75,11 @@ final class StateKeyCompatibilityTest extends TestCase
             ->verifyWithResult('755224', 0, cache: $cache, factorId: 'factor-v1')->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \TypeError
+     */
     #[TestDox('counter OCRA keeps the v1 replay-state key')]
     public function testCounterOCRAKeepsTheV1ReplayStateKey(): void
     {
@@ -94,6 +105,10 @@ final class StateKeyCompatibilityTest extends TestCase
             ->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     #[TestDox('non-counter OCRA keeps the v1 message replay-state key')]
     public function testNonCounterOCRAKeepsTheV1MessageReplayStateKey(): void
     {
@@ -122,6 +137,12 @@ final class StateKeyCompatibilityTest extends TestCase
         )->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('GenericOtp keeps its v1 state and lock keys')]
     public function testGenericOtpKeepsItsV1StateAndLockKeys(): void
     {
@@ -151,6 +172,13 @@ final class StateKeyCompatibilityTest extends TestCase
         expect((new GenericOtp($cache, str_repeat('g', 32)))->generate('binding-v1'))->toHaveLength(6);
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     #[TestDox('AOTP keeps its v1 challenge state key')]
     public function testAOTPKeepsItsV1ChallengeStateKey(): void
     {
@@ -168,6 +196,13 @@ final class StateKeyCompatibilityTest extends TestCase
         expect($cache->get($expectedKey))->toBe(0);
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     #[TestDox('GridOTP keeps its v1 challenge state key')]
     public function testGridOTPKeepsItsV1ChallengeStateKey(): void
     {
@@ -182,6 +217,16 @@ final class StateKeyCompatibilityTest extends TestCase
         expect($cache->get($expectedKey))->toBeArray();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * @throws \Symfony\Component\Serializer\Exception\NotNormalizableValueException
+     * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
+     */
     #[TestDox('Passkey keeps its v1 ceremony state key')]
     public function testPasskeyKeepsItsV1CeremonyStateKey(): void
     {

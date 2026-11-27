@@ -28,6 +28,13 @@ use PHPUnit\Framework\TestCase;
 
 final class RunwireIntegrationTest extends TestCase
 {
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     #[TestDox('state operations keep the synchronous path when no Runwire context is supplied')]
     public function testStateOperationsKeepTheSynchronousPathWhenNoRunwireContextIsSupplied(): void
     {
@@ -38,6 +45,13 @@ final class RunwireIntegrationTest extends TestCase
             ->and($cache->get('runwire-none-state'))->toBe(1);
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     */
     #[TestDox('cancelled Runwire requests fail before authentication state mutation')]
     public function testCancelledRunwireRequestsFailBeforeAuthenticationStateMutation(): void
     {
@@ -59,6 +73,13 @@ final class RunwireIntegrationTest extends TestCase
             ->and($cache->get('runwire-cancelled-state'))->toBeNull();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     */
     #[TestDox('completed Runwire requests cannot mutate authentication state')]
     public function testCompletedRunwireRequestsCannotMutateAuthenticationState(): void
     {
@@ -80,6 +101,13 @@ final class RunwireIntegrationTest extends TestCase
             ->and($cache->get('runwire-completed-state'))->toBeNull();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     */
     #[TestDox('Runwire runtime contexts are process bound for OTP state operations')]
     public function testRunwireRuntimeContextsAreProcessBoundForOTPStateOperations(): void
     {
@@ -112,6 +140,14 @@ final class RunwireIntegrationTest extends TestCase
             ->and($cache->get('runwire-stale-state'))->toBeNull();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('stateful OTP APIs forward the supplied Runwire execution context')]
     public function testStatefulOTPAPIsForwardTheSuppliedRunwireExecutionContext(): void
     {
@@ -128,6 +164,15 @@ final class RunwireIntegrationTest extends TestCase
         expect($otp->generate('runwire-api'))->toMatch('/\\A\\d{6}\\z/D');
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Coroutine\Exception\CoroutineDeadlockException
+     * @throws \Infocyph\Runwire\Coroutine\Exception\CoroutineOverflowException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \OverflowException
+     * @throws \Throwable
+     */
     #[TestDox('cooperative Runwire lock contention uses zero-wait acquisition and leaves no owned tasks')]
     public function testCooperativeRunwireLockContentionUsesZeroWaitAcquisitionAndLeavesNoOwnedTasks(): void
     {
@@ -192,6 +237,10 @@ final class RunwireIntegrationTest extends TestCase
             ->and($diagnostics->backgroundTasksActive)->toBe(0);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     #[TestDox('request cancellation interrupts cooperative lock waiting')]
     public function testRequestCancellationInterruptsCooperativeLockWaiting(): void
     {
@@ -244,6 +293,11 @@ final class RunwireIntegrationTest extends TestCase
             ->and($diagnostics->requestScopesActive)->toBe(0);
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     #[TestDox('cancellation after lock acquisition prevents the following state mutation and still releases the lock')]
     public function testCancellationAfterLockAcquisitionPreventsTheFollowingStateMutationAndStillReleasesTheLock(): void
     {
@@ -286,6 +340,13 @@ final class RunwireIntegrationTest extends TestCase
         ))->toThrow(CancelledException::class);
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     #[TestDox('a committed atomic mutation is not reclassified by cancellation raised during the commit')]
     public function testACommittedAtomicMutationIsNotReclassifiedByCancellationRaisedDuringTheCommit(): void
     {
@@ -325,6 +386,15 @@ final class RunwireIntegrationTest extends TestCase
             ->and($request->cancelled())->toBeTrue();
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Coroutine\Exception\CoroutineDeadlockException
+     * @throws \Infocyph\Runwire\Coroutine\Exception\CoroutineOverflowException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \OverflowException
+     * @throws \Throwable
+     */
     #[TestDox('missing coroutine capability preserves the ordinary lock-provider wait contract')]
     public function testMissingCoroutineCapabilityPreservesTheOrdinaryLockProviderWaitContract(): void
     {
@@ -364,6 +434,15 @@ final class RunwireIntegrationTest extends TestCase
         expect($result)->toBe('blocking');
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\Runwire\Coroutine\Exception\CoroutineDeadlockException
+     * @throws \Infocyph\Runwire\Coroutine\Exception\CoroutineOverflowException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \OverflowException
+     * @throws \Throwable
+     */
     #[TestDox('interleaved request contexts remain isolated and OTP never binds the CacheLayer global runtime')]
     public function testInterleavedRequestContextsRemainIsolatedAndOTPNeverBindsTheCacheLayerGlobalRuntime(): void
     {
@@ -411,6 +490,11 @@ final class RunwireIntegrationTest extends TestCase
             ->and(RunwireIntegration::runtime())->toBeNull();
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     #[TestDox('atomic monotonic advance checks Runwire cancellation again after the state read')]
     public function testAtomicMonotonicAdvanceChecksRunwireCancellationAgainAfterTheStateRead(): void
     {
@@ -451,6 +535,11 @@ final class RunwireIntegrationTest extends TestCase
         ))->toThrow(CancelledException::class);
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     #[TestDox('atomic whole-record transition checks Runwire cancellation again after the state read')]
     public function testAtomicWholeRecordTransitionChecksRunwireCancellationAgainAfterTheStateRead(): void
     {

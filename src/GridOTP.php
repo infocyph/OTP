@@ -118,6 +118,8 @@ final readonly class GridOTP
     /**
      * @throws \RuntimeException
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
      */
     public function issue(
         string $factorId,
@@ -159,6 +161,9 @@ final readonly class GridOTP
 
     /**
      * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public function verifyWithResult(
         string $factorId,

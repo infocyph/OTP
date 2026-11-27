@@ -91,6 +91,7 @@ final readonly class OCRA
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function generate(
         string $challenge,
@@ -128,6 +129,7 @@ final readonly class OCRA
 
     /**
      * @throws \RuntimeException
+     * @throws \InvalidArgumentException
      */
     public function generateSignature(
         string $signatureChallenge,
@@ -222,6 +224,7 @@ final readonly class OCRA
      * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
      * @throws \InvalidArgumentException
+     * @throws \TypeError
      */
     public function planRotation(
         #[\SensitiveParameter]
@@ -303,6 +306,9 @@ final readonly class OCRA
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verifyWithResult(
         #[\SensitiveParameter]
         string $otp,
@@ -359,6 +365,11 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function advanceCounter(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -509,6 +520,11 @@ final readonly class OCRA
         return $first . $second;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function consumeMessage(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -530,6 +546,7 @@ final readonly class OCRA
      * @param int $timestamp Current operation timestamp.
      * @param int $timeStep Parsed suite timestep in seconds.
      * @return array{message:string,offset:int}|null
+     * @throws \RuntimeException
      */
     private function findDriftMatch(
         string $otp,
@@ -567,6 +584,7 @@ final readonly class OCRA
      * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
      * @param VerificationWindow $window Accepted past and future drift.
      * @return array{message:string,offset:int}|null
+     * @throws \RuntimeException
      */
     private function findTimeMatch(
         string $otp,

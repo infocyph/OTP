@@ -14,6 +14,11 @@ use RuntimeException;
 
 final class CacheLockTransitionTest extends TestCase
 {
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[TestDox('whole-record atomic transitions retry from the winning state after contention')]
     public function testWholeRecordAtomicTransitionsRetryFromTheWinningStateAfterContention(): void
     {

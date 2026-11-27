@@ -22,7 +22,10 @@ use Webauthn\Denormalizer\WebauthnSerializerFactory;
 use Webauthn\PublicKeyCredentialDescriptor;
 use Webauthn\TrustPath\EmptyTrustPath;
 
-/** @return array<array-key, mixed> */
+/**
+ * @return array<array-key, mixed>
+ * @throws \RuntimeException
+ */
 function passkeyFixtureArray(mixed $value): array
 {
     if (!is_array($value)) {
@@ -32,6 +35,9 @@ function passkeyFixtureArray(mixed $value): array
     return $value;
 }
 
+/**
+ * @throws \RuntimeException
+ */
 function passkeyFixtureString(mixed $value): string
 {
     if (!is_string($value)) {
@@ -276,6 +282,10 @@ final class PasskeyTest extends TestCase
             ->and($cache->get($stateKey))->toBeNull();
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     */
     #[TestDox('passkey configuration rejects unsafe relying party input')]
     public function testPasskeyConfigurationRejectsUnsafeRelyingPartyInput(): void
     {

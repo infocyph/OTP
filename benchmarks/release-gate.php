@@ -161,7 +161,10 @@ function cpuModel(): string
     return php_uname('m');
 }
 
-/** @param array<array-key, mixed>|false $usage */
+/**
+ * @param array<array-key, mixed>|false $usage
+ * @throws \RuntimeException
+ */
 function cpuSeconds(array|false $usage): float
 {
     if ($usage === false) {
@@ -344,6 +347,7 @@ function runRoundTripWorkload(float $duration, int $repetitions): array
  * @param array<string, mixed> $metadata
  * @param callable(int): \Closure $operationFactory
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runTimedWorkload(
     float $duration,
@@ -412,6 +416,7 @@ function runTimedWorkload(
  * @param array<string, mixed> $metadata
  * @param callable(int): array{attempted:int,successful:int,failed:int,latencies:list<float>,elapsed:float,cpu_seconds:?float,memory_start_mb:?float,memory_end_mb:?float,memory_peak_mb:?float,successful_rpm:float} $repetitionOperation
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runRepeatedWorkload(
     int $repetitions,
@@ -528,6 +533,7 @@ function maximumMemoryGrowth(array $starts, array $ends): ?float
 
 /**
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runConcurrentVerificationWorkload(float $duration, int $repetitions): array
 {
@@ -790,6 +796,15 @@ function processRssMegabytes(array $pids): ?float
     return (float) $kilobytes / 1024.0;
 }
 
+/**
+ * @throws \Infocyph\CacheLayer\Cache\Lock\UnsupportedPdoLockDriver
+ * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+ * @throws \Infocyph\Runwire\Exception\CancelledException
+ * @throws \InvalidArgumentException
+ * @throws \LogicException
+ * @throws \RuntimeException
+ * @throws \Throwable
+ */
 function runConcurrentVerificationWorker(
     string $database,
     string $namespace,
@@ -836,6 +851,9 @@ function runConcurrentVerificationWorker(
     }
 }
 
+/**
+ * @throws \RuntimeException
+ */
 function cleanupConcurrentBenchmark(string $database, string $barrier): void
 {
     $paths = [$barrier . '.go', $barrier . '.stop', $database, $database . '-shm', $database . '-wal'];
@@ -853,6 +871,7 @@ function cleanupConcurrentBenchmark(string $database, string $barrier): void
 
 /**
  * @return array{name:string,type:string,metadata:array<string,mixed>,repetitions:int,warmup_operations:int,duration_seconds:float,concurrency:int,result:array{attempted_operations:int,successful_operations:int,failed_operations:int,timeouts:int,successful_rpm:float,error_rate:float,latency_ms:array{minimum:?float,average:?float,p50:?float,p95:?float,p99:?float,maximum:?float},cpu:array{average_percent:?float,peak_percent:?float},memory:array{average_mb:?float,peak_mb:?float,growth_mb:?float},stability:array{status:string,spread_percent:float}}}
+ * @throws \RuntimeException
  */
 function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
 {
@@ -1013,6 +1032,9 @@ function measureOperation(callable $operation, float $duration, int $sampleInter
     ];
 }
 
+/**
+ * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+ */
 function benchmarkCacheOptions(): CacheOptions
 {
     return new CacheOptions(
@@ -1087,7 +1109,10 @@ function runColdStartWorkload(string $autoload, int $repetitions): array
     );
 }
 
-/** @return array{successful:bool,cpu_seconds:float,memory_peak_mb:float} */
+/**
+ * @return array{successful:bool,cpu_seconds:float,memory_peak_mb:float}
+ * @throws \RuntimeException
+ */
 function runColdStartOperation(string $autoload): array
 {
     $code = <<<'PHP'

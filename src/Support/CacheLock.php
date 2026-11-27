@@ -28,6 +28,7 @@ final class CacheLock
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function advance(
         AuthenticationStateCacheInterface $cache,
@@ -86,6 +87,7 @@ final class CacheLock
 
     /**
      * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \LogicException
      */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {
@@ -100,6 +102,7 @@ final class CacheLock
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function consumeOnce(
         AuthenticationStateCacheInterface $cache,
@@ -122,6 +125,7 @@ final class CacheLock
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function consumeReserved(
         AuthenticationStateCacheInterface $cache,
@@ -157,6 +161,7 @@ final class CacheLock
      * @throws \InvalidArgumentException
      * @throws \Psr\SimpleCache\InvalidArgumentException
      * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function reserveOnce(
         AuthenticationStateCacheInterface $cache,
