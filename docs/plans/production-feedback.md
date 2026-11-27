@@ -97,3 +97,7 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 - Correct benchmark callback and CPU measurement contracts, strengthen fixtures, and retain malformed credential classification without declaring unproven exception types.
 - Bypass Runwire lock acquisition wrapper and empty atomic checkpoints when no context is supplied. Native CAS, lock ownership, cancellation with explicit context and release budgets remain unchanged.
 - Hosted verification pending; concurrent SQLite baseline comparison remains open.
+
+### Batch E11 — fixture exception contracts
+
+- Record propagated exceptions reported by Psalm on unchanged explicit PHPUnit methods and test support methods. No ignore rules added. Hosted verification pending.

@@ -31,6 +31,10 @@ final class TOTPTest extends TestCase
     ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     #[TestDox('full RFC 6238 TOTP vector matrix')]
     public function testFullRFC6238TOTPVectorMatrix(): void
     {
@@ -55,6 +59,11 @@ final class TOTPTest extends TestCase
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('TOTP keeps current-past-future search order and monotonic replay state')]
     public function testTOTPKeepsCurrentPastFutureSearchOrderAndMonotonicReplayState(): void
     {
@@ -74,6 +83,11 @@ final class TOTPTest extends TestCase
             ->and($new->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('TOTP enforces the complete monotonic sequence and maximum drift boundaries')]
     public function testTOTPEnforcesTheCompleteMonotonicSequenceAndMaximumDriftBoundaries(): void
     {
@@ -101,6 +115,11 @@ final class TOTPTest extends TestCase
             )->driftOffset)->toBe(50);
     }
 
+    /**
+     * @throws \Exception
+     * @throws \TypeError
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('TOTP validates protocol bounds and time helpers')]
     public function testTOTPValidatesProtocolBoundsAndTimeHelpers(): void
     {
@@ -116,6 +135,11 @@ final class TOTPTest extends TestCase
             ->toThrow(InvalidArgumentException::class);
     }
 
+    /**
+     * @throws \Exception
+     * @throws \TypeError
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('concurrent TOTP verification advances replay state only once')]
     public function testConcurrentTOTPVerificationAdvancesReplayStateOnlyOnce(): void
     {
@@ -144,6 +168,11 @@ final class TOTPTest extends TestCase
         unlink($path);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('TOTP replay state TTL covers the complete verification window')]
     public function testTOTPReplayStateTTLCoversTheCompleteVerificationWindow(): void
     {
@@ -167,6 +196,11 @@ final class TOTPTest extends TestCase
         expect($result->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[DataProvider('tOTPReplayTTLCoversEveryAcceptedWindowShapeCases')]
     #[TestDox('TOTP replay TTL covers every accepted window shape')]
     public function testTOTPReplayTTLCoversEveryAcceptedWindowShape(int $past, int $future, int $ttl): void
@@ -189,6 +223,11 @@ final class TOTPTest extends TestCase
         )->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('TOTP replay state expires in the actual backend')]
     public function testTOTPReplayStateExpiresInTheActualBackend(): void
     {
@@ -207,6 +246,11 @@ final class TOTPTest extends TestCase
             ->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('TOTP replay-state write failure fails closed')]
     public function testTOTPReplayStateWriteFailureFailsClosed(): void
     {

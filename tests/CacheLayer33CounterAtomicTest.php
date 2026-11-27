@@ -14,6 +14,9 @@ use PHPUnit\Framework\TestCase;
 
 final class CacheLayer33CounterAtomicTest extends TestCase
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('HOTP replay state uses CacheLayer atomics without a lock')]
     public function testHOTPReplayStateUsesCacheLayerAtomicsWithoutALock(): void
     {
@@ -46,6 +49,11 @@ final class CacheLayer33CounterAtomicTest extends TestCase
             ->and($result->nextCounter)->toBe(1);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('counter OCRA replay state uses the monotonic atomic path')]
     public function testCounterOCRAReplayStateUsesTheMonotonicAtomicPath(): void
     {

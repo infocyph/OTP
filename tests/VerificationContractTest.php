@@ -33,6 +33,9 @@ final class VerificationContractTest extends TestCase
         ]);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('credential failures remain structured results')]
     public function testCredentialFailuresRemainStructuredResults(): void
     {
@@ -45,6 +48,9 @@ final class VerificationContractTest extends TestCase
             ->and($hotp->verifyWithResult('000000', 0)->reason)->toBe(VerificationReason::Mismatch);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('monotonic replay backend failures propagate instead of becoming credential results')]
     public function testMonotonicReplayBackendFailuresPropagateInsteadOfBecomingCredentialResults(): void
     {
@@ -70,6 +76,10 @@ final class VerificationContractTest extends TestCase
         ))->toThrow(RuntimeException::class, 'backend read failed');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     #[TestDox('one-time replay backend failures propagate instead of becoming replay')]
     public function testOneTimeReplayBackendFailuresPropagateInsteadOfBecomingReplay(): void
     {

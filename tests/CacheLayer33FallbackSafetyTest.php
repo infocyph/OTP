@@ -18,6 +18,11 @@ use RuntimeException;
 
 final class CacheLayer33FallbackSafetyTest extends TestCase
 {
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('atomic provider returning null falls back to the coordinated lock path')]
     public function testAtomicProviderReturningNullFallsBackToTheCoordinatedLockPath(): void
     {
@@ -53,6 +58,11 @@ final class CacheLayer33FallbackSafetyTest extends TestCase
         )->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('available atomic capability failures never fall back to locks')]
     public function testAvailableAtomicCapabilityFailuresNeverFallBackToLocks(): void
     {
@@ -82,6 +92,11 @@ final class CacheLayer33FallbackSafetyTest extends TestCase
         ))->toThrow(RuntimeException::class, 'atomic backend unavailable');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('authentication replay state always requires fail-closed policy')]
     public function testAuthenticationReplayStateAlwaysRequiresFailClosedPolicy(): void
     {
@@ -98,6 +113,11 @@ final class CacheLayer33FallbackSafetyTest extends TestCase
         ))->toThrow(InvalidArgumentException::class, 'configured fail-closed');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('authentication replay state always requires payload integrity')]
     public function testAuthenticationReplayStateAlwaysRequiresPayloadIntegrity(): void
     {
@@ -115,6 +135,11 @@ final class CacheLayer33FallbackSafetyTest extends TestCase
         ))->toThrow(InvalidArgumentException::class, 'enable payload integrity');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('authentication replay state always requires one authoritative backend')]
     public function testAuthenticationReplayStateAlwaysRequiresOneAuthoritativeBackend(): void
     {
@@ -133,6 +158,10 @@ final class CacheLayer33FallbackSafetyTest extends TestCase
         ))->toThrow(InvalidArgumentException::class, 'one authoritative direct backend');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     #[TestDox('one-time OCRA atomic contention is bounded and fails closed')]
     public function testOneTimeOCRAAtomicContentionIsBoundedAndFailsClosed(): void
     {

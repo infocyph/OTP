@@ -27,6 +27,11 @@ final class OCRATest extends TestCase
         return [['sha1', 40], ['sha256', 64], ['sha512', 128]];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('RFC 6287 suites follow the reference byte conversion for numeric challenges')]
     public function testRFC6287SuitesFollowTheReferenceByteConversionForNumericChallenges(): void
     {
@@ -45,6 +50,11 @@ final class OCRATest extends TestCase
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('RFC 6287 time and explicit mutual challenge vectors remain intact')]
     public function testRFC6287TimeAndExplicitMutualChallengeVectorsRemainIntact(): void
     {
@@ -59,6 +69,11 @@ final class OCRATest extends TestCase
             ->and($mutual->generateSignature('SIG10000'))->toBe('53095496');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('odd-nibble numeric and hexadecimal challenges match independent reference outputs')]
     public function testOddNibbleNumericAndHexadecimalChallengesMatchIndependentReferenceOutputs(): void
     {
@@ -84,6 +99,11 @@ final class OCRATest extends TestCase
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('non-counter OCRA rejects irrelevant counters and cannot vary replay identity')]
     public function testNonCounterOCRARejectsIrrelevantCountersAndCannotVaryReplayIdentity(): void
     {
@@ -112,6 +132,11 @@ final class OCRATest extends TestCase
             ->and(fn () => $ocra->verify($otp, '12345678', 1))->toThrow(InvalidArgumentException::class);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('counter OCRA advances monotonically and exposes next counter')]
     public function testCounterOCRAAdvancesMonotonicallyAndExposesNextCounter(): void
     {
@@ -139,6 +164,11 @@ final class OCRATest extends TestCase
             )->replayDetected)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('OCRA rejects missing and irrelevant suite inputs')]
     public function testOCRARejectsMissingAndIrrelevantSuiteInputs(): void
     {
@@ -161,6 +191,11 @@ final class OCRATest extends TestCase
             ->toThrow(InvalidArgumentException::class, 'valid UTF-8');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('OCRA time verification supports explicit bounded drift and replay')]
     public function testOCRATimeVerificationSupportsExplicitBoundedDriftAndReplay(): void
     {
@@ -209,6 +244,11 @@ final class OCRATest extends TestCase
             ->and(fn () => $ocra->generate('12345678', timestamp: -1))->toThrow(InvalidArgumentException::class);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[DataProvider('oCRAFullHMACSuitesReturnStablePrintableHexadecimalCases')]
     #[TestDox('OCRA full-HMAC suites return stable printable hexadecimal')]
     public function testOCRAFullHMACSuitesReturnStablePrintableHexadecimal(string $algorithm, int $length): void
@@ -222,6 +262,10 @@ final class OCRATest extends TestCase
             ->and($ocra->verify('not-hex', '12345678'))->toBeFalse();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     #[TestDox('OCRA suite parsing is authoritative')]
     public function testOCRASuiteParsingIsAuthoritative(): void
     {
@@ -236,6 +280,11 @@ final class OCRATest extends TestCase
             ->and(fn () => new OCRA('OCRA-1:HOTP-SHA256-10:QN08', OCRA_KEY_32))->toThrow(InvalidArgumentException::class);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('concurrent counter OCRA verification accepts one request')]
     public function testConcurrentCounterOCRAVerificationAcceptsOneRequest(): void
     {
@@ -263,6 +312,11 @@ final class OCRATest extends TestCase
         unlink($path);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('concurrent challenge OCRA verification accepts one request')]
     public function testConcurrentChallengeOCRAVerificationAcceptsOneRequest(): void
     {
@@ -290,6 +344,11 @@ final class OCRATest extends TestCase
         unlink($path);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
     #[TestDox('non-counter OCRA passes the application replay TTL to CacheLayer')]
     public function testNonCounterOCRAPassesTheApplicationReplayTTLToCacheLayer(): void
     {
@@ -312,6 +371,10 @@ final class OCRATest extends TestCase
         )->matched)->toBeTrue();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     #[TestDox('OCRA strict protocol fields reject trailing and control separators')]
     public function testOCRAStrictProtocolFieldsRejectTrailingAndControlSeparators(): void
     {

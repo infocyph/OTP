@@ -39,6 +39,9 @@ final class SqliteAtomicStore implements RecoveryCodeStoreInterface
         );
     }
 
+    /**
+     * @throws \Throwable
+     */
     #[\Override]
     public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
     {
@@ -82,6 +85,9 @@ final class SqliteAtomicStore implements RecoveryCodeStoreInterface
         ];
     }
 
+    /**
+     * @throws \Throwable
+     */
     #[\Override]
     public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
     {

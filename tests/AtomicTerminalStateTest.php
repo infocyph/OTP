@@ -15,6 +15,9 @@ use PHPUnit\Framework\TestCase;
 
 final class AtomicTerminalStateTest extends TestCase
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     #[TestDox('atomic GenericOtp terminal tombstone rejects a delayed verifier with an earlier timestamp')]
     public function testAtomicGenericOtpTerminalTombstoneRejectsADelayedVerifierWithAnEarlierTimestamp(): void
     {
@@ -87,6 +90,10 @@ final class AtomicTerminalStateTest extends TestCase
             ->and($state['remainingAttempts'] ?? null)->toBe(0);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     #[TestDox('atomic GridOTP attempt-exhaustion tombstone rejects a valid response from a stale timestamp')]
     public function testAtomicGridOTPAttemptExhaustionTombstoneRejectsAValidResponseFromAStaleTimestamp(): void
     {

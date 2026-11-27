@@ -27,6 +27,11 @@ final class RedisState
         }
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     */
     public static function cache(string $namespace): AuthenticationStateCacheInterface
     {
         $cache = Cache::redis(
@@ -44,6 +49,9 @@ final class RedisState
         return $cache;
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public static function requireAvailable(): void
     {
         if (!self::available()) {

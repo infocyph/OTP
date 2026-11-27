@@ -14,6 +14,7 @@ final class Concurrency
      *
      * @param callable(int): int $operation
      * @return list<int>
+     * @throws \RuntimeException
      */
     public static function run(callable $operation, int $workers = 2): array
     {

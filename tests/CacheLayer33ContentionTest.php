@@ -15,6 +15,11 @@ use RuntimeException;
 
 final class CacheLayer33ContentionTest extends TestCase
 {
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('atomic replay contention is bounded and fails closed')]
     public function testAtomicReplayContentionIsBoundedAndFailsClosed(): void
     {
@@ -41,6 +46,11 @@ final class CacheLayer33ContentionTest extends TestCase
         ))->toThrow(RuntimeException::class, 'after atomic contention');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Exception
+     * @throws \TypeError
+     */
     #[TestDox('replay protection rejects a cache with neither atomics nor a coordinated lock')]
     public function testReplayProtectionRejectsACacheWithNeitherAtomicsNorACoordinatedLock(): void
     {

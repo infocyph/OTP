@@ -14,11 +14,21 @@ use RuntimeException;
 
 final class CacheLayerState
 {
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     */
     public static function memory(): AuthenticationStateCacheInterface
     {
         return Cache::memory('otp-tests', self::options());
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \Infocyph\CacheLayer\Cache\Lock\UnsupportedPdoLockDriver
+     * @throws \LogicException
+     */
     public static function sqlite(string $path): AuthenticationStateCacheInterface
     {
         if (!extension_loaded('pdo_sqlite')) {
@@ -46,6 +56,9 @@ final class CacheLayerState
         return $cache;
     }
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     */
     private static function options(): CacheOptions
     {
         return new CacheOptions(
