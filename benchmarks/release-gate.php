@@ -945,6 +945,7 @@ function awaitConcurrentStart(string $barrier, int $worker): int
     if (!is_string($rawStart) || !ctype_digit($rawStart)) {
         throw new RuntimeException('Invalid concurrent verification start timestamp.');
     }
+
     return (int) $rawStart;
 }
 
