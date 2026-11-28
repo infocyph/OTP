@@ -129,6 +129,7 @@ final class CacheLockTransitionTest extends TestCase
             },
         ))->toThrow(RuntimeException::class, 'after atomic contention');
     }
+
     /**
      * @throws \Throwable
      */
