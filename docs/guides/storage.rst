@@ -4,8 +4,8 @@ CacheLayer state and durable persistence
 OTP uses ``infocyph/cachelayer`` for package-owned authentication state.
 Recovery codes and Passkey credential records deliberately remain durable
 application data rather than authentication cache. For adapter-specific
-connection, TLS, cluster, and deployment options, consult the `CacheLayer 4.1
-documentation <https://github.com/infocyph/CacheLayer/tree/4.1>`_.
+connection, TLS, cluster, and deployment options, consult the `CacheLayer 4.2
+documentation <https://github.com/infocyph/CacheLayer/tree/4.2>`_.
 
 Required CacheLayer policy
 --------------------------
@@ -45,24 +45,24 @@ Every stateful operation receives one CacheLayer
 fail-closed, payload-integrity protected, and backed by one authoritative direct
 backend.
 
-TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 4.1 native atomics where
+TOTP, HOTP, OCRA, MobileOTP, and AOTP use CacheLayer 4.2 native atomics where
 their scalar transition maps safely to conditional mutation. If native atomics
 are not available, those paths use the lock provider returned by
 ``authenticationStateLock()``.
 
 ``GenericOtp``, ``GridOTP``, and ``Passkey`` mutate complete multi-field
-records as one serializable state machine. OTP uses CacheLayer 4.1 whole-record
+records as one serializable state machine. OTP uses CacheLayer 4.2 whole-record
 CAS when a safe atomic capability is available and otherwise uses the
 coordinated lock fallback. Backends that cannot provide either accepted atomic
 or lock semantics are rejected before authentication state is mutated.
 
 Capability selection is not runtime failover. Once an atomic capability is
 selected, an atomic backend exception propagates and OTP does not retry the same
-mutation through locks. The sole transient exception is a native PDO insert
-rejected with SQLSTATE ``40001`` and MySQL/MariaDB error ``1213`` (the database
-rolled back the entire transaction). OTP re-reads authoritative state within the
-existing eight-attempt atomic budget. Unknown commit outcomes always propagate,
-preventing re-execution of a mutation whose commit status is not known.
+mutation through locks. CacheLayer 4.2 owns bounded retries of confirmed PDO
+transaction aborts for caches with objects and closures disabled. OTP retries
+conditional misses within its existing eight-attempt state-transition budget,
+not backend exceptions. Unknown commit outcomes and exhausted database retries
+propagate.
 
 Lock acquisition is bounded and any acquisition, ownership-refresh, read,
 write, or delete failure aborts the authentication operation with an exception.
@@ -94,7 +94,7 @@ requires disabling verification for affected factors until state is reconciled
 or the factors are safely rotated. A successful healthy-cluster test is not
 proof of lossless failover. Configure memory so authentication keys are not evicted.
 HOTP and counter-OCRA state has no TTL and must survive restarts and failover.
-CacheLayer 4.1 Redis/Valkey adapters expose native atomic replay operations, so
+CacheLayer 4.2 Redis/Valkey adapters expose native atomic replay operations, so
 eligible scalar and whole-record transitions use that path without acquiring replay locks.
 
 PDO example
@@ -115,15 +115,18 @@ PDO example
        options: $options,
    );
 
-With CacheLayer 4.1, OTP selects native PDO conditional mutations for whole-record
-state when available, instead of taking a separate advisory lock. A dedicated
+With CacheLayer 4.2, OTP selects native PDO conditional mutations for whole-record
+state on MySQL/MariaDB and PostgreSQL instead of taking a separate advisory lock.
+SQLite's effective file-lock provider retains the coordinated whole-record path;
+scalar transitions still prefer native atomics. Custom lease-based fallback locks
+require native atomics. A dedicated
 PDO connection must be outside an application-owned transaction so CacheLayer
 can own the atomic transaction. Otherwise the operation fails closed; an atomic
 failure is never retried through the lock path.
 
 Stop all old OTP workers sharing a PDO state namespace before deploying this
-change. Older lock-coordinated writers cannot safely run concurrently with the
-new CAS-coordinated writers. Existing state formats and keys are unchanged.
+change. Do not mix lock-coordinated and CAS-coordinated whole-record writers
+(in either migration direction). Existing state formats and keys are unchanged.
 When an adapter does not expose native atomics, OTP retains the coordinated
 lock path. SQLite is useful for local integration tests; production multi-host
 deployments normally require a network database or Redis.
@@ -315,8 +318,8 @@ codes, provisioning URIs, AOTP challenge context/signatures, or Passkey ceremony
 payloads.
 
 Atomic ``setIfAbsent()``/``compareAndSet()`` failures and bounded-contention
-exhaustion are operational failures and propagate, except for the confirmed PDO
-insert rollback described above. OTP does not convert an unknown outcome into a
+exhaustion are operational failures and propagate after CacheLayer's own
+bounded transaction retries. OTP does not convert an unknown outcome into a
 mismatch/replay result and never falls back to locks after an atomic operation
 has been selected.
 

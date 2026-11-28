@@ -32,7 +32,7 @@
         "php-64bit": "^8.4",
         "ext-ctype": "*",
         "bacon/bacon-qr-code": "^3.1.1",
-        "infocyph/cachelayer": "^4.1",
+        "infocyph/cachelayer": "^4.2",
         "paragonie/constant_time_encoding": "^3.1.5"
     },
     "require-dev": {

@@ -7,12 +7,10 @@ namespace Infocyph\OTP\Tests;
 use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
-use Infocyph\CacheLayer\Cache\Lock\PdoLockProvider;
 use Infocyph\CacheLayer\Exceptions\CacheBackendException;
 use Infocyph\OTP\Support\AtomicState;
 use Infocyph\OTP\TOTP;
 use InvalidArgumentException;
-use PDO;
 use PDOException;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
@@ -75,22 +73,13 @@ final class CacheLayer33ContentionTest extends TestCase
         ))->toThrow(InvalidArgumentException::class, 'atomic or coordinated lock capability');
     }
 
-    /**
-     * @throws \Infocyph\CacheLayer\Cache\Lock\UnsupportedPdoLockDriver
-     * @throws \PDOException
-     * @throws \RuntimeException
-     * @throws \Psr\SimpleCache\InvalidArgumentException
-     * @throws \Infocyph\Runwire\Exception\CancelledException
-     * @throws \LogicException
-     */
-    #[TestDox('a rolled-back PDO insert observes the winning replay marker')]
-    public function testRolledBackPdoInsertObservesWinner(): void
+    #[TestDox('a native conditional miss observes the winning replay marker')]
+    public function testNativeConditionalMissObservesWinner(): void
     {
         $atomic = $this->createMock(AtomicCacheInterface::class);
-        $atomic->expects($this->once())->method('setIfAbsent')->willThrowException(self::deadlock());
+        $atomic->expects($this->once())->method('setIfAbsent')->willReturn(false);
         $cache = $this->createMock(AuthenticationStateCacheInterface::class);
-        $cache->expects($this->once())->method('authenticationStateLock')
-            ->willReturn(new PdoLockProvider(new PDO('sqlite::memory:')));
+        $cache->expects($this->never())->method('authenticationStateLock');
         $cache->expects($this->once())->method('get')->with('state')->willReturn(1);
         $cache->expects($this->never())->method('set');
         $cache->expects($this->never())->method('delete');
@@ -98,23 +87,18 @@ final class CacheLayer33ContentionTest extends TestCase
         expect(AtomicState::claim($cache, $atomic, 'state', 1, 30, 'test', null))->toBeFalse();
     }
 
-    /**
-     * @throws \Infocyph\CacheLayer\Cache\Lock\UnsupportedPdoLockDriver
-     * @throws \PDOException
-     */
-    #[TestDox('confirmed PDO deadlocks cannot exceed the existing atomic attempt budget')]
-    public function testPdoDeadlockRetryIsBounded(): void
+    #[TestDox('exhausted native transaction retries propagate without multiplying the retry budget')]
+    public function testExhaustedNativeTransactionRetriesPropagate(): void
     {
         $atomic = $this->createMock(AtomicCacheInterface::class);
-        $atomic->expects($this->exactly(8))->method('setIfAbsent')->willThrowException(self::deadlock());
+        $atomic->expects($this->once())->method('setIfAbsent')->willThrowException(self::deadlock());
         $cache = $this->createMock(AuthenticationStateCacheInterface::class);
-        $cache->expects($this->exactly(8))->method('authenticationStateLock')
-            ->willReturn(new PdoLockProvider(new PDO('sqlite::memory:')));
-        $cache->expects($this->exactly(8))->method('get')->willReturn(null);
+        $cache->expects($this->never())->method('authenticationStateLock');
+        $cache->expects($this->never())->method('get');
         $cache->expects($this->never())->method('set');
 
         expect(fn () => AtomicState::claim($cache, $atomic, 'state', 1, 30, 'test', null))
-            ->toThrow(RuntimeException::class, 'after atomic contention');
+            ->toThrow(CacheBackendException::class, 'Cache backend operation failed.');
     }
 
     #[TestDox('ambiguous commit failure propagates without retry or lock fallback')]

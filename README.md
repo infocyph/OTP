@@ -23,7 +23,7 @@ four uses `otpauth://` provisioning.
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
-- CacheLayer `^4.1`
+- CacheLayer `^4.2`
 - Composer
 
 ```bash
@@ -91,7 +91,7 @@ $result = $totp->verifyWithWindow(
 ```
 
 `$stateCache` must be fail-closed, payload-integrity protected, and authoritative.
-CacheLayer 4.1 native atomics are preferred when the backend exposes them;
+CacheLayer 4.2 native atomics are preferred when the backend exposes them;
 otherwise TOTP/HOTP/OCRA use the cache's coordinated lock fallback. A selected
 atomic backend failure propagates and is never retried through locks. `factorId`
 must identify one factor and secret/moving-factor generation, not merely a user.
@@ -134,9 +134,9 @@ $valid = $otp->verify('login-challenge-123', $submittedCode);
 ```
 
 Generic OTP updates its complete multi-field record as one serializable
-transition. CacheLayer 4.1 whole-record CAS is used when the backend exposes a
-safe atomic capability; otherwise OTP uses the cache's coordinated lock
-fallback. A successful verification consumes the challenge; a mismatch
+transition. CacheLayer 4.2 whole-record CAS is used when the backend exposes a
+safe atomic capability and appropriate lock policy. SQLite retains coordinated
+whole-record locks; network PDO uses native conditional mutation. A successful verification consumes the challenge; a mismatch
 decrements attempts without extending expiry. See
 [Generic OTP documentation](https://docs.infocyph.com/projects/OTP/en/latest/guides/generic-otp.html).
 

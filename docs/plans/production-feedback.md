@@ -1,6 +1,6 @@
 # OTP — production feedback and upstream action plan
 
-Status: **CacheLayer patch release pending — Foundation handoff deferred; MobileOTP variant QA pending** · 2026-11-28
+Status: **CacheLayer 4.2 integrated — final hosted verification pending** · 2026-11-28
 
 Baseline: Exact installed specialist version pending inventory. Release target to be selected after root-cause isolation; no version bump authorized by this file.
 
@@ -21,17 +21,17 @@ Follow [PHPForge engineering principles](https://github.com/infocyph/PHPForge/bl
 
 ## OTP implementation tracker — 2026-11-27
 
-- [x] A: Runwire ^4.0.1, CacheLayer ^4.1, compatible dependency updates and PHP 8.6 matrix.
+- [x] A: Runwire ^4.0.1, CacheLayer ^4.2, compatible dependency updates and PHP 8.6 matrix.
 - [ ] B: PDO lock ownership and native atomic state.
   - [x] B-direct: Network PDO native state selection, bounded confirmed rollback handling, independent ownership, expiry and contention regressions verified.
-  - [ ] B-upstream: [CacheLayer PR #37](https://github.com/infocyph/CacheLayer/pull/37) opened; await published patch, then integrate effective provider capability and remeasure.
+  - [ ] B-upstream: CacheLayer 4.2 published and integrated; verify native network PDO and SQLite coordination, retry ownership and sustained throughput.
 - [x] C: Distributed topology and replay (36/36 Redis/Valkey jobs on 2f02b3f; published consumer requalification remains H).
 - [x] D: Direct OTP protocol coverage and recovery qualification; Foundation consumer work transferred by maintainer decision.
   - [x] D-direct: All OTP families, native Passkey registration/assertion, durable 77-byte recovery identity and cross-owner consumption/rotation verified.
   - Deferred external scope: Foundation FND-001 remains open in its [feedback register](https://github.com/infocyph/infbyte-app-experiment/blob/main/feedbacks/foundation.md); not a standalone OTP release gate.
-- [ ] E: PHPStan (179) and Psalm (940) findings on baseline f40d42e; root-cause fixes, no suppressions.
+- [x] E: PHPStan and Psalm passed on da63523; no suppressions; final-head recheck remains H.
   - [x] E-direct: PHPStan zero errors across all versions; all non-MD5 Psalm findings fixed; all other review threads resolved.
-  - [ ] E-legacy: Maintainer-authorized optional allowlisted MobileOTP digest, default MD5 for compatibility; verify hosted QA and scanner outcome.
+  - [x] E-legacy: Optional allowlisted MobileOTP digest with MD5 legacy default verified in all three hosted analysis jobs; no open review threads.
 - [x] F: Prefer-stable Passkey regression (WebAuthn 5.3.15 baseline).
 - [x] G: Documentation and migration updates (warning-free hosted Sphinx build on 5e0ce3d).
 - [ ] H: Hosted QA, security and sustained performance gates.
@@ -309,3 +309,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 - Maintainer authorized optional MobileOTP digest configuration with default MD5 for compatibility. Restrict algorithm to md5/sha256/sha384/sha512, fixed at construction; no dynamic request-selected fallback, no noncryptographic hashes. Existing legacy vectors and replay domains remain unchanged, six-character output and secret bounds unchanged. Document limitations, enrollment and rotation, add SHA-2 generation/verification/replay and invalid algorithm regressions. This is an actual optional protocol variant, not a claim that MD5 is now secure; no analyzer suppression added. SEC-06/COMPAT/FLOW: hosted QA and scanner outcome pending.
 - Foundation deferred by maintainer: [feedback update b1f78b1](https://github.com/infocyph/infbyte-app-experiment/commit/b1f78b177674f92b496b6c3b5e027a0cc85c5400) records exact migration and qualification requirements. D direct work complete; FND-001 remains open externally. No Foundation source change.
 - CacheLayer write restored; [PR #37](https://github.com/infocyph/CacheLayer/pull/37), branch patch/pdo-lock-capability from main, commit 31626d7 exposes effective coordination provider and contains confirmed native insert rollback. Hosted qualification and maintainer patch publication required. Do not pin unreleased commit or use reflection. OTP dependency and production selection remain unchanged until the published patch is available. No auto-merge or release.
+
+### Batch B10/H5 — published CacheLayer 4.2 integration
+
+- [CacheLayer 4.2](https://github.com/infocyph/CacheLayer/releases/tag/4.2) published. Source confirms effectiveLockProvider() and bounded native transaction retries (definitive PostgreSQL serialization/deadlock, InnoDB rollback/timeout and SQLite busy errors; options must disable objects and closures). Adopt ^4.2. Classify the effective configured provider before whole-record mutation: native PDO remains atomic, default SQLite file coordination restored, wrapped lease-based providers require atomics. No runtime fallback after failures; original cache lock wrapper retains acquisition/ownership semantics. Remove duplicated OTP database exception retries; conditional misses remain bounded by existing OTP transition budget. TYPE/DATA/SEC/PERF/COMPAT/FLOW pending hosted verification. Added SQLite selection regression and changed retry regression to assert exhausted backend exceptions propagate immediately; retain actual independent network PDO tests and existing contention tests. Documentation and mixed-writer migration guidance updated.
+- Prior head da63523: [46104308288](https://github.com/infocyph/OTP/actions/runs/46104308288) cluster workflow passed; [46104308520](https://github.com/infocyph/OTP/actions/runs/46104308520) all three analysis jobs, six functional QA jobs, three benchmarks, docs, preparation and clean installation passed. No unresolved review threads. Sustained comparison and HTTP acceptance failed. Final H remains pending on new dependency; no benchmark baseline or threshold change. Foundation FND-001 remains deferred externally.

@@ -8,6 +8,7 @@ use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Tests\Support\CacheLayerState;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -127,5 +128,24 @@ final class CacheLockTransitionTest extends TestCase
                 ];
             },
         ))->toThrow(RuntimeException::class, 'after atomic contention');
+    }
+    /**
+     * @throws \Throwable
+     */
+    #[TestDox('SQLite uses its effective coordinated lock for whole records and retains native scalar atomics')]
+    public function testSqliteUsesEffectiveCoordinatedLockForWholeRecords(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'otp-capability-');
+        if ($path === false) {
+            throw new RuntimeException('Unable to allocate SQLite test database.');
+        }
+
+        try {
+            $cache = CacheLayerState::sqlite($path);
+            expect(CacheLock::stateAtomic($cache))->toBeNull()
+                ->and(CacheLock::assertSafe($cache))->toBeInstanceOf(AtomicCacheInterface::class);
+        } finally {
+            unlink($path);
+        }
     }
 }

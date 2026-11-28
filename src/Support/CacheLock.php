@@ -76,7 +76,7 @@ final class CacheLock
                 'Authentication state caches must provide an atomic or coordinated lock capability.',
             );
         }
-        if (self::lockRequiresAtomic($locks)) {
+        if (self::lockRequiresAtomic(self::effectiveLock($locks))) {
             throw new InvalidArgumentException(
                 'Lease-based authentication state locks require a backend atomic capability.',
             );
@@ -195,6 +195,9 @@ final class CacheLock
         }
 
         $locks = $cache->authenticationStateLock();
+        if ($locks !== null) {
+            $locks = self::effectiveLock($locks);
+        }
 
         return $locks === null || $locks instanceof PdoLockProvider || self::lockRequiresAtomic($locks)
             ? $atomic
@@ -405,6 +408,20 @@ final class CacheLock
             },
             $runwire,
         );
+    }
+
+    private static function effectiveLock(LockProviderInterface $locks): LockProviderInterface
+    {
+        while ($locks instanceof PdoLockProvider) {
+            $effective = $locks->effectiveLockProvider();
+            if ($effective === $locks) {
+                break;
+            }
+
+            $locks = $effective;
+        }
+
+        return $locks;
     }
 
     private static function lockRequiresAtomic(LockProviderInterface $locks): bool

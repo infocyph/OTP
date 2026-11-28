@@ -12,9 +12,11 @@ Current upgrade from OTP 7.0
 
 The current development line targets the optional Runwire 4 integration.
 Hosts enabling it should install ``infocyph/runwire:^4.0.1``. CacheLayer's minimum
-is ``^4.1`` and the optional WebAuthn development/test minimum is ``^5.3.17``.
-Drain stateful workers before switching a shared PDO state backend from
-lock-based coordination to native conditional mutation. Do not mix those writers
+is ``^4.2`` and the optional WebAuthn development/test minimum is ``^5.3.17``.
+Drain stateful workers before switching a shared PDO state backend between
+lock-based coordination and native conditional mutation. CacheLayer 4.2 restores
+the coordinated whole-record path for default SQLite and retains native CAS
+for network PDO. CacheLayer owns confirmed database transaction retries. Do not mix those writers
 or clear replay keys during rollout.
 MobileOTP adds an optional constructor algorithm argument; existing two-argument
 calls retain the exact MD5 wire output. SHA-2 variants require matching client
