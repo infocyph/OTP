@@ -207,3 +207,71 @@ jobs:
             perf/http/*-server.log
           retention-days: 61
           if-no-files-found: error
+
+  http-attribution:
+    if: github.event_name == 'pull_request'
+    name: HTTP performance attribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      OTP_PERF_BASELINE_SHA: df54c49b823c6beaad65cc2f829fb8b9c6502236
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: candidate
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.OTP_PERF_BASELINE_SHA }}
+          path: baseline
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+      - name: Install matched HTTP host dependencies
+        shell: bash
+        run: |
+          mkdir -p attribution
+          composer require --working-dir=baseline --dev 'infocyph/runwire:^3.0' --no-update --no-interaction
+          composer update --working-dir=baseline --no-interaction --prefer-dist --no-progress --prefer-stable
+          composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
+          composer show --working-dir=baseline --format=json > attribution/baseline-packages.json
+          composer show --working-dir=candidate --format=json > attribution/candidate-packages.json
+      - name: Measure paired HTTP attribution workloads
+        shell: bash
+        run: |
+          for mode in full no-context memory memory-no-context transport; do
+            python3 candidate/benchmarks/http-acceptance.py \
+              --baseline="$GITHUB_WORKSPACE/baseline" \
+              --candidate="$GITHUB_WORKSPACE/candidate" \
+              --output="$GITHUB_WORKSPACE/attribution/$mode" \
+              --workload="$mode" --diagnostic \
+              --duration=15 --warmup=5 --repetitions=4 --concurrency 8 32
+          done
+      - name: Summarize attribution
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in sorted(Path('attribution').glob('*/http-acceptance.json')):
+              data = json.loads(path.read_text())
+              for concurrency, comparison in data['comparisons'].items():
+                  base = data['baseline'][concurrency]
+                  candidate = data['candidate'][concurrency]
+                  print(path.parent.name, 'C' + concurrency,
+                        f"baseline={base['median_successful_rpm']:.0f}",
+                        f"candidate={candidate['median_successful_rpm']:.0f}",
+                        f"regression={comparison['regression_percent']:.2f}%",
+                        f"CV={base['cv_percent']:.2f}/{candidate['cv_percent']:.2f}%")
+          PY
+      - name: Upload attribution evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: http-performance-attribution
+          path: attribution/
+          retention-days: 61
+          if-no-files-found: error

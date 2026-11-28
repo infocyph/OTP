@@ -33,6 +33,17 @@ python3 benchmarks/http-acceptance.py \
   --soak-duration=300 --concurrency 1 8 32
 ```
 
+The separate HTTP performance attribution job uses the same hosted runner for
+five paired workload modes at C8/C32, with four alternating 15-second trials
+and 5-second priming. Full is the control; no-context omits only the optional
+OTP execution context; memory and memory-no-context use process-local memory
+for the worker-owned fixture keys; transport validates a fixed response without
+OTP or storage. These are diagnostic workloads, not release substitutes.
+Compare stable within-mode baseline/candidate medians and within-revision mode
+contrasts; do not treat cross-mode ratios as exact additive costs. The older OTP
+baseline does not implement context-aware calls. The full release gate retains
+its original workload, trial lengths, soak and thresholds independently.
+
 The host fixture is a measured integration workload; it does not predict every
 application's throughput. Results are retained as artifacts of the exact-candidate
 Security & Standards workflow. Earlier snapshots below do not certify 7.0.1.
