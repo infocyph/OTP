@@ -10,6 +10,7 @@ const COLD_START_OPERATIONS = 30;
 const COLD_START_STABILITY_SPREAD_PERCENT = 10.0;
 const CONCURRENT_STABILITY_SPREAD_PERCENT = 5.0;
 const CONCURRENT_WARMUP_OPERATIONS = 256;
+const CONCURRENT_WARMUP_SECONDS = 5;
 const CONCURRENT_WORKERS = 4;
 const DEFAULT_DURATION_SECONDS = 8.0;
 const DEFAULT_REPETITIONS = 3;
@@ -25,6 +26,7 @@ $options = getopt('', [
     'autoload:',
     'duration::',
     'build-report',
+    'concurrent-trial',
     'release:',
     'repetitions::',
     'stable',
@@ -76,6 +78,29 @@ if (!in_array($autoload, get_included_files(), true)) {
 
 if ($workloadName === 'cold-start' && $autoload !== realpath(__DIR__ . '/../vendor/autoload.php')) {
     throw new RuntimeException('Cold-start measurement requires the local checkout autoloader.');
+}
+
+if (array_key_exists('concurrent-trial', $options)) {
+    if ($workloadName !== 'concurrent-verify' || $buildReport || !$stableEnvironment) {
+        throw new RuntimeException('A raw concurrent trial requires --workload=concurrent-verify and --stable, without --build-report.');
+    }
+    $measurement = measureConcurrentVerification($duration, 0);
+    if ($measurement['failed'] !== 0 || $measurement['successful'] < 1) {
+        throw new RuntimeException('Concurrent verification trial failed.');
+    }
+    $raw = json_encode([
+        'environment' => environment(false, $release),
+        'duration' => $duration,
+        'concurrency' => CONCURRENT_WORKERS,
+        'warmup_seconds' => CONCURRENT_WARMUP_SECONDS,
+        'warmup_operations_minimum' => CONCURRENT_WARMUP_OPERATIONS * CONCURRENT_WORKERS,
+        'stability_limit' => CONCURRENT_STABILITY_SPREAD_PERCENT,
+        'measurement' => $measurement,
+    ], JSON_THROW_ON_ERROR);
+    if (fwrite(STDOUT, $raw . PHP_EOL) === false) {
+        throw new RuntimeException('Unable to write raw concurrent trial.');
+    }
+    exit(0);
 }
 
 $workload = match ($workloadName) {
@@ -574,7 +599,8 @@ function runConcurrentVerificationWorkload(float $duration, int $repetitions): a
             'operation' => 'four persistent workers performing GenericOtp::generate + verify',
             'backend' => 'CacheLayer SQLite authoritative state',
             'runwire_context' => 'absent',
-            'queue' => 'process start barrier only',
+            'queue' => 'synchronized warmup and common measurement deadline',
+            'warmup_seconds' => CONCURRENT_WARMUP_SECONDS,
             'backend_connections' => CONCURRENT_WORKERS,
             'memory_measurement' => 'parent and all ready workers RSS sampled every 10ms during load',
             'duration_per_repetition_seconds' => $duration,
@@ -608,17 +634,28 @@ function measureConcurrentVerification(float $duration, int $repetition): array
     try {
         startConcurrentWorkers($children, $database, $namespace, $barrier, $duration);
         awaitConcurrentBarrier($children, $barrier);
-        $usageBefore = getrusage();
         $parentPid = getmypid();
         if ($parentPid === false) {
             throw new RuntimeException('Unable to identify benchmark parent process.');
         }
         $pids = [$parentPid, ...array_values($children)];
+        $start = hrtime(true) + CONCURRENT_WARMUP_SECONDS * 1_000_000_000;
+        if (file_put_contents($barrier . '.go.tmp', (string) $start) === false
+            || !rename($barrier . '.go.tmp', $barrier . '.go')) {
+            throw new RuntimeException('Unable to start concurrent verification warmup.');
+        }
+        while (hrtime(true) < $start) {
+            usleep(1_000);
+        }
+        $usageBefore = getrusage();
         $memoryStart = processRssMegabytes($pids);
-        $start = hrtime(true);
-        file_put_contents($barrier . '.go', '1');
+        clearstatcache(true, $database . '-wal');
+        $walStart = is_file($database . '-wal') ? filesize($database . '-wal') : 0;
         [$memoryEnd, $memoryPeak] = sampleConcurrentWorkers($children, $pids, $barrier, $duration, $start, $memoryStart);
         $elapsed = (hrtime(true) - $start) / 1_000_000_000;
+        clearstatcache(true, $database . '-wal');
+        $walEnd = is_file($database . '-wal') ? filesize($database . '-wal') : 0;
+        fprintf(STDERR, "Concurrent trial WAL bytes: %s -> %s\n", (string) $walStart, (string) $walEnd);
         file_put_contents($barrier . '.stop', '1');
         joinConcurrentWorkers($children);
         $cpu = cpuSeconds(getrusage()) - cpuSeconds($usageBefore);
@@ -758,6 +795,7 @@ function readConcurrentResults(array $children, string $barrier, float $cpu): ar
     $latencies = [];
     foreach (array_keys($children) as $worker) {
         $result = readConcurrentResult($barrier . '.result.' . $worker);
+        fprintf(STDERR, "Concurrent worker %d: %d successful, %d failed, %.6f CPU seconds\n", $worker, $result['successful'], $result['failed'], $result['cpu_seconds']);
         $cpu += $result['cpu_seconds'];
         $attempted += $result['attempted'];
         $successful += $result['successful'];
@@ -859,10 +897,21 @@ function runConcurrentVerificationWorker(
         }
     }
 
-    file_put_contents($barrier . '.ready.' . $worker, '1');
+    if (file_put_contents($barrier . '.ready.' . $worker, '1') === false) {
+        throw new RuntimeException('Unable to signal concurrent worker readiness.');
+    }
+    $readyDeadline = hrtime(true) + 20_000_000_000;
     while (!is_file($barrier . '.go')) {
+        if (hrtime(true) >= $readyDeadline) {
+            throw new RuntimeException('Concurrent worker warmup barrier timed out.');
+        }
         usleep(500);
     }
+    $rawStart = file_get_contents($barrier . '.go');
+    if (!is_string($rawStart) || !ctype_digit($rawStart)) {
+        throw new RuntimeException('Invalid concurrent verification start timestamp.');
+    }
+    $start = (int) $rawStart;
 
     $operation = static function () use ($otp, $worker, &$sequence): void {
         $binding = 'worker-' . $worker . '-' . ($sequence % 128);
@@ -872,7 +921,11 @@ function runConcurrentVerificationWorker(
             throw new RuntimeException('Concurrent GenericOtp verification was rejected.');
         }
     };
-    $measurement = measureOperation($operation, $duration, 20);
+    while (hrtime(true) < $start) {
+        $operation();
+    }
+    fprintf(STDERR, "Concurrent worker %d: %d sustained warmup operations\n", $worker, $sequence);
+    $measurement = measureOperation($operation, $duration, 20, $start + (int) round($duration * 1_000_000_000.0));
     $payload = json_encode([
         'attempted' => $measurement['attempted'],
         'successful' => $measurement['successful'],
@@ -891,7 +944,7 @@ function runConcurrentVerificationWorker(
  */
 function cleanupConcurrentBenchmark(string $database, string $barrier): void
 {
-    $paths = [$barrier . '.go', $barrier . '.stop', $database, $database . '-shm', $database . '-wal'];
+    $paths = [$barrier . '.go', $barrier . '.go.tmp', $barrier . '.stop', $database, $database . '-shm', $database . '-wal'];
     for ($worker = 0; $worker < CONCURRENT_WORKERS; $worker++) {
         $paths[] = $barrier . '.ready.' . $worker;
         $paths[] = $barrier . '.result.' . $worker;
@@ -1021,7 +1074,7 @@ function runRunwireLifecycleWorkload(float $duration, int $repetitions): array
  * }
  * @throws \RuntimeException
  */
-function measureOperation(callable $operation, float $duration, int $sampleInterval): array
+function measureOperation(callable $operation, float $duration, int $sampleInterval, ?int $endNanoseconds = null): array
 {
     $attempted = 0;
     $successful = 0;
@@ -1030,7 +1083,7 @@ function measureOperation(callable $operation, float $duration, int $sampleInter
     $usageBefore = getrusage();
     $memoryStart = memory_get_usage(true);
     $start = hrtime(true);
-    $deadline = $start + (int) round($duration * 1_000_000_000.0);
+    $deadline = $endNanoseconds ?? ($start + (int) round($duration * 1_000_000_000.0));
 
     while (true) {
         $before = hrtime(true);

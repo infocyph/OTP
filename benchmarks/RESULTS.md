@@ -12,6 +12,20 @@ measured ready-workload elapsed time. The HTTP comparison reproduced a small
 stateful-path regression; strict upstream Base32 decoding removes a redundant
 encode round trip while retaining canonical secret validation.
 
+The SQLite calibration now runs an A/A control using the same baseline source
+and installed dependencies twice, then A/B using the same runner and baseline.
+Each phase uses four trials per arm in ABBAABBA order; each trial has 256
+validated priming operations per worker, five seconds of concurrent warmup,
+then a common 30-second measurement deadline. Four workers share the same
+topology-selected logical CPU set (distinct physical cores preferred; siblings
+used where required). No system configuration is changed. Raw trial JSON and
+worker/WAL logs are retained alongside the PHPForge-compatible aggregate,
+including all samples. The A/A comparison must satisfy the same 5% spread
+limit and 2% regression limit in both directions; A/B still requires the
+original 2% budget and stable environment. Unstable results are not discarded
+or retried; both phases collect evidence before certification. This is a
+calibration of the benchmark, not a production optimization.
+
 `http-acceptance.py` launches two workers per revision (Runwire 3 baseline,
 Runwire 4 candidate), waits for both workers, warms them, then alternates four
 30-second baseline/candidate trials at concurrency 1, 8 and 32 after 10 seconds

@@ -119,25 +119,22 @@ jobs:
             --repetitions=3 \
             --stable \
             --workload=roundtrip > "$GITHUB_WORKSPACE/perf/candidate-roundtrip.json"
-          php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
-            --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --release="$OTP_PERF_BASELINE_SHA" \
-            --duration=8 \
-            --repetitions=3 \
-            --stable \
-            --workload=concurrent-verify > "$GITHUB_WORKSPACE/perf/baseline-concurrent.json"
-          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
-            --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --release="$GITHUB_SHA" \
-            --duration=8 \
-            --repetitions=3 \
-            --stable \
-            --workload=concurrent-verify > "$GITHUB_WORKSPACE/perf/candidate-concurrent.json"
           php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
             --release="$GITHUB_SHA" \
             --repetitions=3 \
             --workload=cold-start > "$GITHUB_WORKSPACE/perf/cold-start.json"
+
+      - name: Calibrate and compare paired four-worker SQLite trials
+        shell: bash
+        run: |
+          python3 candidate/benchmarks/sqlite-acceptance.py \
+            --baseline="$GITHUB_WORKSPACE/baseline" \
+            --candidate="$GITHUB_WORKSPACE/candidate" \
+            --harness="$GITHUB_WORKSPACE/candidate/benchmarks/release-gate.php" \
+            --baseline-release="$OTP_PERF_BASELINE_SHA" \
+            --candidate-release="$GITHUB_SHA" \
+            --output="$GITHUB_WORKSPACE/perf"
 
       - name: Install PHPForge validation tooling
         run: composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
@@ -173,6 +170,17 @@ jobs:
               comparison_status=1
             fi
           done
+          # A/A must be stable and within budget in either direction.
+          for arm in a b; do
+            other=b
+            if [[ "$arm" == b ]]; then other=a; fi
+            if ! composer --working-dir=candidate ic:benchmark:compare \
+              "$GITHUB_WORKSPACE/perf/aa-baseline-$arm.json" \
+              "$GITHUB_WORKSPACE/perf/aa-baseline-$other.json" \
+              --max-regression=2 --stable-environment; then
+              comparison_status=1
+            fi
+          done
           exit "$comparison_status"
 
       - name: Prepare the matching Runwire 3 HTTP host baseline
@@ -205,6 +213,7 @@ jobs:
             perf/*.json
             perf/http/*.json
             perf/http/*-server.log
+            perf/sqlite-trials/
           retention-days: 61
           if-no-files-found: error
 
