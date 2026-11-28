@@ -357,7 +357,7 @@ final class GenericOtpTest extends TestCase
             $this->createMock(AuthenticationStateCacheInterface::class),
             $locks,
         );
-        $cache->method('get')->willReturn(null);
+        $cache->expects($this->never())->method('get');
         $cache->expects($this->once())->method('set')->with(
             hash('sha256', "infocyph:otp:generic:state:v1\0binding"),
             $this->callback(static fn (array $state): bool => is_int($state['expiresAt'] ?? null)

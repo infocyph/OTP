@@ -22,9 +22,9 @@ Follow [PHPForge engineering principles](https://github.com/infocyph/PHPForge/bl
 ## OTP implementation tracker — 2026-11-27
 
 - [x] A: Runwire ^4.0.1, CacheLayer ^4.2, compatible dependency updates and PHP 8.6 matrix.
-- [ ] B: PDO lock ownership and native atomic state.
+- [x] B: PDO lock ownership and native atomic state (4.2 integration verified on 3883720).
   - [x] B-direct: Network PDO native state selection, bounded confirmed rollback handling, independent ownership, expiry and contention regressions verified.
-  - [ ] B-upstream: CacheLayer 4.2 published and integrated; verify native network PDO and SQLite coordination, retry ownership and sustained throughput.
+  - [x] B-upstream: CacheLayer 4.2 published and integrated; native functional QA and SQLite sustained comparison passed on 3883720. Historical advisory-lock failure remains unproven; current native protocol regressions pass.
 - [x] C: Distributed topology and replay (36/36 Redis/Valkey jobs on 2f02b3f; published consumer requalification remains H).
 - [x] D: Direct OTP protocol coverage and recovery qualification; Foundation consumer work transferred by maintainer decision.
   - [x] D-direct: All OTP families, native Passkey registration/assertion, durable 77-byte recovery identity and cross-owner consumption/rotation verified.
@@ -36,7 +36,7 @@ Follow [PHPForge engineering principles](https://github.com/infocyph/PHPForge/bl
 - [x] G: Documentation and migration updates (warning-free hosted Sphinx build on 5e0ce3d).
 - [ ] H: Hosted QA, security and sustained performance gates.
   - [x] H-functional: Six supported QA variants, 36 topology cases, three standard benchmarks, clean install and documentation build green on 2f02b3f.
-  - [ ] H-performance: Stable paired SQLite measurement, 2% throughput budget at every workload/concurrency, and HTTP/soak certification.
+  - [ ] H-performance: Sustained generation, roundtrip and SQLite concurrency passed; HTTP C1 remained 2.94% regression on 3883720. Final-head certification pending.
   - [ ] H-release: MobileOTP variant qualification and published CacheLayer patch integration; final standalone OTP tracker reconciliation. Foundation consumer matrix deferred to Foundation feedback.
 
 Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 passed, 4 failed, 2 skipped). Findings pending reproduction on updated dependencies. Preserve public contracts and fail-closed semantics. Apply PHPForge CORE, FLOW, SEC, DATA, COMPAT, CONFIG, OPS, PERF and remaining applicable rules with evidence per batch. No automatic merge.
@@ -319,3 +319,8 @@ Baseline workflow: https://github.com/infocyph/OTP/actions/runs/44992998393 (7 p
 
 - [46110542945](https://github.com/infocyph/OTP/actions/runs/46110542945) on f4117d0: six functional QA variants, three standard benchmarks, docs, clean install and preparation passed. PHPStan passed; all three Psalm jobs report only four MissingThrowsDocblock diagnostics in testNativeConditionalMissObservesWinner (5306–5309). Cluster and sustained certification active at inspection.
 - Document the four propagated exceptions already declared by AtomicState::claim. Preserve the conditional-miss winner, fail-closed behavior and assertions. TYPE/FLOW-02/EXEC: no suppression, runtime change, test removal or gate adjustment. New head verification pending.
+
+### Batch H6 — eliminate redundant locked issuance read
+
+- [46110856121](https://github.com/infocyph/OTP/actions/runs/46110856121) on 3883720: 15 successful jobs, 1 failure (HTTP acceptance), 2 intentional skips. All three analyzers, all six QA variants, documentation, clean install, preparation and all standard benchmarks passed. [46110855967](https://github.com/infocyph/OTP/actions/runs/46110855967) cluster workflow passed. Sustained generate 907540.41 -> 902840.04 RPM (+0.52% regression), roundtrip 564623.30 -> 560820.74 (+0.67%), SQLite concurrent 301639.85 -> 301309.78 (+0.11%): original comparison gate passed. HTTP stable C1 +2.94% (fail), C8 +0.52%, C32 +1.76% (pass); soak executed. H remains open.
+- GenericOtp issuance unconditionally replaces the previous record, yet the lock-coordinated transition performed an unused authoritative read before writing. Skip that read only for unconditional issuance under the existing coordinated lock; native CAS still reads authoritative state and retries conditional misses. Expiry is still sampled after lock acquisition, ownership refresh and pre-mutation cancellation retained, write failure still aborts, no format or key change. Strengthen the existing delayed-lock issuance regression to require zero state reads. Existing concurrent replacement, replay, failure and native PDO tests remain. PERF-01/DATA/FLOW-02: candidate optimization, performance improvement not established until hosted comparison passes; no workload, threshold or baseline changes.

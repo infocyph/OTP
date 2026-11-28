@@ -226,6 +226,7 @@ final class CacheLock
 
     /**
      * @template T
+     * @param bool $readCurrent Whether the lock-coordinated transition needs the previous value; atomic transitions always read it.
      * @param callable(mixed): array{
      *     result:T,
      *     replacement?:mixed,
@@ -245,6 +246,7 @@ final class CacheLock
         string $stateName,
         callable $transition,
         ?RunwireExecutionContext $runwire = null,
+        bool $readCurrent = true,
     ): mixed {
         if ($runwire !== null) {
             self::checkpoint($runwire);
@@ -263,8 +265,9 @@ final class CacheLock
                 $stateName,
                 $transition,
                 $runwire,
+                $readCurrent,
             ): mixed {
-                $decision = $transition($cache->get($stateKey));
+                $decision = $transition($readCurrent ? $cache->get($stateKey) : null);
                 if (!array_key_exists('replacement', $decision)) {
                     return $decision['result'];
                 }

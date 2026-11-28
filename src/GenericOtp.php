@@ -125,6 +125,7 @@ final readonly class GenericOtp
                 ];
             },
             $runwire,
+            readCurrent: false,
         );
 
         return $otp;
