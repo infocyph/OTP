@@ -12,21 +12,24 @@ measured ready-workload elapsed time. The HTTP comparison reproduced a small
 stateful-path regression; strict upstream Base32 decoding removes a redundant
 encode round trip while retaining canonical secret validation.
 
-`http-acceptance.py` launches two Runwire 3 workers per revision, waits for both
-workers, warms them, then alternates baseline/candidate trials at concurrency
-1, 8 and 32. Worker CPUs are held to the same affinity; the client uses other
-available CPUs. Every HTTP response must confirm Generic OTP acceptance/replay
+`http-acceptance.py` launches two workers per revision (Runwire 3 baseline,
+Runwire 4 candidate), waits for both workers, warms them, then alternates four
+30-second baseline/candidate trials at concurrency 1, 8 and 32 after 10 seconds
+of per-connection priming. Each worker is assigned a fixed logical CPU, preferring
+distinct physical cores when reported by the runner; the client uses other
+physical cores where available. The topology and actual worker affinity are
+recorded. All trials are retained and the same gates apply to both revisions. Every HTTP response must confirm Generic OTP acceptance/replay
 rejection, counter OCRA and provisioning parsing against shared integrity-protected
 SQLite. It fails on invalid responses, timeouts, a process/resource violation,
 more than 2.5% trial RPM CV or more than 2% median RPM regression. The configured
 300-second candidate soak also checks bounded live process-tree RSS and FDs.
 
-Example (both checkouts must include the same stable Runwire 3 host dependency):
+Example (baseline includes Runwire 3; candidate includes Runwire 4):
 
 ```sh
 python3 benchmarks/http-acceptance.py \
   --baseline=/path/to/baseline --candidate=/path/to/candidate \
-  --output=/tmp/otp-http --duration=15 --repetitions=3 \
+  --output=/tmp/otp-http --duration=30 --warmup=10 --repetitions=4 \
   --soak-duration=300 --concurrency 1 8 32
 ```
 

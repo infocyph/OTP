@@ -7,8 +7,10 @@ namespace Infocyph\OTP\Tests;
 use DateTimeImmutable;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\OCRA;
+use Infocyph\OTP\Support\OcraMessage;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
+use Infocyph\OTP\ValueObjects\OcraSuite;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -96,6 +98,28 @@ final class OCRATest extends TestCase
         }
         foreach ($hexVectors as $challenge => $expected) {
             expect($hex->generate($challenge))->toBe($expected);
+        }
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    #[TestDox('numeric challenge encoding preserves bytes across the native integer boundary')]
+    public function testNumericChallengeEncodingPreservesBytesAcrossTheNativeIntegerBoundary(): void
+    {
+        $suite = OcraSuite::parse('OCRA-1:HOTP-SHA256-8:QN64');
+        $operation = ['counter' => null, 'pinDigest' => null, 'session' => null, 'timestamp' => null];
+        $vectors = [
+            ['00000000000000000015', '0f'],
+            ['999999999999999999', '0de0b6b3a763ffff'],
+            ['1000000000000000000', '0de0b6b3a7640000'],
+            ['9223372036854775808', '8000000000000000'],
+            ['9999999999999999999999999999999999999999999999999999999999999999', '184f03e93ff9f4daa797ed6e38ed64bf6a1f00ffffffffffffffff'],
+        ];
+        foreach ($vectors as [$challenge, $expected]) {
+            expect(bin2hex(OcraMessage::build($suite, $challenge, $operation)))
+                ->toBe(bin2hex($suite->suite . "\0") . str_pad($expected, 256, '0'));
         }
     }
 

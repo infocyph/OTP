@@ -202,7 +202,7 @@ final class ProvisioningUriParser
             throw new InvalidArgumentException('Invalid empty otpauth query parameter.');
         }
         [$encodedKey, $encodedValue] = array_pad(explode('=', $parameter, 2), 2, '');
-        if ($encodedKey === '' || preg_match('/%(?![A-Fa-f0-9]{2})/', $encodedKey . $encodedValue) === 1) {
+        if ($encodedKey === '' || preg_match('/%(?![A-Fa-f0-9]{2})/', $parameter) === 1) {
             throw new InvalidArgumentException('Invalid otpauth query encoding.');
         }
         $key = rawurldecode($encodedKey);

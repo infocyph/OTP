@@ -58,6 +58,11 @@ final class OcraMessage
             return "\0";
         }
 
+        // Eighteen decimal digits always fit the required 64-bit PHP runtime.
+        if (strlen($decimal) <= 18) {
+            return self::hexToBytes(dechex((int) $decimal));
+        }
+
         $hex = '';
         while ($decimal !== '') {
             $quotient = '';

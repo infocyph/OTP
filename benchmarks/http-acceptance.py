@@ -35,30 +35,31 @@ def process_tree(pid):
 
 
 async def request(reader, writer):
-    writer.write(b'GET /otp HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n')
-    await writer.drain()
-    header = await asyncio.wait_for(reader.readuntil(b'\r\n\r\n'), timeout=5)
-    if not header.startswith(b'HTTP/1.1 200 '):
-        raise RuntimeError('Unexpected HTTP status: ' + repr(header))
-    fields = dict(line.split(b':', 1) for line in header.lower().split(b'\r\n')[1:] if b':' in line)
-    if b'content-length' in fields:
-        body = await reader.readexactly(int(fields[b'content-length']))
-    elif fields.get(b'transfer-encoding', b'').strip() == b'chunked':
-        chunks = []
-        while True:
-            size = int((await reader.readline()).strip(), 16)
-            if size == 0:
-                await reader.readline()
-                break
-            chunks.append(await reader.readexactly(size))
-            if await reader.readexactly(2) != b'\r\n':
-                raise RuntimeError('Invalid chunk terminator')
-        body = b''.join(chunks)
-    else:
-        raise RuntimeError('Response requires explicit framing')
-    if body != EXPECTED:
-        raise RuntimeError('Authentication response validation failed: ' + repr(body))
-    return fields.get(b'connection', b'').strip() != b'close'
+    async with asyncio.timeout(5):
+        writer.write(b'GET /otp HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n')
+        await writer.drain()
+        header = await reader.readuntil(b'\r\n\r\n')
+        if not header.startswith(b'HTTP/1.1 200 '):
+            raise RuntimeError('Unexpected HTTP status: ' + repr(header))
+        fields = dict(line.split(b':', 1) for line in header.lower().split(b'\r\n')[1:] if b':' in line)
+        if b'content-length' in fields:
+            body = await reader.readexactly(int(fields[b'content-length']))
+        elif fields.get(b'transfer-encoding', b'').strip() == b'chunked':
+            chunks = []
+            while True:
+                size = int((await reader.readline()).strip(), 16)
+                if size == 0:
+                    await reader.readline()
+                    break
+                chunks.append(await reader.readexactly(size))
+                if await reader.readexactly(2) != b'\r\n':
+                    raise RuntimeError('Invalid chunk terminator')
+            body = b''.join(chunks)
+        else:
+            raise RuntimeError('Response requires explicit framing')
+        if body != EXPECTED:
+            raise RuntimeError('Authentication response validation failed: ' + repr(body))
+        return fields.get(b'connection', b'').strip() != b'close'
 
 
 async def load(port, concurrency, duration, pid, warmup=False, settle_seconds=0):
@@ -125,7 +126,10 @@ async def load(port, concurrency, duration, pid, warmup=False, settle_seconds=0)
             await writer.wait_closed()
 
     try:
-        await asyncio.gather(monitor(), *(client(r, w) for r, w in connections))
+        async with asyncio.TaskGroup() as workload:
+            workload.create_task(monitor())
+            for reader, writer in connections:
+                workload.create_task(client(reader, writer))
     finally:
         for _, writer in connections:
             writer.close()
@@ -167,7 +171,13 @@ async def start_host(root, configuration, output_dir, label):
         for _ in range(400):
             if process.poll() is not None:
                 raise RuntimeError('HTTP server exited: inspect ' + str(log.name))
-            if len(list(Path(ready.name).glob('ready-*'))) == 2:
+            workers = sorted(int(path.name.removeprefix('ready-')) for path in Path(ready.name).glob('ready-*'))
+            if len(workers) == 2:
+                if set(workers) != {entry[0] for entry in process_tree(process.pid)} - {process.pid}:
+                    raise RuntimeError('Ready workers do not match the live process tree')
+                for index, worker in enumerate(workers):
+                    os.sched_setaffinity(worker, {configuration.server_cpus[index % len(configuration.server_cpus)]})
+                print(label, 'worker affinity:', {worker: sorted(os.sched_getaffinity(worker)) for worker in workers}, flush=True)
                 await load(port, 8, configuration.warmup, process.pid, warmup=True)
                 return host
             await asyncio.sleep(.05)
@@ -261,6 +271,17 @@ if __name__ == '__main__':
             and all(1 <= n <= 128 for n in arguments.concurrency)):
         parser.error('Positive durations, at least three trials and bounded concurrency are required')
     allowed_cpus = sorted(os.sched_getaffinity(0))
-    arguments.server_cpus = allowed_cpus[:2]
-    os.sched_setaffinity(0, allowed_cpus[2:] or allowed_cpus)
+    core_groups = {}
+    for cpu in allowed_cpus:
+        topology = Path('/sys/devices/system/cpu') / ('cpu' + str(cpu)) / 'topology'
+        try:
+            core = ((topology / 'physical_package_id').read_text().strip(), (topology / 'core_id').read_text().strip())
+        except OSError:
+            core = ('logical', str(cpu))
+        core_groups.setdefault(core, []).append(cpu)
+    arguments.cpu_core_groups = list(core_groups.values())
+    representatives = [group[0] for group in arguments.cpu_core_groups]
+    arguments.server_cpus = representatives[:2] if len(representatives) >= 2 else allowed_cpus[:2]
+    client_cpus = [cpu for group in arguments.cpu_core_groups if not set(group).intersection(arguments.server_cpus) for cpu in group]
+    os.sched_setaffinity(0, client_cpus or [cpu for cpu in allowed_cpus if cpu not in arguments.server_cpus] or allowed_cpus)
     asyncio.run(main(arguments))

@@ -104,7 +104,7 @@ final readonly class OCRA
     ): string {
         $operation = $this->prepareOperation($challenge, $counter, $pin, $session, $timestamp);
 
-        return $this->calculate($challenge, $operation);
+        return $this->calculate(OcraMessage::build($this->suite, $challenge, $operation));
     }
 
     /**
@@ -124,7 +124,7 @@ final readonly class OCRA
         $challenge = $this->composeChallenge($clientChallenge, $serverChallenge);
         $operation = $this->prepareOperation($challenge, $counter, $pin, $session, $timestamp, true);
 
-        return $this->calculate($challenge, $operation);
+        return $this->calculate(OcraMessage::build($this->suite, $challenge, $operation));
     }
 
     /**
@@ -142,7 +142,7 @@ final readonly class OCRA
     ): string {
         $operation = $this->prepareOperation($signatureChallenge, $counter, $pin, $session, $timestamp);
 
-        return $this->calculate($signatureChallenge, $operation);
+        return $this->calculate(OcraMessage::build($this->suite, $signatureChallenge, $operation));
     }
 
     /**
@@ -479,13 +479,11 @@ final readonly class OCRA
     }
 
     /**
-     * @param string $challenge Validated operation challenge.
-     * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
      * @throws \RuntimeException
      */
-    private function calculate(string $challenge, array $operation): string
+    private function calculate(string $message): string
     {
-        $hash = hash_hmac($this->suite->algorithm, OcraMessage::build($this->suite, $challenge, $operation), $this->sharedKey, true);
+        $hash = hash_hmac($this->suite->algorithm, $message, $this->sharedKey, true);
         if ($this->suite->digits === 0) {
             return strtoupper(bin2hex($hash));
         }
@@ -650,11 +648,12 @@ final readonly class OCRA
             $timeStep = $this->suite->timeStepSeconds ?? throw new RuntimeException('Missing OCRA time step.');
             $operation['timestamp'] = $timestamp + ($offset * $timeStep);
         }
-        if (!hash_equals($this->calculate($challenge, $operation), $otp)) {
+        $message = OcraMessage::build($this->suite, $challenge, $operation);
+        if (!hash_equals($this->calculate($message), $otp)) {
             return null;
         }
 
-        return ['message' => OcraMessage::build($this->suite, $challenge, $operation), 'offset' => $offset];
+        return ['message' => $message, 'offset' => $offset];
     }
 
     /**

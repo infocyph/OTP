@@ -153,3 +153,12 @@ test('parser applies account-label and extension bounds symmetrically', function
             'otpauth://totp/Example:alice?secret=' . $secret . '&extension=' . str_repeat('v', 1025),
         ))->toThrow(InvalidArgumentException::class);
 });
+
+test('parser rejects percent escapes crossing query key and value boundaries', function (string $parameter) {
+    $uri = 'otpauth://totp/Example:alice?secret=' . TOTP::generateSecret();
+
+    expect(fn () => ProvisioningUriParser::parse($uri . '&' . $parameter))
+        ->toThrow(InvalidArgumentException::class, 'Invalid otpauth query encoding.')
+        ->and(ProvisioningUriParser::parse($uri . '&extension%25=ab')->additionalParameters)
+        ->toBe(['extension%' => 'ab']);
+})->with(['extension%=ab', 'extension%A=b', 'extension=x%']);

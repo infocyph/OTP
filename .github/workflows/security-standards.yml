@@ -190,8 +190,9 @@ jobs:
             --baseline="$GITHUB_WORKSPACE/baseline" \
             --candidate="$GITHUB_WORKSPACE/candidate" \
             --output="$GITHUB_WORKSPACE/perf/http" \
-            --duration=15 \
-            --repetitions=3 \
+            --duration=30 \
+            --warmup=10 \
+            --repetitions=4 \
             --soak-duration=300 \
             --concurrency 1 8 32
 
