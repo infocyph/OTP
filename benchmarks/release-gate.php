@@ -897,21 +897,7 @@ function runConcurrentVerificationWorker(
         }
     }
 
-    if (file_put_contents($barrier . '.ready.' . $worker, '1') === false) {
-        throw new RuntimeException('Unable to signal concurrent worker readiness.');
-    }
-    $readyDeadline = hrtime(true) + 20_000_000_000;
-    while (!is_file($barrier . '.go')) {
-        if (hrtime(true) >= $readyDeadline) {
-            throw new RuntimeException('Concurrent worker warmup barrier timed out.');
-        }
-        usleep(500);
-    }
-    $rawStart = file_get_contents($barrier . '.go');
-    if (!is_string($rawStart) || !ctype_digit($rawStart)) {
-        throw new RuntimeException('Invalid concurrent verification start timestamp.');
-    }
-    $start = (int) $rawStart;
+    $start = awaitConcurrentStart($barrier, $worker);
 
     $operation = static function () use ($otp, $worker, &$sequence): void {
         $binding = 'worker-' . $worker . '-' . ($sequence % 128);
@@ -937,6 +923,29 @@ function runConcurrentVerificationWorker(
     while (!is_file($barrier . '.stop')) {
         usleep(1_000);
     }
+}
+
+/**
+ * Signal readiness and obtain the common monotonic measurement start.
+ * @throws \RuntimeException
+ */
+function awaitConcurrentStart(string $barrier, int $worker): int
+{
+    if (file_put_contents($barrier . '.ready.' . $worker, '1') === false) {
+        throw new RuntimeException('Unable to signal concurrent worker readiness.');
+    }
+    $readyDeadline = hrtime(true) + 20_000_000_000;
+    while (!is_file($barrier . '.go')) {
+        if (hrtime(true) >= $readyDeadline) {
+            throw new RuntimeException('Concurrent worker warmup barrier timed out.');
+        }
+        usleep(500);
+    }
+    $rawStart = file_get_contents($barrier . '.go');
+    if (!is_string($rawStart) || !ctype_digit($rawStart)) {
+        throw new RuntimeException('Invalid concurrent verification start timestamp.');
+    }
+    return (int) $rawStart;
 }
 
 /**
