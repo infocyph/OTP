@@ -35,9 +35,13 @@ final readonly class MobileOTP
         string $secret,
         #[\SensitiveParameter]
         string $pin,
+        private string $algorithm = 'md5',
     ) {
         self::assertSecret($secret);
         self::assertPin($pin);
+        if (!in_array($algorithm, ['md5', 'sha256', 'sha384', 'sha512'], true)) {
+            throw new InvalidArgumentException('MobileOTP algorithm must be md5, sha256, sha384, or sha512.');
+        }
         $this->pin = $pin;
         $this->secret = $secret;
     }
@@ -237,8 +241,8 @@ final readonly class MobileOTP
 
     private function codeAtStep(int $step): string
     {
-        // Legacy mOTP wire compatibility requires this exact digest and truncation.
-        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+        // MD5 is the legacy wire default; alternatives require matching client configuration.
+        return substr(hash($this->algorithm, $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
     }
 
     /** @return array{step:int,offset:int}|null */

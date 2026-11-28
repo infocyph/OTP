@@ -16,7 +16,10 @@ is ``^4.1`` and the optional WebAuthn development/test minimum is ``^5.3.17``.
 Drain stateful workers before switching a shared PDO state backend from
 lock-based coordination to native conditional mutation. Do not mix those writers
 or clear replay keys during rollout.
-Public OTP APIs and persisted OTP key domains are unchanged. The host continues
+MobileOTP adds an optional constructor algorithm argument; existing two-argument
+calls retain the exact MD5 wire output. SHA-2 variants require matching client
+configuration and a new enrolled factor generation. Persisted OTP key domains
+are unchanged. The host continues
 to own all Runwire workers, event loops, requests and coroutine scopes.
 
 OTP 6.1 to 7.0

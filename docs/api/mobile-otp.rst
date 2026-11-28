@@ -8,6 +8,7 @@ Constructor and secret generation:
    new MobileOTP(
        #[\SensitiveParameter] string $secret,
        #[\SensitiveParameter] string $pin,
+       string $algorithm = 'md5',
    );
 
    public static function generateSecret(): string;
@@ -46,6 +47,11 @@ Verification:
        ?AuthenticationStateCacheInterface $cache = null,
        ?string $factorId = null,
    ): VerificationResult;
+
+The algorithm is fixed at construction and accepts only ``md5``, ``sha256``,
+``sha384``, or ``sha512``. The default is the interoperable legacy mOTP digest;
+other choices require a client configured for the same variant. Do not accept
+algorithm selection from an authentication request.
 
 ``PERIOD`` is 10 seconds and ``OUTPUT_LENGTH`` is six hexadecimal characters.
 Verification windows are capped at the legacy three-minute/18-step tolerance per

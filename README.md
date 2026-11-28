@@ -276,8 +276,11 @@ $result = $mobile->verifyWithWindow(
 ```
 
 The default window is zero; legacy tolerance can be configured up to 18
-10-second steps per direction. MD5 is used only because it is part of the legacy
-wire algorithm. Prefer TOTP, AOTP, or Passkey for new deployments. See
+10-second steps per direction. MD5 remains the legacy default. Controlled clients
+may explicitly configure `algorithm: 'sha256'` (or `sha384`, `sha512`) on both
+sides; these variants are not standard mOTP. Persist the choice at enrollment,
+never accept it from a verification request, and rotate the factor when changing
+it. Prefer TOTP, AOTP, or Passkey for new deployments. See
 [MobileOTP documentation](https://docs.infocyph.com/projects/OTP/en/latest/guides/mobile-otp.html).
 
 ### Passkey / WebAuthn

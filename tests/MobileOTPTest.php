@@ -95,3 +95,26 @@ test('MobileOTP generates canonical 16 character init secrets', function () {
 
     expect($secret)->toMatch('/\A[0-9a-f]{16}\z/D');
 });
+
+test('MobileOTP supports explicitly configured cryptographic digest variants', function (string $algorithm) {
+    $timestamp = 1_234_567_890;
+    $mobile = new MobileOTP('7ac61d4736f51a2b', '5555', algorithm: $algorithm);
+    $expected = substr(hash($algorithm, '1234567897ac61d4736f51a2b5555'), 0, MobileOTP::OUTPUT_LENGTH);
+    $cache = CacheLayerState::memory();
+
+    expect($mobile->generate($timestamp))->toBe($expected)
+        ->and($mobile->verify($expected, $timestamp))->toBeTrue()
+        ->and($mobile->verifyWithWindow($expected, $timestamp, cache: $cache, factorId: 'variant-v1')->matched)->toBeTrue()
+        ->and($mobile->verifyWithWindow($expected, $timestamp, cache: $cache, factorId: 'variant-v1')->reason)->toBe(VerificationReason::Replay);
+})->with(['sha256', 'sha384', 'sha512']);
+
+test('MobileOTP preserves the explicit MD5 legacy default', function () {
+    $mobile = new MobileOTP('7ac61d4736f51a2b', '5555', algorithm: 'md5');
+
+    expect($mobile->generate(1_234_567_890))->toBe('09cb10');
+});
+
+test('MobileOTP rejects unapproved digest algorithms', function (string $algorithm) {
+    expect(fn () => new MobileOTP('7ac61d4736f51a2b', '5555', algorithm: $algorithm))
+        ->toThrow(InvalidArgumentException::class);
+})->with(['sha1', 'crc32', 'xxh3', 'MD5', '', 'unknown']);
