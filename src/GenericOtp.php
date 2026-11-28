@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Support\RunwireState;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -69,7 +70,7 @@ final readonly class GenericOtp
     public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
     {
         self::assertBinding($binding);
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $stateKey = self::stateKey($binding);
         if (($atomic = CacheLock::stateAtomic($this->cache)) !== null) {
             $atomic->getAndDelete($stateKey);

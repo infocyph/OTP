@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Support\RunwireState;
 use Infocyph\OTP\ValueObjects\AotpChallenge;
 use Infocyph\OTP\ValueObjects\AotpKeyPair;
 use Infocyph\OTP\ValueObjects\AotpResponse;
@@ -138,7 +139,7 @@ final readonly class AOTP
             throw new InvalidArgumentException('AOTP challenge TTL must be between 1 and 600 seconds.');
         }
         CacheLock::assertSafe($cache);
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
 
         for ($attempt = 0; $attempt < self::RESERVATION_ATTEMPTS; $attempt++) {
             $issuedAt = $now ?? time();
@@ -203,7 +204,7 @@ final readonly class AOTP
     ): VerificationResult {
         self::assertFactorId($factorId);
         CacheLock::assertSafe($cache);
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $verificationTime = $now ?? time();
         if ($verificationTime < 0) {
             throw new InvalidArgumentException('AOTP verification timestamp must be non-negative.');

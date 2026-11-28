@@ -39,7 +39,7 @@ final class CacheLock
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
             return AtomicState::advance($cache, $atomic, $stateKey, $value, $ttl, $stateName, $runwire);
@@ -91,10 +91,6 @@ final class CacheLock
      */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {
-        if ($runwire === null) {
-            return;
-        }
-
         RunwireState::checkpoint($runwire);
     }
 
@@ -112,7 +108,7 @@ final class CacheLock
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
             return AtomicState::claim($cache, $atomic, $stateKey, 1, $ttl, $stateName, $runwire);
@@ -136,7 +132,7 @@ final class CacheLock
         ?RunwireExecutionContext $runwire = null,
         ?int $expiresAt = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         if ($ttl < 1) {
             throw new InvalidArgumentException('Reserved authentication state TTL must be positive.');
         }
@@ -172,7 +168,7 @@ final class CacheLock
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         if ($ttl < 1) {
             throw new InvalidArgumentException('Reserved authentication state TTL must be positive.');
         }
@@ -218,7 +214,7 @@ final class CacheLock
         callable $operation,
         ?RunwireExecutionContext $runwire = null,
     ): mixed {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         self::assertLockSafe($cache);
 
         return self::synchronizedKnownSafe($cache, $key, $operation, $runwire);
@@ -248,9 +244,7 @@ final class CacheLock
         ?RunwireExecutionContext $runwire = null,
         bool $readCurrent = true,
     ): mixed {
-        if ($runwire !== null) {
-            self::checkpoint($runwire);
-        }
+        RunwireState::checkpoint($runwire);
         $atomic = self::stateAtomic($cache);
         if ($atomic !== null) {
             return AtomicState::transition($cache, $atomic, $stateKey, $stateName, $transition, $runwire);
@@ -272,7 +266,7 @@ final class CacheLock
                     return $decision['result'];
                 }
 
-                self::checkpoint($runwire);
+                RunwireState::checkpoint($runwire);
                 self::ensureOwned($locks, $handle);
                 $mutated = ($decision['delete'] ?? false)
                     ? $cache->delete($stateKey)
@@ -397,7 +391,7 @@ final class CacheLock
                 if ($current !== 0) {
                     throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
                 }
-                self::checkpoint($runwire);
+                RunwireState::checkpoint($runwire);
                 self::ensureOwned($locks, $handle);
                 $remaining = $expiresAt === null ? $ttl : $expiresAt - time();
                 if ($remaining < 1) {
@@ -478,7 +472,7 @@ final class CacheLock
         string $failure,
         ?RunwireExecutionContext $runwire,
     ): void {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         self::ensureOwned($locks, $handle);
         if (!$cache->set($stateKey, $value, $ttl)) {
             throw new RuntimeException($failure);
@@ -504,13 +498,13 @@ final class CacheLock
             ? $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
             : RunwireState::acquireLock($locks, $key, $runwire, self::WAIT_SECONDS, self::LEASE_SECONDS);
         if ($handle === null) {
-            self::checkpoint($runwire);
+            RunwireState::checkpoint($runwire);
 
             throw new RuntimeException('Unable to acquire the OTP state lock.');
         }
 
         try {
-            self::checkpoint($runwire);
+            RunwireState::checkpoint($runwire);
             $result = $operation($locks, $handle);
         } catch (Throwable $failure) {
             try {

@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\PasskeyResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Support\RunwireState;
 use Infocyph\OTP\ValueObjects\PasskeyCeremony;
 use InvalidArgumentException;
 use JsonException;
@@ -128,7 +129,7 @@ final readonly class Passkey
         if ($userHandle !== null) {
             self::assertUserHandle($userHandle);
         }
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $options = PublicKeyCredentialRequestOptions::create(
             challenge: random_bytes(32),
             rpId: $this->rpId,
@@ -172,7 +173,7 @@ final readonly class Passkey
         self::assertUserHandle($userHandle);
         self::assertUserName($username, 'Passkey username');
         self::assertUserName($displayName, 'Passkey display name');
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $options = PublicKeyCredentialCreationOptions::create(
             rp: PublicKeyCredentialRpEntity::create(id: $this->rpId),
             user: PublicKeyCredentialUserEntity::create($username, $userHandle, $displayName),

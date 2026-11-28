@@ -104,6 +104,75 @@ final class RunwireIntegrationTest extends TestCase
     }
 
     /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
+    #[TestDox('a request rebound after execution-context construction is rejected before backend access')]
+    public function testReboundRequestContextIsRejectedBeforeBackendAccess(): void
+    {
+        $request = RequestContext::standalone();
+        $execution = new RunwireExecutionContext($request->runtime(), $request);
+        $request->activate(RuntimeContext::standalone(), new RequestExecutionPolicy());
+
+        $cache = $this->createMock(AuthenticationStateCacheInterface::class);
+        $cache->expects($this->never())->method('isFailOpen');
+        $cache->expects($this->never())->method('get');
+        $cache->expects($this->never())->method('set');
+
+        expect(fn () => CacheLock::advance(
+            $cache,
+            'rebound-state',
+            'rebound-lock',
+            1,
+            null,
+            'test',
+            $execution,
+        ))->toThrow(LogicException::class, 'different runtime context');
+    }
+
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
+    #[TestDox('cancellation during cache capability discovery is observed before the atomic read')]
+    public function testCancellationDuringCapabilityDiscoveryPreventsAtomicRead(): void
+    {
+        $runtime = RuntimeContext::standalone();
+        $request = RequestContext::create($runtime);
+        $execution = new RunwireExecutionContext($runtime, $request);
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $atomic->expects($this->never())->method('setIfAbsent');
+        $atomic->expects($this->never())->method('compareAndSet');
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->expects($this->once())->method('atomic')->willReturnCallback(
+            static function () use ($request, $atomic): AtomicCacheInterface {
+                $request->cancel(CancellationReason::HOST_CANCELLED);
+
+                return $atomic;
+            },
+        );
+        $cache->expects($this->never())->method('get');
+
+        expect(fn () => CacheLock::advance(
+            $cache,
+            'cancelled-capability-state',
+            'cancelled-capability-lock',
+            1,
+            null,
+            'test',
+            $execution,
+        ))->toThrow(CancelledException::class);
+    }
+
+    /**
      * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
      * @throws \Infocyph\Runwire\Exception\CancelledException
      * @throws \InvalidArgumentException
