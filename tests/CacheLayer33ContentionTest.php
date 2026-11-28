@@ -73,6 +73,12 @@ final class CacheLayer33ContentionTest extends TestCase
         ))->toThrow(InvalidArgumentException::class, 'atomic or coordinated lock capability');
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
     #[TestDox('a native conditional miss observes the winning replay marker')]
     public function testNativeConditionalMissObservesWinner(): void
     {
