@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\HOTP;
 use Infocyph\OTP\OCRA;
-use Infocyph\OTP\TOTP;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
+use Infocyph\OTP\TOTP;
 
 
 test('SQLite lock fallback never regresses TOTP state in an out-of-order race', function () {

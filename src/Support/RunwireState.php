@@ -12,6 +12,11 @@ use LogicException;
 /** @internal */
 final class RunwireState
 {
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Throwable
+     */
     public static function acquireLock(
         LockProviderInterface $locks,
         string $key,
@@ -20,11 +25,7 @@ final class RunwireState
         float $leaseSeconds,
     ): ?LockHandle {
         self::checkpoint($runwire);
-        if (
-            $runwire === null
-            || $runwire->scope === null
-            || !$runwire->runtime->capabilities->supportsRunwireCoroutines
-        ) {
+        if ($runwire === null) {
             return $locks->acquire($key, $waitSeconds, $leaseSeconds);
         }
 
@@ -34,8 +35,11 @@ final class RunwireState
 
             return null;
         }
+        if ($runwire->scope === null || !$runwire->runtime->capabilities->supportsRunwireCoroutines) {
+            return $locks->acquire($key, $waitSeconds, $leaseSeconds);
+        }
 
-        $deadline = (int) hrtime(true) + (int) ceil($waitSeconds * 1_000_000_000);
+        $deadline = (int) hrtime(true) + (int) ceil($waitSeconds * 1_000_000_000.0);
         do {
             self::checkpoint($runwire);
             $handle = $locks->acquire($key, 0.0, $leaseSeconds);
@@ -54,14 +58,35 @@ final class RunwireState
         } while (true);
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \LogicException
+     */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {
         if ($runwire === null) {
             return;
         }
 
-        self::validate($runwire);
-        $runwire->request?->cancellation->throwIfCancelled();
+        $request = $runwire->request;
+        $runtime = $runwire->runtime;
+        if ($request !== null) {
+            if ($request->completed()) {
+                throw new LogicException('Completed Runwire request context cannot be used for OTP state operations.');
+            }
+            if ($request->runtime() !== $runtime) {
+                throw new LogicException('Runwire request context is bound to a different runtime context.');
+            }
+        }
+
+        if ($runtime->pid !== 0) {
+            $pid = getmypid();
+            if (is_int($pid) && $runtime->pid !== $pid) {
+                throw new LogicException('Runwire runtime context belongs to a different process.');
+            }
+        }
+
+        $request?->cancellation->throwIfCancelled();
         $runwire->scope?->cancellation()->throwIfCancelled();
     }
 
@@ -78,23 +103,5 @@ final class RunwireState
         }
 
         return max(0.0, $remaining);
-    }
-
-    private static function validate(RunwireExecutionContext $runwire): void
-    {
-        $request = $runwire->request;
-        if ($request !== null) {
-            if ($request->completed()) {
-                throw new LogicException('Completed Runwire request context cannot be used for OTP state operations.');
-            }
-            if ($request->runtime() !== $runwire->runtime) {
-                throw new LogicException('Runwire request context is bound to a different runtime context.');
-            }
-        }
-
-        $pid = getmypid();
-        if (is_int($pid) && $runwire->runtime->pid !== 0 && $runwire->runtime->pid !== $pid) {
-            throw new LogicException('Runwire runtime context belongs to a different process.');
-        }
     }
 }

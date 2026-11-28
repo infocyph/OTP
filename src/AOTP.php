@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Result\VerificationResult;
 use Infocyph\OTP\Support\Base64Url;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Support\RunwireState;
 use Infocyph\OTP\ValueObjects\AotpChallenge;
 use Infocyph\OTP\ValueObjects\AotpKeyPair;
 use Infocyph\OTP\ValueObjects\AotpResponse;
@@ -33,6 +34,10 @@ final readonly class AOTP
     /** @var non-empty-string */
     private string $binaryPublicKey;
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     public function __construct(
         string $publicKey,
         private string $audience,
@@ -42,6 +47,9 @@ final readonly class AOTP
         self::assertAudience($audience);
     }
 
+    /**
+     * @throws \LogicException
+     */
     public static function generateKeyPair(): AotpKeyPair
     {
         self::requireSodium();
@@ -65,6 +73,10 @@ final readonly class AOTP
             && function_exists('sodium_memzero');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     public static function respond(
         #[\SensitiveParameter]
         string $privateKey,
@@ -106,6 +118,13 @@ final readonly class AOTP
         return new AotpResponse($challenge->id, self::encode($signature));
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Throwable
+     */
     public function issue(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -120,7 +139,7 @@ final readonly class AOTP
             throw new InvalidArgumentException('AOTP challenge TTL must be between 1 and 600 seconds.');
         }
         CacheLock::assertSafe($cache);
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
 
         for ($attempt = 0; $attempt < self::RESERVATION_ATTEMPTS; $attempt++) {
             $issuedAt = $now ?? time();
@@ -150,6 +169,13 @@ final readonly class AOTP
         throw new RuntimeException('Unable to reserve a unique AOTP challenge.');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \LogicException
+     * @throws \Throwable
+     */
     public function verify(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -161,6 +187,13 @@ final readonly class AOTP
         return $this->verifyWithResult($cache, $factorId, $challenge, $response, $now, $runwire)->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \LogicException
+     * @throws \Throwable
+     */
     public function verifyWithResult(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -171,38 +204,39 @@ final readonly class AOTP
     ): VerificationResult {
         self::assertFactorId($factorId);
         CacheLock::assertSafe($cache);
-        CacheLock::checkpoint($runwire);
-        $now ??= time();
-        if ($now < 0) {
+        RunwireState::checkpoint($runwire);
+        $verificationTime = $now ?? time();
+        if ($verificationTime < 0) {
             throw new InvalidArgumentException('AOTP verification timestamp must be non-negative.');
         }
         if (
             !hash_equals($challenge->id, $response->challengeId)
             || !hash_equals($this->audience, $challenge->audience)
-            || $challenge->issuedAt > $now
-            || $challenge->expiresAt <= $now
+            || $challenge->issuedAt > $verificationTime
+            || $challenge->expiresAt <= $verificationTime
         ) {
             return VerificationResult::mismatch();
         }
 
         $stateKey = self::stateKey($factorId, $challenge);
-        $state = $cache->get($stateKey);
+        $state = self::reservationState($cache, $stateKey);
         if ($state === null) {
             return VerificationResult::mismatch();
-        }
-        if (!is_int($state) || ($state !== 0 && $state !== 1)) {
-            throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.');
         }
 
         $signature = self::decodeSignature($response->signature);
         if (!sodium_crypto_sign_verify_detached($signature, $challenge->signingPayload(), $this->binaryPublicKey)) {
             return VerificationResult::mismatch();
         }
+        $verificationTime = $now ?? time();
+        if ($challenge->expiresAt <= $verificationTime) {
+            return VerificationResult::mismatch();
+        }
         if ($state === 1) {
             return VerificationResult::replay();
         }
 
-        $ttl = max(1, $challenge->expiresAt - $now);
+        $ttl = $challenge->expiresAt - $verificationTime;
         if (!CacheLock::consumeReserved(
             $cache,
             $stateKey,
@@ -210,13 +244,19 @@ final readonly class AOTP
             $ttl,
             'AOTP challenge',
             $runwire,
+            $now === null ? $challenge->expiresAt : null,
         )) {
-            return VerificationResult::replay();
+            return $challenge->expiresAt <= ($now ?? time())
+                ? VerificationResult::mismatch()
+                : VerificationResult::replay();
         }
 
         return VerificationResult::success();
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertAudience(string $audience): void
     {
         if (
@@ -231,6 +271,9 @@ final readonly class AOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertContext(string $context): void
     {
         if (
@@ -245,6 +288,9 @@ final readonly class AOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -252,7 +298,10 @@ final readonly class AOTP
         }
     }
 
-    /** @return non-empty-string */
+    /**
+     * @return non-empty-string
+     * @throws \InvalidArgumentException
+     */
     private static function decodeKey(string $key, int $bytes, string $name): string
     {
         $decoded = Base64Url::decode($key, $name);
@@ -263,7 +312,10 @@ final readonly class AOTP
         return $decoded;
     }
 
-    /** @return non-empty-string */
+    /**
+     * @return non-empty-string
+     * @throws \InvalidArgumentException
+     */
     private static function decodeSignature(string $signature): string
     {
         $decoded = Base64Url::decode($signature, 'AOTP signature');
@@ -287,11 +339,28 @@ final readonly class AOTP
         );
     }
 
+    /**
+     * @throws \LogicException
+     */
     private static function requireSodium(): void
     {
         if (!self::isAvailable()) {
             throw new LogicException('AOTP requires ext-sodium for Ed25519 operations.');
         }
+    }
+
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    private static function reservationState(AuthenticationStateCacheInterface $cache, string $stateKey): ?int
+    {
+        return match ($cache->get($stateKey)) {
+            null => null,
+            0 => 0,
+            1 => 1,
+            default => throw new RuntimeException('Invalid AOTP challenge state in CacheLayer.'),
+        };
     }
 
     private static function stateKey(string $factorId, AotpChallenge $challenge): string

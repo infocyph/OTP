@@ -1,0 +1,44 @@
+name: OTP cluster qualification
+
+on:
+  pull_request:
+    branches: [ main, master, develop, development ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [redis, valkey]
+        fault: [promotion, minority, shard-loss]
+        factor: [generic, totp, hotp, mobile, ocra-counter, ocra-challenge]
+    env:
+      OTP_CLUSTER_ENGINE: ${{ matrix.engine }}
+      OTP_CLUSTER_FAULT: ${{ matrix.fault }}
+      OTP_CLUSTER_FACTOR: ${{ matrix.factor }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: redis, pcntl, posix
+          tools: composer:v2
+          coverage: none
+      - name: Install production dependencies
+        run: composer update --no-dev --no-interaction --prefer-dist --no-progress --prefer-stable
+      - name: Validate qualification fixture
+        run: |
+          php -l qa/redis-cluster.php
+          bash -n qa/redis-cluster.sh
+      - name: Prove native replay preservation and failure behavior
+        run: bash qa/redis-cluster.sh

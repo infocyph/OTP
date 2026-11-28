@@ -9,6 +9,9 @@ use InvalidArgumentException;
 
 final readonly class PasskeyResult
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function __construct(
         public bool $matched,
         public VerificationReason $reason,
@@ -43,21 +46,33 @@ final readonly class PasskeyResult
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function malformed(): self
     {
         return new self(false, VerificationReason::Malformed);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function mismatch(): self
     {
         return new self(false, VerificationReason::Mismatch);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function replay(): self
     {
         return new self(false, VerificationReason::Replay, replayDetected: true);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function success(
         string $credentialId,
         #[\SensitiveParameter]

@@ -10,6 +10,9 @@ final class LabelHelper
 {
     private const int MAX_LABEL_LENGTH = 255;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function formatLabel(string $label, ?string $issuer = null): string
     {
         $label = self::normalizeAccountLabel($label);
@@ -25,6 +28,9 @@ final class LabelHelper
         return $formatted;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function normalizeAccountLabel(string $label): string
     {
         $label = trim($label);
@@ -36,6 +42,9 @@ final class LabelHelper
         return $label;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function normalizeIssuer(string $issuer): string
     {
         $issuer = trim($issuer);
@@ -48,10 +57,10 @@ final class LabelHelper
     }
 
     /**
-     * @param $label Provisioning label.
-     * @param $issuer Optional issuer override.
-     * @return array Parsed issuer/label parts.
-     * @phpstan-return array{issuer:?string,label:string}
+     * @param string $label Provisioning label.
+     * @param ?string $issuer Optional issuer override.
+     * @return array{issuer:?string,label:string} Parsed issuer/label parts.
+     * @throws \InvalidArgumentException
      */
     public static function parseLabel(string $label, ?string $issuer = null): array
     {
@@ -78,6 +87,9 @@ final class LabelHelper
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertText(string $value, string $field): void
     {
         if (
@@ -91,14 +103,14 @@ final class LabelHelper
     }
 
     /**
-     * @param $decoded Decoded provisioning label.
-     * @param $queryIssuer Normalized query-string issuer.
-     * @return array Parsed issuer/label parts.
-     * @phpstan-return array{issuer:?string,label:string}
+     * @param string $decoded Decoded provisioning label.
+     * @param ?string $queryIssuer Normalized query-string issuer.
+     * @return array{issuer:?string,label:string} Parsed issuer/label parts.
+     * @throws \InvalidArgumentException
      */
     private static function parseIssuerLabel(string $decoded, ?string $queryIssuer): array
     {
-        [$labelIssuer, $account] = explode(':', $decoded, 2);
+        [$labelIssuer, $account] = explode(':', $decoded, 2) + ['', ''];
         $labelIssuer = trim($labelIssuer);
         $account = self::normalizeAccountLabel($account);
 

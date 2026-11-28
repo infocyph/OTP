@@ -36,6 +36,23 @@ final class CacheLayer33ReplayBench
 
     private string $lockStateKey;
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheBackendException
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     */
+    public function __construct()
+    {
+        $this->setUp();
+    }
+
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheBackendException
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     */
     public function setUp(): void
     {
         $options = new CacheOptions(
@@ -69,6 +86,9 @@ final class CacheLayer33ReplayBench
         }
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public function benchAtomicCompareAndSet(): void
     {
         $next = $this->atomicCasValue + 1;
@@ -83,6 +103,12 @@ final class CacheLayer33ReplayBench
         $this->atomicCasValue = $next;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function benchAtomicMonotonicAdvance(): void
     {
         $this->atomicCounter++;
@@ -96,6 +122,12 @@ final class CacheLayer33ReplayBench
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function benchAtomicOneTimeClaim(): void
     {
         $stateKey = hash('sha256', 'otp-bench:atomic-claim:' . $this->atomicCounter++);
@@ -114,6 +146,12 @@ final class CacheLayer33ReplayBench
         $this->atomicOperations->setIfAbsent($stateKey, 1, 300);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function benchLockFallbackMonotonicAdvance(): void
     {
         $this->lockCounter++;
@@ -127,6 +165,12 @@ final class CacheLayer33ReplayBench
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function benchLockFallbackOneTimeClaim(): void
     {
         $stateKey = hash('sha256', 'otp-bench:lock-claim:' . $this->lockCounter++);

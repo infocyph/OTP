@@ -7,6 +7,7 @@ vendor export-ignore
 graphify-out export-ignore
 phpforge export-ignore
 plans export-ignore
+qa export-ignore
 build export-ignore
 dist export-ignore
 var export-ignore

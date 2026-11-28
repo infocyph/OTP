@@ -147,7 +147,7 @@ Internal support
 ``CacheLock`` and ``SecretRotationPlanner`` are marked ``@internal``. They are
 implementation details, not supported application entry points. Use protocol
 ``planRotation()`` methods for rotation. Replay-aware protocols consume
-CacheLayer 4.0 native atomic state when available and use the cache-owned lock as
+CacheLayer 4.1 native atomic state when available and use the cache-owned lock as
 a fallback. Multi-field GenericOtp/GridOTP/Passkey state is transitioned as one
 whole record rather than split into independent fields.
 Applications should not call or depend on these internal coordination helpers.

@@ -23,6 +23,9 @@ final readonly class RecoveryCodes
 
     private const float MIN_ENTROPY_BITS = 40.0;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         private RecoveryCodeStoreInterface $store,
         #[\SensitiveParameter]
@@ -42,6 +45,10 @@ final readonly class RecoveryCodes
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function consume(string $binding, #[\SensitiveParameter] string $code): RecoveryCodeConsumptionResult
     {
         self::assertBinding($binding);
@@ -72,6 +79,10 @@ final readonly class RecoveryCodes
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function generate(
         string $binding,
         int $count = 10,
@@ -92,7 +103,7 @@ final readonly class RecoveryCodes
         }
 
         $characters = self::characterSet($characterSet);
-        if ($length * log(count($characters), 2) < self::MIN_ENTROPY_BITS) {
+        if ((float) $length * log(count($characters), 2) < self::MIN_ENTROPY_BITS) {
             throw new InvalidArgumentException('Recovery code configuration must provide at least 40 bits of entropy.');
         }
         if (!self::canGenerateUniqueCodes($count, $length, count($characters))) {
@@ -126,6 +137,9 @@ final readonly class RecoveryCodes
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertBinding(string $binding): void
     {
         if ($binding === '' || strlen($binding) > 190) {
@@ -151,6 +165,7 @@ final readonly class RecoveryCodes
     /**
      * @param string $characterSet Caller-supplied ASCII alphabet.
      * @return non-empty-list<string>
+     * @throws \InvalidArgumentException
      */
     private static function characterSet(string $characterSet): array
     {
@@ -197,6 +212,7 @@ final readonly class RecoveryCodes
     /**
      * @param array{consumed:mixed,total:mixed,remaining:mixed,lastUsedAt:mixed} $state
      * @return array{consumed:bool,total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
+     * @throws \RuntimeException
      */
     private static function requireConsumptionState(array $state): array
     {
@@ -209,8 +225,9 @@ final readonly class RecoveryCodes
     }
 
     /**
-     * @param array{total:mixed,remaining:mixed,lastUsedAt:mixed} $state
+     * @param array<string, mixed> $state
      * @return array{total:int,remaining:int,lastUsedAt:?DateTimeImmutable}
+     * @throws \RuntimeException
      */
     private static function requireMetadataState(array $state): array
     {
@@ -236,6 +253,9 @@ final readonly class RecoveryCodes
         return hash_hmac('sha256', "recovery-code\0" . $binding . "\0" . $code, $this->key);
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     private function invalidResult(string $binding): RecoveryCodeConsumptionResult
     {
         $state = self::requireMetadataState($this->store->metadata($binding));

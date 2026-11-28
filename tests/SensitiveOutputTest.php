@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\GridOTP;
 use Infocyph\OTP\HOTP;

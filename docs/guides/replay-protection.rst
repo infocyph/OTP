@@ -24,7 +24,8 @@ Supplying only part of an optional replay pair throws ``InvalidArgumentException
 Unsafe cache policies and backend failures throw and must produce a temporary
 authentication failure.
 
-OTP 7.0 requires CacheLayer 4.0 or newer. Scalar replay transitions use the
+The current OTP development line requires CacheLayer 4.1 or newer. Scalar replay
+transitions use the
 native ``AtomicCacheProviderInterface`` capability when the configured backend
 exposes it. Backends without atomics remain supported when they provide a
 coordinated authentication-state lock. Native atomic failures never fall back to
@@ -34,6 +35,12 @@ locks after an operation has been selected.
 when CacheLayer exposes a safe atomic capability. Backends without that
 capability use the coordinated lock fallback for the same serializable
 transition.
+
+Native PDO inserts rejected with a confirmed InnoDB deadlock rollback may be
+retried within the existing bounded atomic loop. An unknown commit outcome is
+never retried or converted into a credential result. Redis Cluster recovery
+must preserve the authoritative replay state; asynchronous replication alone
+does not guarantee that preservation.
 
 See :doc:`storage` for complete Redis, PDO, and local-development setup.
 

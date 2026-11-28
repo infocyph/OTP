@@ -24,6 +24,23 @@ decimal digits. ``MobileOTP::generateSecret()`` creates the canonical
 The Init-Secret is hashed as text, not decoded from hexadecimal. Its character
 case therefore affects the result. Preserve the exact enrolled value.
 
+Configured digest variants
+--------------------------
+
+The optional constructor argument ``algorithm`` defaults to ``md5`` to preserve
+existing mOTP clients. For a controlled client/server deployment, both sides
+may explicitly select ``sha256``, ``sha384``, or ``sha512`` instead:
+
+.. code-block:: php
+
+   $mobile = new MobileOTP($secret, $pin, algorithm: 'sha256');
+
+These are custom variants, not standard mOTP. The timestep, input construction,
+and six-hex-character output remain unchanged. Persist the algorithm as trusted
+factor configuration, never take it from a verification request, and rotate
+the factor ID and credentials when changing the algorithm. The verifier must
+not try other algorithms after a mismatch.
+
 Complete enrollment and verification flow
 -----------------------------------------
 
@@ -146,7 +163,7 @@ Replay protection
 -----------------
 
 Replay-aware verification advances the greatest accepted MobileOTP timestep
-through the same CacheLayer 4.0 monotonic state primitive used by TOTP. Native
+through the same CacheLayer 4.2 monotonic state primitive used by TOTP. Native
 atomics are preferred when the configured backend exposes them; otherwise the
 coordinated lock fallback is used. A timestep accepted once cannot be accepted
 again for the same factor generation, and an older timestep cannot overwrite a
@@ -158,8 +175,9 @@ are an all-or-nothing pair; providing only one is rejected.
 Security position
 -----------------
 
-Mobile-OTP deliberately uses MD5 because MD5 is part of the established protocol
-wire calculation. OTP does not use MD5 for any new design. Only the first 24 bits
+MD5 remains the default solely for the established Mobile-OTP wire calculation.
+The optional SHA-2 variants do not make the legacy default stronger, nor do
+they turn this construction into HMAC or increase its output length. Only the first 24 bits
 of the digest are transmitted, the legacy Init-Secret is 64 bits, and the PIN is
 four decimal digits.
 
@@ -176,7 +194,8 @@ Operational rules
 * Preserve the exact Init-Secret text and case.
 * Encrypt both Init-Secret and PIN at rest on the verifier.
 * Use monitored time synchronization and the smallest practical window.
-* Rotate ``factorId`` whenever Init-Secret or PIN generation changes.
+* Rotate ``factorId`` and credentials whenever the algorithm changes; rotate
+  ``factorId`` whenever Init-Secret or PIN generation changes.
 * Apply application rate limits; the protocol's six-hex-character output remains
   a small online-guessing space.
 * Do not expose Init-Secrets, PINs, generated codes, or replay IDs in logs.

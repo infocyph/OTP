@@ -12,23 +12,51 @@ measured ready-workload elapsed time. The HTTP comparison reproduced a small
 stateful-path regression; strict upstream Base32 decoding removes a redundant
 encode round trip while retaining canonical secret validation.
 
-`http-acceptance.py` launches two Runwire 3 workers per revision, waits for both
-workers, warms them, then alternates baseline/candidate trials at concurrency
-1, 8 and 32. Worker CPUs are held to the same affinity; the client uses other
-available CPUs. Every HTTP response must confirm Generic OTP acceptance/replay
+The SQLite calibration now runs an A/A control using the same baseline source
+and installed dependencies twice, then A/B using the same runner and baseline.
+Each phase uses four trials per arm in ABBAABBA order; each trial has 256
+validated priming operations per worker, five seconds of concurrent warmup,
+then a common 30-second measurement deadline. Four workers share the same
+topology-selected logical CPU set (distinct physical cores preferred; siblings
+used where required). No system configuration is changed. Raw trial JSON and
+worker/WAL logs are retained alongside the PHPForge-compatible aggregate,
+including all samples. The A/A comparison must satisfy the same 5% spread
+limit and 2% regression limit in both directions; A/B still requires the
+original 2% budget and stable environment. Unstable results are not discarded
+or retried; both phases collect evidence before certification. This is a
+calibration of the benchmark, not a production optimization.
+
+`http-acceptance.py` launches two workers per revision (Runwire 3 baseline,
+Runwire 4 candidate), waits for both workers, warms them, then alternates four
+30-second baseline/candidate trials at concurrency 1, 8 and 32 after 10 seconds
+of per-connection priming. Each worker is assigned a fixed logical CPU, preferring
+distinct physical cores when reported by the runner; the client uses other
+physical cores where available. The topology and actual worker affinity are
+recorded. All trials are retained and the same gates apply to both revisions. Every HTTP response must confirm Generic OTP acceptance/replay
 rejection, counter OCRA and provisioning parsing against shared integrity-protected
 SQLite. It fails on invalid responses, timeouts, a process/resource violation,
 more than 2.5% trial RPM CV or more than 2% median RPM regression. The configured
 300-second candidate soak also checks bounded live process-tree RSS and FDs.
 
-Example (both checkouts must include the same stable Runwire 3 host dependency):
+Example (baseline includes Runwire 3; candidate includes Runwire 4):
 
 ```sh
 python3 benchmarks/http-acceptance.py \
   --baseline=/path/to/baseline --candidate=/path/to/candidate \
-  --output=/tmp/otp-http --duration=15 --repetitions=3 \
+  --output=/tmp/otp-http --duration=30 --warmup=10 --repetitions=4 \
   --soak-duration=300 --concurrency 1 8 32
 ```
+
+The separate HTTP performance attribution job uses the same hosted runner for
+five paired workload modes at C8/C32, with four alternating 15-second trials
+and 5-second priming. Full is the control; no-context omits only the optional
+OTP execution context; memory and memory-no-context use process-local memory
+for the worker-owned fixture keys; transport validates a fixed response without
+OTP or storage. These are diagnostic workloads, not release substitutes.
+Compare stable within-mode baseline/candidate medians and within-revision mode
+contrasts; do not treat cross-mode ratios as exact additive costs. The older OTP
+baseline does not implement context-aware calls. The full release gate retains
+its original workload, trial lengths, soak and thresholds independently.
 
 The host fixture is a measured integration workload; it does not predict every
 application's throughput. Results are retained as artifacts of the exact-candidate
@@ -253,3 +281,10 @@ direct array mutations and could not coordinate multiple workers or hosts, so
 these figures are not a like-for-like optimization regression. The full raw
 suite remains the authoritative release gate; this document highlights the
 security-sensitive and corrected worst-case subjects.
+
+The release-gate PHP command emits JSON on standard output and diagnostics on
+standard error; redirect standard output to the desired report file. The
+Composer `benchmark:release` command uses `--build-report` for the fixed
+`build/benchmark-result.json` path. The HTTP harness launches its workers in
+its own temporary directories. Cold-start measurements use the current
+checkout's Composer autoloader.

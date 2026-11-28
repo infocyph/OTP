@@ -39,6 +39,10 @@ final class SqliteAtomicStore implements RecoveryCodeStoreInterface
         );
     }
 
+    /**
+     * @throws \Throwable
+     */
+    #[\Override]
     public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
     {
         return $this->transaction(function () use ($binding, $hashedCode, $usedAt): array {
@@ -58,6 +62,7 @@ final class SqliteAtomicStore implements RecoveryCodeStoreInterface
         });
     }
 
+    #[\Override]
     public function metadata(string $binding): array
     {
         $statement = $this->database->prepare(
@@ -80,6 +85,10 @@ final class SqliteAtomicStore implements RecoveryCodeStoreInterface
         ];
     }
 
+    /**
+     * @throws \Throwable
+     */
+    #[\Override]
     public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
     {
         return $this->transaction(function () use ($binding, $hashedCodes, $issuedAt): array {
@@ -103,9 +112,12 @@ final class SqliteAtomicStore implements RecoveryCodeStoreInterface
         });
     }
 
-    /** @template T */
-    /** @param callable(): T $operation */
-    /** @return T */
+    /**
+     * @template T
+     * @param callable(): T $operation
+     * @return T
+     * @throws Throwable
+     */
     private function transaction(callable $operation): mixed
     {
         $this->database->exec('BEGIN IMMEDIATE');

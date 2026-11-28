@@ -10,6 +10,9 @@ use InvalidArgumentException;
 
 final readonly class VerificationResult
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function __construct(
         public bool $matched,
         public VerificationReason $reason,
@@ -25,16 +28,25 @@ final readonly class VerificationResult
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function malformed(): self
     {
         return new self(false, VerificationReason::Malformed);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function mismatch(): self
     {
         return new self(false, VerificationReason::Mismatch);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function replay(
         ?int $matchedTimestep = null,
         ?int $matchedCounter = null,
@@ -51,6 +63,9 @@ final readonly class VerificationResult
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function success(
         VerificationReason $reason = VerificationReason::Matched,
         ?int $matchedTimestep = null,

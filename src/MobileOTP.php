@@ -27,14 +27,21 @@ final readonly class MobileOTP
 
     private string $secret;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         string $secret,
         #[\SensitiveParameter]
         string $pin,
+        private string $algorithm = 'md5',
     ) {
         self::assertSecret($secret);
         self::assertPin($pin);
+        if (!in_array($algorithm, ['md5', 'sha256', 'sha384', 'sha512'], true)) {
+            throw new InvalidArgumentException('MobileOTP algorithm must be md5, sha256, sha384, or sha512.');
+        }
         $this->pin = $pin;
         $this->secret = $secret;
     }
@@ -53,13 +60,19 @@ final readonly class MobileOTP
         return bin2hex(random_bytes(8));
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function generate(?int $timestamp = null, int $offsetSteps = 0): string
     {
         $step = $this->getTimeStepFromTimestamp($timestamp ?? time(), $offsetSteps);
 
-        return substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
+        return $this->codeAtStep($step);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getTimeStepFromTimestamp(int $timestamp, int $offsetSteps = 0): int
     {
         self::assertOffset($offsetSteps);
@@ -75,6 +88,12 @@ final readonly class MobileOTP
         return $step + $offsetSteps;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function verify(
         #[\SensitiveParameter]
         string $otp,
@@ -91,6 +110,12 @@ final readonly class MobileOTP
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function verifyWithWindow(
         #[\SensitiveParameter]
         string $otp,
@@ -127,6 +152,9 @@ final readonly class MobileOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertFactorId(string $factorId): void
     {
         if ($factorId === '' || strlen($factorId) > self::MAX_FACTOR_ID_LENGTH) {
@@ -134,6 +162,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertOffset(int $offsetSteps): void
     {
         if ($offsetSteps < -self::MAX_OFFSET_STEPS || $offsetSteps > self::MAX_OFFSET_STEPS) {
@@ -141,6 +172,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertPin(string $pin): void
     {
         if (strlen($pin) !== 4 || !ctype_digit($pin)) {
@@ -148,6 +182,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -163,6 +200,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertSecret(string $secret): void
     {
         if (strlen($secret) !== 16 || preg_match('/\A[0-9A-Fa-f]{16}\z/D', $secret) !== 1) {
@@ -170,6 +210,9 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertWindow(VerificationWindow $window): void
     {
         if ($window->past > self::MAX_WINDOW_STEPS || $window->future > self::MAX_WINDOW_STEPS) {
@@ -177,6 +220,12 @@ final readonly class MobileOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -188,6 +237,12 @@ final readonly class MobileOTP
         $lockKey = hash('sha256', "infocyph:otp:mobile:lock:v1\0" . $factorId);
 
         return CacheLock::advance($cache, $stateKey, $lockKey, $timeStep, $ttl, 'MobileOTP replay', $runwire);
+    }
+
+    private function codeAtStep(int $step): string
+    {
+        // MD5 is the legacy wire default; alternatives require matching client configuration.
+        return substr(hash($this->algorithm, $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
     }
 
     /** @return array{step:int,offset:int}|null */
@@ -213,8 +268,6 @@ final readonly class MobileOTP
 
     private function matches(string $otp, int $step): bool
     {
-        $candidate = substr(hash('md5', $step . $this->secret . $this->pin), 0, self::OUTPUT_LENGTH);
-
-        return hash_equals($candidate, $otp);
+        return hash_equals($this->codeAtStep($step), $otp);
     }
 }

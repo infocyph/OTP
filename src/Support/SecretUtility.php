@@ -12,6 +12,9 @@ use Throwable;
 
 final class SecretUtility
 {
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function decodeBase32(#[\SensitiveParameter] string $secret): string
     {
         $normalized = self::normalizeBase32($secret);
@@ -28,6 +31,7 @@ final class SecretUtility
     /**
      * @param $bytes Secret byte length.
      * @throws Exception
+     * @throws \TypeError
      */
     public static function generate(int $bytes = 20): string
     {
@@ -49,6 +53,9 @@ final class SecretUtility
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function normalizeBase32(#[\SensitiveParameter] string $secret): string
     {
         $secret = strtoupper(str_replace([' ', "\t", "\r", "\n", '-'], '', trim($secret)));
@@ -66,6 +73,9 @@ final class SecretUtility
         return $secret;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function requireStrongBase32(#[\SensitiveParameter] string $secret): string
     {
         $decoded = self::decodeBase32($secret);

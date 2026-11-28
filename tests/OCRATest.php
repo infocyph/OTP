@@ -2,155 +2,234 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
+use DateTimeImmutable;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\OCRA;
+use Infocyph\OTP\Support\OcraMessage;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
+use Infocyph\OTP\ValueObjects\OcraSuite;
 use Infocyph\OTP\ValueObjects\VerificationWindow;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\TestDox;
+use PHPUnit\Framework\TestCase;
 
 const OCRA_KEY_20 = '12345678901234567890';
 const OCRA_KEY_32 = '12345678901234567890123456789012';
 const OCRA_KEY_64 = '1234567890123456789012345678901234567890123456789012345678901234';
 
-test('RFC 6287 suites follow the reference byte conversion for numeric challenges', function () {
-    $sha1 = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', OCRA_KEY_20);
-    $sha256 = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', OCRA_KEY_32);
-    $sha512 = new OCRA('OCRA-1:HOTP-SHA512-8:C-QN08', OCRA_KEY_64);
-    $sha1Expected = ['237653', '243178', '890740', '869330', '581521', '423328', '288643', '004504', '518526', '721123'];
-    $sha256Expected = ['65347737', '86775851', '78192410', '71565254', '10104329', '65983500', '70069104', '91771096', '75011558', '08522129'];
-    $sha512Expected = ['07016083', '63947962', '72071755', '88548889', '40500742', '34557787', '40889896', '54898728', '39113879', '06429217'];
-
-    for ($index = 0; $index < 10; $index++) {
-        $challenge = str_repeat((string) $index, 8);
-        expect($sha1->generate($challenge))->toBe($sha1Expected[$index])
-            ->and($sha256->generate('12345678', $index, '1234'))->toBe($sha256Expected[$index])
-            ->and($sha512->generate($challenge, $index))->toBe($sha512Expected[$index]);
+final class OCRATest extends TestCase
+{
+    /** @return list<array{string, int}> */
+    public static function oCRAFullHMACSuitesReturnStablePrintableHexadecimalCases(): array
+    {
+        return [['sha1', 40], ['sha256', 64], ['sha512', 128]];
     }
-});
 
-test('RFC 6287 time and explicit mutual challenge vectors remain intact', function () {
-    $time = new OCRA('OCRA-1:HOTP-SHA512-8:QN08-T1M', OCRA_KEY_64);
-    $timestamp = (new DateTimeImmutable('Mar 25 2008, 12:06:30 GMT'))->getTimestamp();
-    $mutual = new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32);
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[TestDox('RFC 6287 suites follow the reference byte conversion for numeric challenges')]
+    public function testRFC6287SuitesFollowTheReferenceByteConversionForNumericChallenges(): void
+    {
+        $sha1 = new OCRA('OCRA-1:HOTP-SHA1-6:QN08', OCRA_KEY_20);
+        $sha256 = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1', OCRA_KEY_32);
+        $sha512 = new OCRA('OCRA-1:HOTP-SHA512-8:C-QN08', OCRA_KEY_64);
+        $sha1Expected = ['237653', '243178', '890740', '869330', '581521', '423328', '288643', '004504', '518526', '721123'];
+        $sha256Expected = ['65347737', '86775851', '78192410', '71565254', '10104329', '65983500', '70069104', '91771096', '75011558', '08522129'];
+        $sha512Expected = ['07016083', '63947962', '72071755', '88548889', '40500742', '34557787', '40889896', '54898728', '39113879', '06429217'];
 
-    expect($time->generate('00000000', timestamp: $timestamp))->toBe('95209754')
-        ->and($time->generate('11111111', timestamp: $timestamp))->toBe('55907591')
-        ->and($mutual->generateMutual('CLI22220', 'SRV11110'))->toBe('28247970')
-        ->and($mutual->generateMutual('CLI22224', 'SRV11114'))->toBe('83412541')
-        ->and($mutual->generateSignature('SIG10000'))->toBe('53095496');
-});
-
-test('odd-nibble numeric and hexadecimal challenges match independent reference outputs', function () {
-    $numeric = new OCRA('OCRA-1:HOTP-SHA256-8:QN64', OCRA_KEY_32);
-    $hex = new OCRA('OCRA-1:HOTP-SHA256-8:QH64', OCRA_KEY_32);
-    $numericVectors = [
-        '0' => '28196979',
-        '15' => '24289059',
-        '16' => '19086334',
-        '255' => '45431508',
-        '256' => '81618124',
-        '4095' => '92780630',
-        '4096' => '19086334',
-        '1048575' => '24357113',
-    ];
-    $hexVectors = ['F' => '11932816', 'ABC' => '85619925', 'ABCDE' => '34979433'];
-
-    foreach ($numericVectors as $challenge => $expected) {
-        expect($numeric->generate((string) $challenge))->toBe($expected);
+        for ($index = 0; $index < 10; $index++) {
+            $challenge = str_repeat((string) $index, 8);
+            expect($sha1->generate($challenge))->toBe($sha1Expected[$index])
+                ->and($sha256->generate('12345678', $index, '1234'))->toBe($sha256Expected[$index])
+                ->and($sha512->generate($challenge, $index))->toBe($sha512Expected[$index]);
+        }
     }
-    foreach ($hexVectors as $challenge => $expected) {
-        expect($hex->generate($challenge))->toBe($expected);
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[TestDox('RFC 6287 time and explicit mutual challenge vectors remain intact')]
+    public function testRFC6287TimeAndExplicitMutualChallengeVectorsRemainIntact(): void
+    {
+        $time = new OCRA('OCRA-1:HOTP-SHA512-8:QN08-T1M', OCRA_KEY_64);
+        $timestamp = (new DateTimeImmutable('Mar 25 2008, 12:06:30 GMT'))->getTimestamp();
+        $mutual = new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32);
+
+        expect($time->generate('00000000', timestamp: $timestamp))->toBe('95209754')
+            ->and($time->generate('11111111', timestamp: $timestamp))->toBe('55907591')
+            ->and($mutual->generateMutual('CLI22220', 'SRV11110'))->toBe('28247970')
+            ->and($mutual->generateMutual('CLI22224', 'SRV11114'))->toBe('83412541')
+            ->and($mutual->generateSignature('SIG10000'))->toBe('53095496');
     }
-});
 
-test('non-counter OCRA rejects irrelevant counters and cannot vary replay identity', function () {
-    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
-    $cache = CacheLayerState::memory();
-    $otp = $ocra->generate('12345678');
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[TestDox('odd-nibble numeric and hexadecimal challenges match independent reference outputs')]
+    public function testOddNibbleNumericAndHexadecimalChallengesMatchIndependentReferenceOutputs(): void
+    {
+        $numeric = new OCRA('OCRA-1:HOTP-SHA256-8:QN64', OCRA_KEY_32);
+        $hex = new OCRA('OCRA-1:HOTP-SHA256-8:QH64', OCRA_KEY_32);
+        $numericVectors = [
+            '0' => '28196979',
+            '15' => '24289059',
+            '16' => '19086334',
+            '255' => '45431508',
+            '256' => '81618124',
+            '4095' => '92780630',
+            '4096' => '19086334',
+            '1048575' => '24357113',
+        ];
+        $hexVectors = ['F' => '11932816', 'ABC' => '85619925', 'ABCDE' => '34979433'];
 
-    $first = $ocra->verifyWithResult(
-        $otp,
-        '12345678',
-        cache: $cache,
-        factorId: 'factor-v1',
-        replayTtl: 300,
-    );
-    $second = $ocra->verifyWithResult(
-        $otp,
-        '12345678',
-        cache: $cache,
-        factorId: 'factor-v1',
-        replayTtl: 300,
-    );
+        foreach ($numericVectors as $challenge => $expected) {
+            expect($numeric->generate((string) $challenge))->toBe($expected);
+        }
+        foreach ($hexVectors as $challenge => $expected) {
+            expect($hex->generate($challenge))->toBe($expected);
+        }
+    }
 
-    expect($first->matched)->toBeTrue()
-        ->and($second->replayDetected)->toBeTrue()
-        ->and(fn () => $ocra->generate('12345678', 1))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $ocra->verify($otp, '12345678', 1))->toThrow(InvalidArgumentException::class);
-});
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    #[TestDox('numeric challenge encoding preserves bytes across the native integer boundary')]
+    public function testNumericChallengeEncodingPreservesBytesAcrossTheNativeIntegerBoundary(): void
+    {
+        $suite = OcraSuite::parse('OCRA-1:HOTP-SHA256-8:QN64');
+        $operation = ['counter' => null, 'pinDigest' => null, 'session' => null, 'timestamp' => null];
+        $vectors = [
+            ['00000000000000000015', '0f'],
+            ['999999999999999999', '0de0b6b3a763ffff'],
+            ['1000000000000000000', '0de0b6b3a7640000'],
+            ['9223372036854775808', '8000000000000000'],
+            ['9999999999999999999999999999999999999999999999999999999999999999', '184f03e93ff9f4daa797ed6e38ed64bf6a1f00ffffffffffffffff'],
+        ];
+        foreach ($vectors as [$challenge, $expected]) {
+            expect(bin2hex(OcraMessage::build($suite, $challenge, $operation)))
+                ->toBe(bin2hex($suite->suite . "\0") . str_pad($expected, 256, '0'));
+        }
+    }
 
-test('counter OCRA advances monotonically and exposes next counter', function () {
-    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', OCRA_KEY_32);
-    $cache = CacheLayerState::memory();
-    $otp = $ocra->generate('12345678', 4);
-    $result = $ocra->verifyWithResult($otp, '12345678', 4, cache: $cache, factorId: 'factor-v1');
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     * @throws \LogicException
+     */
+    #[TestDox('non-counter OCRA rejects irrelevant counters and cannot vary replay identity')]
+    public function testNonCounterOCRARejectsIrrelevantCountersAndCannotVaryReplayIdentity(): void
+    {
+        $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
+        $cache = CacheLayerState::memory();
+        $otp = $ocra->generate('12345678');
 
-    expect($result->matched)->toBeTrue()
-        ->and($result->matchedCounter)->toBe(4)
-        ->and($result->nextCounter)->toBe(5)
-        ->and($ocra->verifyWithResult(
+        $first = $ocra->verifyWithResult(
             $otp,
             '12345678',
-            4,
             cache: $cache,
             factorId: 'factor-v1',
-        )->replayDetected)->toBeTrue()
-        ->and($ocra->verifyWithResult(
-            $ocra->generate('12345678', 3),
+            replayTtl: 300,
+        );
+        $second = $ocra->verifyWithResult(
+            $otp,
             '12345678',
-            3,
             cache: $cache,
             factorId: 'factor-v1',
-        )->replayDetected)->toBeTrue();
-});
+            replayTtl: 300,
+        );
 
-test('OCRA rejects missing and irrelevant suite inputs', function () {
-    $plain = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
-    $pin = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', OCRA_KEY_32);
-    $session = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', OCRA_KEY_32);
-    $time = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-T1M', OCRA_KEY_32);
-    $counter = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', OCRA_KEY_32);
+        expect($first->matched)->toBeTrue()
+            ->and($second->replayDetected)->toBeTrue()
+            ->and(fn () => $ocra->generate('12345678', 1))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $ocra->verify($otp, '12345678', 1))->toThrow(InvalidArgumentException::class);
+    }
 
-    expect(fn () => $plain->generate('12345678', pin: '1234'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $pin->generate('12345678'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $plain->generate('12345678', session: 'session'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $session->generate('12345678'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $plain->generate('12345678', timestamp: 1))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $time->generate('12345678'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $counter->generate('12345678'))->toThrow(InvalidArgumentException::class)
-        ->and($session->generate('12345678', session: 'ABC'))
-        ->toBe($session->generate('12345678', session: OCRA::sessionHex('414243')))
-        ->and(fn () => OCRA::sessionHex('FF'))
-        ->toThrow(InvalidArgumentException::class, 'valid UTF-8');
-});
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     * @throws \LogicException
+     */
+    #[TestDox('counter OCRA advances monotonically and exposes next counter')]
+    public function testCounterOCRAAdvancesMonotonicallyAndExposesNextCounter(): void
+    {
+        $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', OCRA_KEY_32);
+        $cache = CacheLayerState::memory();
+        $otp = $ocra->generate('12345678', 4);
+        $result = $ocra->verifyWithResult($otp, '12345678', 4, cache: $cache, factorId: 'factor-v1');
 
-test('OCRA time verification supports explicit bounded drift and replay', function () {
-    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-T1M', OCRA_KEY_32);
-    $cache = CacheLayerState::memory();
-    $otp = $ocra->generate('12345678', timestamp: 1060);
-    $result = $ocra->verifyWithResult(
-        $otp,
-        '12345678',
-        timestamp: 1000,
-        timeWindow: new VerificationWindow(0, 1),
-        cache: $cache,
-        factorId: 'factor-v1',
-        replayTtl: 120,
-    );
+        expect($result->matched)->toBeTrue()
+            ->and($result->matchedCounter)->toBe(4)
+            ->and($result->nextCounter)->toBe(5)
+            ->and($ocra->verifyWithResult(
+                $otp,
+                '12345678',
+                4,
+                cache: $cache,
+                factorId: 'factor-v1',
+            )->replayDetected)->toBeTrue()
+            ->and($ocra->verifyWithResult(
+                $ocra->generate('12345678', 3),
+                '12345678',
+                3,
+                cache: $cache,
+                factorId: 'factor-v1',
+            )->replayDetected)->toBeTrue();
+    }
 
-    expect($result->matched)->toBeTrue()
-        ->and($result->driftOffset)->toBe(1)
-        ->and($ocra->verifyWithResult(
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[TestDox('OCRA rejects missing and irrelevant suite inputs')]
+    public function testOCRARejectsMissingAndIrrelevantSuiteInputs(): void
+    {
+        $plain = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
+        $pin = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-PSHA1', OCRA_KEY_32);
+        $session = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-S064', OCRA_KEY_32);
+        $time = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-T1M', OCRA_KEY_32);
+        $counter = new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08', OCRA_KEY_32);
+
+        expect(fn () => $plain->generate('12345678', pin: '1234'))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $pin->generate('12345678'))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $plain->generate('12345678', session: 'session'))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $session->generate('12345678'))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $plain->generate('12345678', timestamp: 1))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $time->generate('12345678'))->toThrow(InvalidArgumentException::class)
+            ->and(fn () => $counter->generate('12345678'))->toThrow(InvalidArgumentException::class)
+            ->and($session->generate('12345678', session: 'ABC'))
+            ->toBe($session->generate('12345678', session: OCRA::sessionHex('414243')))
+            ->and(fn () => OCRA::sessionHex('FF'))
+            ->toThrow(InvalidArgumentException::class, 'valid UTF-8');
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     * @throws \LogicException
+     */
+    #[TestDox('OCRA time verification supports explicit bounded drift and replay')]
+    public function testOCRATimeVerificationSupportsExplicitBoundedDriftAndReplay(): void
+    {
+        $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08-T1M', OCRA_KEY_32);
+        $cache = CacheLayerState::memory();
+        $otp = $ocra->generate('12345678', timestamp: 1060);
+        $result = $ocra->verifyWithResult(
             $otp,
             '12345678',
             timestamp: 1000,
@@ -158,139 +237,194 @@ test('OCRA time verification supports explicit bounded drift and replay', functi
             cache: $cache,
             factorId: 'factor-v1',
             replayTtl: 120,
-        )->replayDetected)->toBeTrue()
-        ->and($ocra->verifyWithResult(
-            $ocra->generate('12345678', timestamp: 1000),
-            '12345678',
-            timestamp: 1000,
-            timeWindow: new VerificationWindow(),
-        )->driftOffset)->toBe(0)
-        ->and($ocra->verifyWithResult(
-            $ocra->generate('12345678', timestamp: 940),
-            '12345678',
-            timestamp: 1000,
-            timeWindow: new VerificationWindow(1),
-        )->driftOffset)->toBe(-1)
-        ->and($ocra->verify(
-            $ocra->generate('12345678', timestamp: 1120),
-            '12345678',
-            timestamp: 1000,
-            timeWindow: new VerificationWindow(1, 1),
-        ))->toBeFalse()
-        ->and(fn () => $ocra->generate('12345678', timestamp: -1))->toThrow(InvalidArgumentException::class);
-});
-
-test('OCRA full-HMAC suites return stable printable hexadecimal', function (string $algorithm, int $length) {
-    $ocra = new OCRA(sprintf('OCRA-1:HOTP-%s-0:QN08', strtoupper($algorithm)), OCRA_KEY_64);
-    $otp = $ocra->generate('12345678');
-
-    expect($otp)->toHaveLength($length)
-        ->toMatch('/^[A-F0-9]+$/')
-        ->and($ocra->verify($otp, '12345678'))->toBeTrue()
-        ->and($ocra->verify('not-hex', '12345678'))->toBeFalse();
-})->with([['sha1', 40], ['sha256', 64], ['sha512', 128]]);
-
-test('OCRA suite parsing is authoritative', function () {
-    $suite = (new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1-S064-T1M', OCRA_KEY_32))->getSuite();
-
-    expect($suite->algorithm)->toBe('sha256')
-        ->and($suite->digits)->toBe(8)
-        ->and($suite->counterEnabled)->toBeTrue()
-        ->and($suite->pinAlgorithm)->toBe('sha1')
-        ->and($suite->sessionLength)->toBe(64)
-        ->and($suite->timeStepSeconds)->toBe(60)
-        ->and(fn () => new OCRA('OCRA-1:HOTP-SHA256-10:QN08', OCRA_KEY_32))->toThrow(InvalidArgumentException::class);
-});
-
-test('concurrent counter OCRA verification accepts one request', function () {
-    $path = tempnam(sys_get_temp_dir(), 'otp-ocra-');
-    expect($path)->toBeString();
-    $suite = 'OCRA-1:HOTP-SHA256-8:C-QN08';
-    $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678', 4);
-    CacheLayerState::sqlite($path);
-
-    $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
-        $cache = CacheLayerState::sqlite($path);
-        $result = (new OCRA($suite, OCRA_KEY_32))->verifyWithResult(
-            $otp,
-            '12345678',
-            4,
-            cache: $cache,
-            factorId: 'factor-concurrent',
         );
 
-        return $result->matched ? 1 : 0;
-    });
-    sort($results);
+        expect($result->matched)->toBeTrue()
+            ->and($result->driftOffset)->toBe(1)
+            ->and($ocra->verifyWithResult(
+                $otp,
+                '12345678',
+                timestamp: 1000,
+                timeWindow: new VerificationWindow(0, 1),
+                cache: $cache,
+                factorId: 'factor-v1',
+                replayTtl: 120,
+            )->replayDetected)->toBeTrue()
+            ->and($ocra->verifyWithResult(
+                $ocra->generate('12345678', timestamp: 1000),
+                '12345678',
+                timestamp: 1000,
+                timeWindow: new VerificationWindow(),
+            )->driftOffset)->toBe(0)
+            ->and($ocra->verifyWithResult(
+                $ocra->generate('12345678', timestamp: 940),
+                '12345678',
+                timestamp: 1000,
+                timeWindow: new VerificationWindow(1),
+            )->driftOffset)->toBe(-1)
+            ->and($ocra->verify(
+                $ocra->generate('12345678', timestamp: 1120),
+                '12345678',
+                timestamp: 1000,
+                timeWindow: new VerificationWindow(1, 1),
+            ))->toBeFalse()
+            ->and(fn () => $ocra->generate('12345678', timestamp: -1))->toThrow(InvalidArgumentException::class);
+    }
 
-    expect($results)->toBe([0, 1]);
-    unlink($path);
-});
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[DataProvider('oCRAFullHMACSuitesReturnStablePrintableHexadecimalCases')]
+    #[TestDox('OCRA full-HMAC suites return stable printable hexadecimal')]
+    public function testOCRAFullHMACSuitesReturnStablePrintableHexadecimal(string $algorithm, int $length): void
+    {
+        $ocra = new OCRA(sprintf('OCRA-1:HOTP-%s-0:QN08', strtoupper($algorithm)), OCRA_KEY_64);
+        $otp = $ocra->generate('12345678');
 
-test('concurrent challenge OCRA verification accepts one request', function () {
-    $path = tempnam(sys_get_temp_dir(), 'otp-ocra-challenge-');
-    expect($path)->toBeString();
-    $suite = 'OCRA-1:HOTP-SHA256-8:QN08';
-    $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678');
-    CacheLayerState::sqlite($path);
+        expect($otp)->toHaveLength($length)
+            ->toMatch('/^[A-F0-9]+$/')
+            ->and($ocra->verify($otp, '12345678'))->toBeTrue()
+            ->and($ocra->verify('not-hex', '12345678'))->toBeFalse();
+    }
 
-    $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
-        $cache = CacheLayerState::sqlite($path);
-        $result = (new OCRA($suite, OCRA_KEY_32))->verifyWithResult(
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
+    #[TestDox('OCRA suite parsing is authoritative')]
+    public function testOCRASuiteParsingIsAuthoritative(): void
+    {
+        $suite = (new OCRA('OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1-S064-T1M', OCRA_KEY_32))->getSuite();
+
+        expect($suite->algorithm)->toBe('sha256')
+            ->and($suite->digits)->toBe(8)
+            ->and($suite->counterEnabled)->toBeTrue()
+            ->and($suite->pinAlgorithm)->toBe('sha1')
+            ->and($suite->sessionLength)->toBe(64)
+            ->and($suite->timeStepSeconds)->toBe(60)
+            ->and(fn () => new OCRA('OCRA-1:HOTP-SHA256-10:QN08', OCRA_KEY_32))->toThrow(InvalidArgumentException::class);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     * @throws \LogicException
+     */
+    #[TestDox('concurrent counter OCRA verification accepts one request')]
+    public function testConcurrentCounterOCRAVerificationAcceptsOneRequest(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'otp-ocra-');
+        expect($path)->toBeString();
+        $suite = 'OCRA-1:HOTP-SHA256-8:C-QN08';
+        $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678', 4);
+        CacheLayerState::sqlite($path);
+
+        $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
+            $cache = CacheLayerState::sqlite($path);
+            $result = (new OCRA($suite, OCRA_KEY_32))->verifyWithResult(
+                $otp,
+                '12345678',
+                4,
+                cache: $cache,
+                factorId: 'factor-concurrent',
+            );
+
+            return $result->matched ? 1 : 0;
+        });
+        sort($results);
+
+        expect($results)->toBe([0, 1]);
+        unlink($path);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     * @throws \LogicException
+     */
+    #[TestDox('concurrent challenge OCRA verification accepts one request')]
+    public function testConcurrentChallengeOCRAVerificationAcceptsOneRequest(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'otp-ocra-challenge-');
+        expect($path)->toBeString();
+        $suite = 'OCRA-1:HOTP-SHA256-8:QN08';
+        $otp = (new OCRA($suite, OCRA_KEY_32))->generate('12345678');
+        CacheLayerState::sqlite($path);
+
+        $results = Concurrency::run(static function () use ($path, $suite, $otp): int {
+            $cache = CacheLayerState::sqlite($path);
+            $result = (new OCRA($suite, OCRA_KEY_32))->verifyWithResult(
+                $otp,
+                '12345678',
+                cache: $cache,
+                factorId: 'factor-concurrent-challenge',
+                replayTtl: 300,
+            );
+
+            return $result->matched ? 1 : 0;
+        });
+        sort($results);
+
+        expect($results)->toBe([0, 1]);
+        unlink($path);
+    }
+
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[TestDox('non-counter OCRA passes the application replay TTL to CacheLayer')]
+    public function testNonCounterOCRAPassesTheApplicationReplayTTLToCacheLayer(): void
+    {
+        $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
+        $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
+        $cache->method('get')->willReturn(null);
+        $cache->expects($this->once())->method('set')->with(
+            $this->callback(static fn (string $key): bool => strlen($key) === 64),
+            1,
+            300,
+        )->willReturn(true);
+        $otp = $ocra->generate('12345678');
+
+        expect($ocra->verifyWithResult(
             $otp,
             '12345678',
             cache: $cache,
-            factorId: 'factor-concurrent-challenge',
+            factorId: 'factor-v1',
             replayTtl: 300,
-        );
+        )->matched)->toBeTrue();
+    }
 
-        return $result->matched ? 1 : 0;
-    });
-    sort($results);
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
+    #[TestDox('OCRA strict protocol fields reject trailing and control separators')]
+    public function testOCRAStrictProtocolFieldsRejectTrailingAndControlSeparators(): void
+    {
+        expect(fn () => new OCRA("OCRA-1:HOTP-SHA256-8:QN08\n", OCRA_KEY_32))
+            ->toThrow(InvalidArgumentException::class);
 
-    expect($results)->toBe([0, 1]);
-    unlink($path);
-});
+        $cases = [
+            [new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32), '12345678', '9'],
+            [new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32), 'ABCD1234', 'Z'],
+            [new OCRA('OCRA-1:HOTP-SHA256-8:QH08', OCRA_KEY_32), 'A1B2C3D4', 'F'],
+        ];
+        $suffixes = ["\n", "\r\n", "\0", "\u{2028}"];
 
-test('non-counter OCRA passes the application replay TTL to CacheLayer', function () {
-    $ocra = new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32);
-    $cache = CacheLayerState::configureMock($this->createMock(AuthenticationStateCacheInterface::class));
-    $cache->method('get')->willReturn(null);
-    $cache->expects($this->once())->method('set')->with(
-        $this->callback(static fn (string $key): bool => strlen($key) === 64),
-        1,
-        300,
-    )->willReturn(true);
-    $otp = $ocra->generate('12345678');
+        foreach ($cases as [$ocra, $challenge, $validCharacter]) {
+            foreach ($suffixes as $suffix) {
+                expect(fn () => $ocra->generate($challenge . $suffix))
+                    ->toThrow(InvalidArgumentException::class);
+            }
 
-    expect($ocra->verifyWithResult(
-        $otp,
-        '12345678',
-        cache: $cache,
-        factorId: 'factor-v1',
-        replayTtl: 300,
-    )->matched)->toBeTrue();
-});
-
-
-test('OCRA strict protocol fields reject trailing and control separators', function () {
-    expect(fn () => new OCRA("OCRA-1:HOTP-SHA256-8:QN08\n", OCRA_KEY_32))
-        ->toThrow(InvalidArgumentException::class);
-
-    $cases = [
-        [new OCRA('OCRA-1:HOTP-SHA256-8:QN08', OCRA_KEY_32), '12345678', '9'],
-        [new OCRA('OCRA-1:HOTP-SHA256-8:QA08', OCRA_KEY_32), 'ABCD1234', 'Z'],
-        [new OCRA('OCRA-1:HOTP-SHA256-8:QH08', OCRA_KEY_32), 'A1B2C3D4', 'F'],
-    ];
-    $suffixes = ["\n", "\r\n", "\0", "\u{2028}"];
-
-    foreach ($cases as [$ocra, $challenge, $validCharacter]) {
-        foreach ($suffixes as $suffix) {
-            expect(fn () => $ocra->generate($challenge . $suffix))
+            expect(fn () => $ocra->generate($challenge . $validCharacter))
                 ->toThrow(InvalidArgumentException::class);
         }
-
-        expect(fn () => $ocra->generate($challenge . $validCharacter))
-            ->toThrow(InvalidArgumentException::class);
     }
-});
+}

@@ -16,6 +16,7 @@ final class SecretRotationPlanner
      * @param $now Current timestamp override.
      * @return array Prepared rotation values.
      * @phpstan-return array{nextSecret:string,overlapUntil:?int}
+     * @throws \InvalidArgumentException
      */
     public static function prepare(
         #[\SensitiveParameter]

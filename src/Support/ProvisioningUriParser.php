@@ -14,6 +14,9 @@ final class ProvisioningUriParser
 
     private const int MAX_URI_LENGTH = 4096;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function parse(#[\SensitiveParameter] string $uri): ParsedOtpAuthUri
     {
         if ($uri === '' || strlen($uri) > self::MAX_URI_LENGTH) {
@@ -74,6 +77,9 @@ final class ProvisioningUriParser
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertHotpParameters(
         int $digits,
         ?int $period,
@@ -102,6 +108,7 @@ final class ProvisioningUriParser
      * @param ?int $counter Parsed counter, which OCRA forbids.
      * @param ?string $ocraSuite Required OCRA suite.
      * @return array{string,int}
+     * @throws \InvalidArgumentException
      */
     private static function assertOcraParameters(
         string $algorithm,
@@ -133,6 +140,9 @@ final class ProvisioningUriParser
         return [$suite->algorithm, $suite->digits];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertTotpParameters(int $digits, ?int $counter, ?string $ocraSuite): int
     {
         if ($counter !== null) {
@@ -182,14 +192,17 @@ final class ProvisioningUriParser
         };
     }
 
-    /** @return array{string, string} */
+    /**
+     * @return array{string, string}
+     * @throws \InvalidArgumentException
+     */
     private static function decodeQueryParameter(string $parameter): array
     {
         if ($parameter === '') {
             throw new InvalidArgumentException('Invalid empty otpauth query parameter.');
         }
         [$encodedKey, $encodedValue] = array_pad(explode('=', $parameter, 2), 2, '');
-        if ($encodedKey === '' || preg_match('/%(?![A-Fa-f0-9]{2})/', $encodedKey . $encodedValue) === 1) {
+        if ($encodedKey === '' || preg_match('/%(?![A-Fa-f0-9]{2})/', $parameter) === 1) {
             throw new InvalidArgumentException('Invalid otpauth query encoding.');
         }
         $key = rawurldecode($encodedKey);
@@ -204,6 +217,7 @@ final class ProvisioningUriParser
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
      * @phpstan-param array<string, string> $query
+     * @throws \InvalidArgumentException
      */
     private static function optionalNonNegativeIntQueryValue(array $query, string $key): ?int
     {
@@ -227,6 +241,7 @@ final class ProvisioningUriParser
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
      * @phpstan-param array<string, string> $query
+     * @throws \InvalidArgumentException
      */
     private static function optionalPositiveIntQueryValue(array $query, string $key): ?int
     {
@@ -256,6 +271,7 @@ final class ProvisioningUriParser
      * @param $queryString Encoded URI query.
      * @return array Parsed query values.
      * @phpstan-return array<string, string>
+     * @throws \InvalidArgumentException
      */
     private static function parseQuery(string $queryString): array
     {
@@ -306,6 +322,7 @@ final class ProvisioningUriParser
      * @param $uri Provisioning URI.
      * @return array Parsed URI components.
      * @phpstan-return array{host:string,path:string,query:string}
+     * @throws \InvalidArgumentException
      */
     private static function parseUriParts(string $uri): array
     {
@@ -340,6 +357,7 @@ final class ProvisioningUriParser
      * @param $query Parsed URI query values.
      * @param $key Query parameter name.
      * @phpstan-param array<string, string> $query
+     * @throws \InvalidArgumentException
      */
     private static function stringQueryValue(array $query, string $key): string
     {

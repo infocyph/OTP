@@ -30,6 +30,10 @@ final readonly class OCRA
 
     private OcraSuite $suite;
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     public function __construct(string $suite, #[\SensitiveParameter] private string $sharedKey)
     {
         if (strlen($sharedKey) < 16 || strlen($sharedKey) > 1024) {
@@ -50,16 +54,27 @@ final readonly class OCRA
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     */
     public static function fromBase32(string $suite, #[\SensitiveParameter] string $secret): self
     {
         return new self($suite, SecretUtility::requireStrongBase32($secret));
     }
 
+    /**
+     * @throws \Exception
+     * @throws \TypeError
+     */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function sessionHex(#[\SensitiveParameter] string $hex): string
     {
         if ($hex === '' || !ctype_xdigit($hex)) {
@@ -74,6 +89,10 @@ final readonly class OCRA
         return $session;
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \InvalidArgumentException
+     */
     public function generate(
         string $challenge,
         ?int $counter = null,
@@ -85,9 +104,13 @@ final readonly class OCRA
     ): string {
         $operation = $this->prepareOperation($challenge, $counter, $pin, $session, $timestamp);
 
-        return $this->calculate($challenge, $operation);
+        return $this->calculate(OcraMessage::build($this->suite, $challenge, $operation));
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function generateMutual(
         string $clientChallenge,
         string $serverChallenge,
@@ -101,9 +124,13 @@ final readonly class OCRA
         $challenge = $this->composeChallenge($clientChallenge, $serverChallenge);
         $operation = $this->prepareOperation($challenge, $counter, $pin, $session, $timestamp, true);
 
-        return $this->calculate($challenge, $operation);
+        return $this->calculate(OcraMessage::build($this->suite, $challenge, $operation));
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \InvalidArgumentException
+     */
     public function generateSignature(
         string $signatureChallenge,
         ?int $counter = null,
@@ -115,7 +142,7 @@ final readonly class OCRA
     ): string {
         $operation = $this->prepareOperation($signatureChallenge, $counter, $pin, $session, $timestamp);
 
-        return $this->calculate($signatureChallenge, $operation);
+        return $this->calculate(OcraMessage::build($this->suite, $signatureChallenge, $operation));
     }
 
     /**
@@ -124,6 +151,7 @@ final readonly class OCRA
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the same URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function getEnrollmentPayload(
         string $label,
@@ -147,6 +175,7 @@ final readonly class OCRA
      * @param string $label Account label without an issuer prefix.
      * @param string $issuer Issuer name; colons are not allowed.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUri(string $label, string $issuer, array $additionalParameters = []): string
     {
@@ -168,6 +197,8 @@ final readonly class OCRA
      * @param string $issuer Issuer name; colons are not allowed.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \BaconQrCode\Exception\InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUriQR(
         string $label,
@@ -192,6 +223,8 @@ final readonly class OCRA
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
      */
     public function planRotation(
         #[\SensitiveParameter]
@@ -220,6 +253,10 @@ final readonly class OCRA
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function verify(
         #[\SensitiveParameter]
         string $otp,
@@ -243,6 +280,10 @@ final readonly class OCRA
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function verifyMutual(
         #[\SensitiveParameter]
         string $otp,
@@ -270,6 +311,10 @@ final readonly class OCRA
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     public function verifyWithResult(
         #[\SensitiveParameter]
         string $otp,
@@ -301,6 +346,9 @@ final readonly class OCRA
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -323,6 +371,12 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private function advanceCounter(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -335,6 +389,9 @@ final readonly class OCRA
         return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'OCRA counter', $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertChallenge(string $challenge, bool $composite = false): void
     {
         $length = $composite ? 128 : $this->suite->challengeLength;
@@ -349,6 +406,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertCounterInput(?int $counter): void
     {
         if ($this->suite->counterEnabled !== ($counter !== null) || ($counter !== null && $counter < 0)) {
@@ -356,6 +416,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertPinInput(?string $pin): void
     {
         if ($this->suite->usesPin() !== ($pin !== null) || ($pin !== null && ($pin === '' || strlen($pin) > 1024))) {
@@ -363,6 +426,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertSessionInput(?string $session): void
     {
         if ($this->suite->usesSession() !== ($session !== null)) {
@@ -373,6 +439,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertTimestampInput(?int $timestamp): void
     {
         if ($this->suite->usesTime() !== ($timestamp !== null) || ($timestamp !== null && $timestamp < 0)) {
@@ -380,6 +449,9 @@ final readonly class OCRA
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function assertVerificationWindow(
         VerificationWindow $window,
         ?AuthenticationStateCacheInterface $cache,
@@ -407,12 +479,11 @@ final readonly class OCRA
     }
 
     /**
-     * @param string $challenge Validated operation challenge.
-     * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
+     * @throws \RuntimeException
      */
-    private function calculate(string $challenge, array $operation): string
+    private function calculate(string $message): string
     {
-        $hash = hash_hmac($this->suite->algorithm, OcraMessage::build($this->suite, $challenge, $operation), $this->sharedKey, true);
+        $hash = hash_hmac($this->suite->algorithm, $message, $this->sharedKey, true);
         if ($this->suite->digits === 0) {
             return strtoupper(bin2hex($hash));
         }
@@ -440,6 +511,9 @@ final readonly class OCRA
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function composeChallenge(string $first, string $second): string
     {
         $this->assertChallenge($first);
@@ -451,6 +525,12 @@ final readonly class OCRA
         return $first . $second;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private function consumeMessage(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -472,6 +552,7 @@ final readonly class OCRA
      * @param int $timestamp Current operation timestamp.
      * @param int $timeStep Parsed suite timestep in seconds.
      * @return array{message:string,offset:int}|null
+     * @throws \RuntimeException
      */
     private function findDriftMatch(
         string $otp,
@@ -509,6 +590,7 @@ final readonly class OCRA
      * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
      * @param VerificationWindow $window Accepted past and future drift.
      * @return array{message:string,offset:int}|null
+     * @throws \RuntimeException
      */
     private function findTimeMatch(
         string $otp,
@@ -530,6 +612,12 @@ final readonly class OCRA
         return $this->findDriftMatch($otp, $challenge, $operation, $window, $timestamp, $timeStep);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private function isReplay(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -551,6 +639,7 @@ final readonly class OCRA
      * @param array{counter:?int,pinDigest:?string,session:?string,timestamp:?int} $operation
      * @param int $offset Candidate timestep offset.
      * @return array{message:string,offset:int}|null
+     * @throws \RuntimeException
      */
     private function matchTimeOffset(string $otp, string $challenge, array $operation, int $offset): ?array
     {
@@ -559,11 +648,12 @@ final readonly class OCRA
             $timeStep = $this->suite->timeStepSeconds ?? throw new RuntimeException('Missing OCRA time step.');
             $operation['timestamp'] = $timestamp + ($offset * $timeStep);
         }
-        if (!hash_equals($this->calculate($challenge, $operation), $otp)) {
+        $message = OcraMessage::build($this->suite, $challenge, $operation);
+        if (!hash_equals($this->calculate($message), $otp)) {
             return null;
         }
 
-        return ['message' => OcraMessage::build($this->suite, $challenge, $operation), 'offset' => $offset];
+        return ['message' => $message, 'offset' => $offset];
     }
 
     /**
@@ -574,6 +664,7 @@ final readonly class OCRA
      * @param ?int $timestamp Suite timestamp input.
      * @param bool $composite Whether the challenge was explicitly composed for mutual authentication.
      * @return array{counter:?int,pinDigest:?string,session:?string,timestamp:?int}
+     * @throws \InvalidArgumentException
      */
     private function prepareOperation(
         string $challenge,
@@ -624,6 +715,10 @@ final readonly class OCRA
         return strlen($otp) === $length && ctype_xdigit($otp);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
     private function verifyChallenge(
         string $otp,
         string $challenge,

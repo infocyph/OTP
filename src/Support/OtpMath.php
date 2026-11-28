@@ -21,6 +21,7 @@ final class OtpMath
      * @param int $digits Output width from six through nine.
      * @param string $algorithm Supported HMAC algorithm name.
      * @internal
+     * @throws \InvalidArgumentException
      */
     public static function hotp(#[\SensitiveParameter] string $secret, int $counter, int $digits, string $algorithm): string
     {
@@ -40,6 +41,7 @@ final class OtpMath
      * @param int $digits Output width from six through nine.
      * @param string $algorithm Prevalidated HMAC algorithm name.
      * @internal
+     * @throws \InvalidArgumentException
      */
     public static function hotpFromBinary(#[\SensitiveParameter] string $binarySecret, int $counter, int $digits, string $algorithm): string
     {

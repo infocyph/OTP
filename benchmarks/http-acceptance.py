@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare validated OTP HTTP requests on matched Runwire 3 hosts (Python stdlib)."""
+"""Compare validated OTP HTTP requests on matched two-worker Runwire hosts (Python stdlib)."""
 import argparse
 import asyncio
 import json
@@ -14,6 +14,7 @@ import tempfile
 import time
 
 EXPECTED = b'{"accepted":true,"replay_rejected":true,"ocra":true,"provisioning":true}'
+TRANSPORT_EXPECTED = b'{"transport":true}'
 
 
 def process_tree(pid):
@@ -34,38 +35,61 @@ def process_tree(pid):
     return result
 
 
-async def request(reader, writer):
-    writer.write(b'GET /otp HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n')
-    await writer.drain()
-    header = await asyncio.wait_for(reader.readuntil(b'\r\n\r\n'), timeout=5)
-    if not header.startswith(b'HTTP/1.1 200 '):
-        raise RuntimeError('Unexpected HTTP status: ' + repr(header))
-    fields = dict(line.split(b':', 1) for line in header.lower().split(b'\r\n')[1:] if b':' in line)
-    if b'content-length' in fields:
-        body = await reader.readexactly(int(fields[b'content-length']))
-    elif fields.get(b'transfer-encoding', b'').strip() == b'chunked':
-        chunks = []
+async def request(reader, writer, expected):
+    async with asyncio.timeout(5):
+        writer.write(b'GET /otp HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n')
+        await writer.drain()
+        header = await reader.readuntil(b'\r\n\r\n')
+        if not header.startswith(b'HTTP/1.1 200 '):
+            raise RuntimeError('Unexpected HTTP status: ' + repr(header))
+        fields = dict(line.split(b':', 1) for line in header.lower().split(b'\r\n')[1:] if b':' in line)
+        if b'content-length' in fields:
+            body = await reader.readexactly(int(fields[b'content-length']))
+        elif fields.get(b'transfer-encoding', b'').strip() == b'chunked':
+            chunks = []
+            while True:
+                size = int((await reader.readline()).strip(), 16)
+                if size == 0:
+                    await reader.readline()
+                    break
+                chunks.append(await reader.readexactly(size))
+                if await reader.readexactly(2) != b'\r\n':
+                    raise RuntimeError('Invalid chunk terminator')
+            body = b''.join(chunks)
+        else:
+            raise RuntimeError('Response requires explicit framing')
+        if body != expected:
+            raise RuntimeError('Authentication response validation failed: ' + repr(body))
+        return fields.get(b'connection', b'').strip() != b'close'
+
+
+async def load(port, concurrency, duration, pid, warmup=False, settle_seconds=0, expected=EXPECTED):
+    connections = []
+
+    async def prime(index):
+        deadline = time.monotonic() + settle_seconds
         while True:
-            size = int((await reader.readline()).strip(), 16)
-            if size == 0:
-                await reader.readline()
-                break
-            chunks.append(await reader.readexactly(size))
-            if await reader.readexactly(2) != b'\r\n':
-                raise RuntimeError('Invalid chunk terminator')
-        body = b''.join(chunks)
-    else:
-        raise RuntimeError('Response requires explicit framing')
-    if body != EXPECTED:
-        raise RuntimeError('Authentication response validation failed: ' + repr(body))
-    return fields.get(b'connection', b'').strip() != b'close'
+            reader, writer = connections[index]
+            if not await request(reader, writer, expected):
+                writer.close()
+                await writer.wait_closed()
+                connections[index] = await asyncio.open_connection('127.0.0.1', port)
+            if time.monotonic() >= deadline:
+                return
 
-
-async def load(port, concurrency, duration, pid, warmup=False):
-    connections = [await asyncio.open_connection('127.0.0.1', port) for _ in range(concurrency)]
-    # Every connection and request path is ready before the measured interval.
-    for reader, writer in connections:
-        await request(reader, writer)
+    # Prime the actual measured connections at the same load and concurrency.
+    # All warmup responses are validated but excluded from the timed samples.
+    try:
+        for _ in range(concurrency):
+            connections.append(await asyncio.open_connection('127.0.0.1', port))
+        async with asyncio.TaskGroup() as priming:
+            for index in range(concurrency):
+                priming.create_task(prime(index))
+    except BaseException:
+        for _, writer in connections:
+            writer.close()
+        await asyncio.gather(*(writer.wait_closed() for _, writer in connections), return_exceptions=True)
+        raise
     start = time.monotonic()
     deadline = start + duration
     samples, ticks, latencies = [], {}, []
@@ -89,7 +113,7 @@ async def load(port, concurrency, duration, pid, warmup=False):
         try:
             while time.monotonic() < deadline:
                 before = time.monotonic()
-                keep_alive = await request(reader, writer)
+                keep_alive = await request(reader, writer, expected)
                 completed += 1
                 count += 1
                 if count % 20 == 0:
@@ -103,7 +127,10 @@ async def load(port, concurrency, duration, pid, warmup=False):
             await writer.wait_closed()
 
     try:
-        await asyncio.gather(monitor(), *(client(r, w) for r, w in connections))
+        async with asyncio.TaskGroup() as workload:
+            workload.create_task(monitor())
+            for reader, writer in connections:
+                workload.create_task(client(reader, writer))
     finally:
         for _, writer in connections:
             writer.close()
@@ -134,19 +161,27 @@ async def start_host(root, configuration, output_dir, label):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
-    command = [configuration.php, '-d', 'opcache.enable_cli=1', str(Path(__file__).with_name('http-host.php')),
+    command = [configuration.php, '-d', 'opcache.enable_cli=1', '-d', 'auto_prepend_file=' + str(root / 'vendor/autoload.php'),
+               str(Path(__file__).with_name('http-host.php')),
                '--autoload=' + str(root / 'vendor/autoload.php'), '--address=127.0.0.1:' + str(port),
-               '--ready-dir=' + ready.name]
+               '--workload=' + configuration.workload]
     log = (output_dir / (label + '-server.log')).open('w')
-    process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+    process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, cwd=ready.name,
                                preexec_fn=lambda: os.sched_setaffinity(0, configuration.server_cpus))
     host = (process, port, log, ready)
     try:
         for _ in range(400):
             if process.poll() is not None:
                 raise RuntimeError('HTTP server exited: inspect ' + str(log.name))
-            if len(list(Path(ready.name).glob('ready-*'))) == 2:
-                await load(port, 8, configuration.warmup, process.pid, warmup=True)
+            workers = sorted(int(path.name.removeprefix('ready-')) for path in Path(ready.name).glob('ready-*'))
+            if len(workers) == 2:
+                if set(workers) != {entry[0] for entry in process_tree(process.pid)} - {process.pid}:
+                    raise RuntimeError('Ready workers do not match the live process tree')
+                for index, worker in enumerate(workers):
+                    os.sched_setaffinity(worker, {configuration.server_cpus[index % len(configuration.server_cpus)]})
+                print(label, 'worker affinity:', {worker: sorted(os.sched_getaffinity(worker)) for worker in workers}, flush=True)
+                await load(port, 8, configuration.warmup, process.pid, warmup=True,
+                           expected=TRANSPORT_EXPECTED if configuration.workload == 'transport' else EXPECTED)
                 return host
             await asyncio.sleep(.05)
         raise RuntimeError('Both server workers must reach readiness')
@@ -173,12 +208,17 @@ def stop_host(host):
 async def main(configuration):
     output = configuration.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    result = {'scope': 'HTTP/1.1 keep-alive, two Runwire 3 workers, shared integrity-protected SQLite; '
+    result = {'scope': 'HTTP/1.1 keep-alive, two Runwire workers (baseline 3.x, candidate 4.x), shared integrity-protected SQLite; '
                        'Generic OTP generate/verify/replay, counter OCRA and provisioning parse on every request',
               'environment': {'php': subprocess.check_output([configuration.php, '-v'], text=True).splitlines()[0],
                               'os': os.uname().release, 'cpu_count': os.cpu_count(),
                               'server_cpus': configuration.server_cpus, 'client_cpus': sorted(os.sched_getaffinity(0))},
               'configuration': {k: str(v) if isinstance(v, Path) else v for k, v in vars(configuration).items()}}
+    result['workload'] = configuration.workload
+    result['diagnostic_only'] = configuration.diagnostic
+    if configuration.workload != 'full':
+        result['scope'] = 'Attribution only: ' + configuration.workload + '; not release acceptance'
+    expected = TRANSPORT_EXPECTED if configuration.workload == 'transport' else EXPECTED
     hosts = {}
     trials = {'baseline': {}, 'candidate': {}}
     try:
@@ -191,13 +231,14 @@ async def main(configuration):
                 order = ['baseline', 'candidate'] if trial % 2 == 0 else ['candidate', 'baseline']
                 for label in order:
                     process, port, _, _ = hosts[label]
-                    measured = await load(port, concurrency, configuration.duration, process.pid)
+                    measured = await load(port, concurrency, configuration.duration, process.pid,
+                                          settle_seconds=configuration.warmup, expected=expected)
                     trials[label][str(concurrency)].append(measured)
                     print(label, 'c=' + str(concurrency), 'trial=' + str(trial + 1),
                           round(measured['successful_rpm']), 'RPM', flush=True)
         if configuration.soak_duration:
             process, port, _, _ = hosts['candidate']
-            result['soak'] = await load(port, max(configuration.concurrency), configuration.soak_duration, process.pid)
+            result['soak'] = await load(port, max(configuration.concurrency), configuration.soak_duration, process.pid, expected=expected)
     finally:
         for host in hosts.values():
             stop_host(host)
@@ -218,7 +259,7 @@ async def main(configuration):
     result.update(comparisons=comparisons, passed=accepted)
     (output / 'http-acceptance.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(comparisons, indent=2), flush=True)
-    if not accepted:
+    if not accepted and not configuration.diagnostic:
         raise SystemExit('HTTP acceptance requires stable trials and no more than 2% RPM regression')
 
 
@@ -228,6 +269,8 @@ if __name__ == '__main__':
     parser.add_argument('--candidate', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--php', default='php')
+    parser.add_argument('--workload', choices=['full', 'no-context', 'memory', 'memory-no-context', 'transport'], default='full')
+    parser.add_argument('--diagnostic', action='store_true', help='Record all comparisons without treating throughput/CV as a release decision')
     parser.add_argument('--duration', type=float, default=15)
     parser.add_argument('--soak-duration', type=float, default=0)
     parser.add_argument('--warmup', type=float, default=5)
@@ -237,7 +280,22 @@ if __name__ == '__main__':
     if not (arguments.duration >= 1 and (arguments.soak_duration == 0 or arguments.soak_duration >= 300) and arguments.warmup >= 1 and arguments.repetitions >= 3
             and all(1 <= n <= 128 for n in arguments.concurrency)):
         parser.error('Positive durations, at least three trials and bounded concurrency are required')
+    if not arguments.diagnostic and arguments.workload != 'full':
+        parser.error('Alternative workloads are diagnostic only')
+    if arguments.diagnostic and arguments.soak_duration:
+        parser.error('Diagnostic runs cannot substitute for release soak certification')
     allowed_cpus = sorted(os.sched_getaffinity(0))
-    arguments.server_cpus = allowed_cpus[:2]
-    os.sched_setaffinity(0, allowed_cpus[2:] or allowed_cpus)
+    core_groups = {}
+    for cpu in allowed_cpus:
+        topology = Path('/sys/devices/system/cpu') / ('cpu' + str(cpu)) / 'topology'
+        try:
+            core = ((topology / 'physical_package_id').read_text().strip(), (topology / 'core_id').read_text().strip())
+        except OSError:
+            core = ('logical', str(cpu))
+        core_groups.setdefault(core, []).append(cpu)
+    arguments.cpu_core_groups = list(core_groups.values())
+    representatives = [group[0] for group in arguments.cpu_core_groups]
+    arguments.server_cpus = representatives[:2] if len(representatives) >= 2 else allowed_cpus[:2]
+    client_cpus = [cpu for group in arguments.cpu_core_groups if not set(group).intersection(arguments.server_cpus) for cpu in group]
+    os.sched_setaffinity(0, client_cpus or [cpu for cpu in allowed_cpus if cpu not in arguments.server_cpus] or allowed_cpus)
     asyncio.run(main(arguments))

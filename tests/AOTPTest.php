@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\OTP\AOTP;
 use Infocyph\OTP\Tests\Support\CacheLayerState;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\ValueObjects\AotpChallenge;
 use Infocyph\OTP\ValueObjects\AotpResponse;
 use Infocyph\OTP\VerificationReason;
+use InvalidArgumentException;
+use RuntimeException;
 
 test('AOTP signs an issued audience-context-bound challenge and consumes it once', function () {
     $cache = CacheLayerState::memory();

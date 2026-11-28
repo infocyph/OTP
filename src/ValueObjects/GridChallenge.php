@@ -24,6 +24,7 @@ final readonly class GridChallenge
     /**
      * @param array<array-key, string> $grid
      * @param list<int> $positions One-based secret positions in response order.
+     * @throws \InvalidArgumentException
      */
     public function __construct(
         public string $id,
@@ -55,7 +56,10 @@ final readonly class GridChallenge
         ];
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * @param array<string, mixed> $data
+     * @throws \InvalidArgumentException
+     */
     public static function fromArray(array $data): self
     {
         if (
@@ -116,6 +120,9 @@ final readonly class GridChallenge
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
         if (strlen(Base64Url::decode($value, $name)) !== $bytes) {
@@ -123,7 +130,10 @@ final readonly class GridChallenge
         }
     }
 
-    /** @param list<int> $positions */
+    /**
+     * @param list<int> $positions
+     * @throws \InvalidArgumentException
+     */
     private static function assertPositions(array $positions, int $secretLength): void
     {
         if (count($positions) < 6 || count($positions) > 10 || count($positions) > $secretLength) {
@@ -139,6 +149,9 @@ final readonly class GridChallenge
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertSecretLength(int $secretLength): void
     {
         if ($secretLength < 8 || $secretLength > 32) {
@@ -146,6 +159,9 @@ final readonly class GridChallenge
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertTimestamps(int $issuedAt, int $expiresAt): void
     {
         if ($issuedAt < 0 || $expiresAt <= $issuedAt) {
@@ -156,6 +172,7 @@ final readonly class GridChallenge
     /**
      * @param array<array-key, string> $grid
      * @return array<array-key, string>
+     * @throws \InvalidArgumentException
      */
     private static function canonicalizeGrid(array $grid): array
     {

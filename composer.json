@@ -32,15 +32,22 @@
         "php-64bit": "^8.4",
         "ext-ctype": "*",
         "bacon/bacon-qr-code": "^3.1.1",
-        "infocyph/cachelayer": "^4.0.2",
-        "paragonie/constant_time_encoding": "^3.1.3"
+        "infocyph/cachelayer": "^4.2",
+        "paragonie/constant_time_encoding": "^3.1.5"
     },
     "require-dev": {
+        "ext-filter": "*",
+        "ext-openssl": "*",
+        "ext-pcntl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*",
+        "ext-posix": "*",
+        "ext-redis": "*",
         "ext-sodium": "*",
         "ext-xmlwriter": "*",
         "infocyph/phpforge": "dev-main@dev",
-        "infocyph/runwire": "^3.0",
-        "web-auth/webauthn-lib": "^5.3.10"
+        "infocyph/runwire": "^4.0.1",
+        "web-auth/webauthn-lib": "^5.3.17"
     },
     "conflict": {
         "spomky-labs/pki-framework": "<1.3.0",
@@ -66,6 +73,7 @@
     },
     "autoload-dev": {
         "psr-4": {
+            "Infocyph\\OTP\\Benchmarks\\": "benchmarks/",
             "Infocyph\\OTP\\Tests\\": "tests/"
         }
     },
@@ -84,6 +92,6 @@
             "@benchmark",
             "@benchmark:release"
         ],
-        "benchmark:release": "@php benchmarks/release-gate.php --autoload=vendor/autoload.php --output=build/benchmark-result.json --release=working-tree"
+        "benchmark:release": "@php benchmarks/release-gate.php --autoload=vendor/autoload.php --build-report --release=working-tree"
     }
 }

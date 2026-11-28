@@ -7,13 +7,21 @@ MobileOTP, and Passkey/WebAuthn. Migrate runtime coordination and application
 persistence deliberately; changing code without understanding state ownership is
 unsafe.
 
-OTP 7.0 to the next patch
--------------------------
+Current upgrade from OTP 7.0
+----------------------------
 
-The next patch validates the optional Runwire integration against Runwire 3.0.
-Hosts enabling it should install ``infocyph/runwire:^3.0``. CacheLayer's minimum
-is ``^4.0.2`` and the optional WebAuthn development/test minimum is ``^5.3.10``.
-Public OTP APIs and persisted OTP key domains are unchanged. The host continues
+The current development line targets the optional Runwire 4 integration.
+Hosts enabling it should install ``infocyph/runwire:^4.0.1``. CacheLayer's minimum
+is ``^4.2`` and the optional WebAuthn development/test minimum is ``^5.3.17``.
+Drain stateful workers before switching a shared PDO state backend between
+lock-based coordination and native conditional mutation. CacheLayer 4.2 restores
+the coordinated whole-record path for default SQLite and retains native CAS
+for network PDO. CacheLayer owns confirmed database transaction retries. Do not mix those writers
+or clear replay keys during rollout.
+MobileOTP adds an optional constructor algorithm argument; existing two-argument
+calls retain the exact MD5 wire output. SHA-2 variants require matching client
+configuration and a new enrolled factor generation. Persisted OTP key domains
+are unchanged. The host continues
 to own all Runwire workers, event loops, requests and coroutine scopes.
 
 OTP 6.1 to 7.0
@@ -69,14 +77,14 @@ The base package does not require sodium or the WebAuthn library at runtime.
 Composer configuration is:
 
 * ``ext-sodium`` — ``require-dev`` + ``suggest``; required only for AOTP;
-* ``web-auth/webauthn-lib:^5.3.10`` — ``require-dev`` + ``suggest``; required only
+* ``web-auth/webauthn-lib:^5.3.17`` — ``require-dev`` + ``suggest``; required only
   for Passkey/WebAuthn.
 
 Applications enabling Passkey install:
 
 .. code-block:: bash
 
-   composer require web-auth/webauthn-lib:^5.3.10
+   composer require web-auth/webauthn-lib:^5.3.17
 
 AOTP production images must enable ``ext-sodium``. ``AOTP::isAvailable()`` and
 ``Passkey::isAvailable()`` can be used for capability-gated feature exposure.
@@ -127,8 +135,8 @@ Become:
 Custom generic-OTP stores, direct PSR cache injection, unkeyed hashes,
 delete-on-any-attempt behavior, and bulk flush were removed. ``GenericOtp`` now
 stores its versioned record directly in CacheLayer and performs comparison,
-consumption, failed-attempt decrement, expiry cleanup, and scoped deletion under
-a CacheLayer lock.
+consumption, failed-attempt decrement, expiry cleanup, and scoped deletion through
+CacheLayer's native atomic capability or its coordinated state lock.
 
 HOTP and TOTP
 -------------
@@ -156,7 +164,7 @@ CacheLayer ``AuthenticationStateCacheInterface`` capability and a
 generation-specific factor ID directly to detailed HOTP/TOTP/OCRA verification.
 The cache must be fail-closed, integrity-protected, and authoritative. OTP 7.0
 uses a CacheLayer 4.0 atomic capability when available and otherwise requires
-the cache's coordinated lock. ``GenericOtp`` always requires that lock. Unsafe
+the cache's coordinated lock. ``GenericOtp`` requires one of those safe paths. Unsafe
 configurations are rejected before state is mutated, and authentication must
 never turn backend errors into cache misses or credential results.
 

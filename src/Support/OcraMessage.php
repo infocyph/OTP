@@ -31,6 +31,9 @@ final class OcraMessage
         return $message;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function hexToBytes(string $hex): string
     {
         if (strlen($hex) % 2 !== 0) {
@@ -45,11 +48,19 @@ final class OcraMessage
         return $bytes;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function decimalToBinary(string $decimal): string
     {
         $decimal = ltrim($decimal, '0');
         if ($decimal === '') {
             return "\0";
+        }
+
+        // Eighteen decimal digits always fit the required 64-bit PHP runtime.
+        if (strlen($decimal) <= 18) {
+            return self::hexToBytes(dechex((int) $decimal));
         }
 
         $hex = '';

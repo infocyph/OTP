@@ -9,7 +9,7 @@ The base package requires:
 * PHP ``^8.4``;
 * a 64-bit PHP build;
 * the ``ctype`` extension;
-* CacheLayer ``^4.0.2``; and
+* CacheLayer ``^4.2``; and
 * Composer.
 
 Install the current release:
@@ -55,7 +55,7 @@ instead of duplicating WebAuthn cryptography and ceremony validation:
 
 .. code-block:: bash
 
-   composer require web-auth/webauthn-lib:^5.3.10
+   composer require web-auth/webauthn-lib:^5.3.17
 
 OTP declares this dependency under Composer ``suggest`` and installs it in
 ``require-dev`` for its own test/static-analysis matrix. It is intentionally not
@@ -77,12 +77,12 @@ Optional Runwire dependency
 ---------------------------
 
 Runwire is optional and is useful only when the host already owns a compatible
-Runwire 3.0 request/coroutine lifecycle. Install it explicitly when that
+Runwire 4.x request/coroutine lifecycle. Install it explicitly when that
 integration is required:
 
 .. code-block:: bash
 
-   composer require infocyph/runwire:^3.0
+   composer require infocyph/runwire:^4.0.1
 
 OTP accepts CacheLayer's existing ``RunwireExecutionContext`` as a trailing
 optional ``runwire`` argument on stateful operations. When omitted, behavior
@@ -195,10 +195,10 @@ Generic OTP and recovery codes use raw purpose-specific HMAC keys instead:
 Use different keys for these two purposes. Both APIs accept 16–1024 key bytes.
 Stateful Generic OTP and replay-aware HOTP/TOTP/OCRA/AOTP/MobileOTP calls require
 a configured fail-closed, payload-integrity protected, authoritative CacheLayer
-authentication-state cache. CacheLayer 4.0 native atomics are preferred for
+authentication-state cache. CacheLayer 4.2 native atomics are preferred for
 scalar and whole-record transitions. GenericOtp, GridOTP, and Passkey use
-whole-record CAS when available; a coordinated lock is the fallback when the
-selected backend does not expose a safe atomic capability. Start with
+whole-record CAS on native network PDO and other eligible backends; SQLite
+retains its effective coordinated file-lock path. Start with
 :doc:`../guides/storage` before wiring an authentication endpoint.
 
 Upgrading to OTP 7.0

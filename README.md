@@ -23,7 +23,7 @@ four uses `otpauth://` provisioning.
 
 - PHP `^8.4` on a 64-bit build
 - `ext-ctype`
-- CacheLayer `^4.0.2`
+- CacheLayer `^4.2`
 - Composer
 
 ```bash
@@ -40,7 +40,7 @@ not include sodium.
 Passkey/WebAuthn requires the upstream WebAuthn implementation:
 
 ```bash
-composer require web-auth/webauthn-lib:^5.3.10
+composer require web-auth/webauthn-lib:^5.3.17
 ```
 
 OTP keeps `web-auth/webauthn-lib` under `require-dev` + `suggest` as well.
@@ -50,10 +50,10 @@ does **not** require `ext-sodium`.
 SVG QR rendering requires `ext-xmlwriter`; code generation and URI provisioning work without it.
 
 Runwire integration is also optional. Applications that already own a Runwire
-3.0 request/coroutine lifecycle may install it explicitly:
+4.x request/coroutine lifecycle may install it explicitly:
 
 ```bash
-composer require infocyph/runwire:^3.0
+composer require infocyph/runwire:^4.0.1
 ```
 
 Pass the existing CacheLayer `RunwireExecutionContext` to stateful OTP
@@ -91,7 +91,7 @@ $result = $totp->verifyWithWindow(
 ```
 
 `$stateCache` must be fail-closed, payload-integrity protected, and authoritative.
-CacheLayer 4.0 native atomics are preferred when the backend exposes them;
+CacheLayer 4.2 native atomics are preferred when the backend exposes them;
 otherwise TOTP/HOTP/OCRA use the cache's coordinated lock fallback. A selected
 atomic backend failure propagates and is never retried through locks. `factorId`
 must identify one factor and secret/moving-factor generation, not merely a user.
@@ -134,9 +134,9 @@ $valid = $otp->verify('login-challenge-123', $submittedCode);
 ```
 
 Generic OTP updates its complete multi-field record as one serializable
-transition. CacheLayer 4.0 whole-record CAS is used when the backend exposes a
-safe atomic capability; otherwise OTP uses the cache's coordinated lock
-fallback. A successful verification consumes the challenge; a mismatch
+transition. CacheLayer 4.2 whole-record CAS is used when the backend exposes a
+safe atomic capability and appropriate lock policy. SQLite retains coordinated
+whole-record locks; network PDO uses native conditional mutation. A successful verification consumes the challenge; a mismatch
 decrements attempts without extending expiry. See
 [Generic OTP documentation](https://docs.infocyph.com/projects/OTP/en/latest/guides/generic-otp.html).
 
@@ -276,8 +276,11 @@ $result = $mobile->verifyWithWindow(
 ```
 
 The default window is zero; legacy tolerance can be configured up to 18
-10-second steps per direction. MD5 is used only because it is part of the legacy
-wire algorithm. Prefer TOTP, AOTP, or Passkey for new deployments. See
+10-second steps per direction. MD5 remains the legacy default. Controlled clients
+may explicitly configure `algorithm: 'sha256'` (or `sha384`, `sha512`) on both
+sides; these variants are not standard mOTP. Persist the choice at enrollment,
+never accept it from a verification request, and rotate the factor when changing
+it. Prefer TOTP, AOTP, or Passkey for new deployments. See
 [MobileOTP documentation](https://docs.infocyph.com/projects/OTP/en/latest/guides/mobile-otp.html).
 
 ### Passkey / WebAuthn

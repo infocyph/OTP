@@ -13,6 +13,9 @@ final readonly class AotpKeyPair
 
     private const int PUBLIC_KEY_BYTES = 32;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         public string $publicKey,
         #[\SensitiveParameter]
@@ -31,6 +34,9 @@ final readonly class AotpKeyPair
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertEncodedLength(string $value, int $bytes, string $name): void
     {
         if (strlen(Base64Url::decode($value, $name)) !== $bytes) {

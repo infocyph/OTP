@@ -31,6 +31,9 @@ final readonly class HOTP
 
     private string $secret;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         string $secret,
@@ -57,11 +60,18 @@ final readonly class HOTP
         ];
     }
 
+    /**
+     * @throws \Exception
+     * @throws \TypeError
+     */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function generate(int $counter): string
     {
         return OtpMath::hotpFromBinary($this->binarySecret, $counter, $this->digits, $this->algorithm);
@@ -74,6 +84,7 @@ final readonly class HOTP
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the same URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function getEnrollmentPayload(
         string $label,
@@ -99,6 +110,7 @@ final readonly class HOTP
      * @param string $issuer Issuer name; colons are not allowed.
      * @param int $initialCounter Initial non-negative HOTP counter.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUri(
         string $label,
@@ -130,6 +142,8 @@ final readonly class HOTP
      * @param int $initialCounter Initial non-negative HOTP counter.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \BaconQrCode\Exception\InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUriQR(
         string $label,
@@ -154,6 +168,7 @@ final readonly class HOTP
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function planRotation(
         #[\SensitiveParameter]
@@ -185,11 +200,17 @@ final readonly class HOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verify(#[\SensitiveParameter] string $otp, int $counter, int $lookAhead = 0): bool
     {
         return $this->verifyWithResult($otp, $counter, $lookAhead)->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function verifyWithResult(
         #[\SensitiveParameter]
         string $otp,
@@ -226,6 +247,9 @@ final readonly class HOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -241,6 +265,9 @@ final readonly class HOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertVerificationConfiguration(
         int $counter,
         int $lookAhead,
@@ -256,6 +283,12 @@ final readonly class HOTP
         self::assertReplayConfiguration($cache, $factorId);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -268,6 +301,9 @@ final readonly class HOTP
         return CacheLock::advance($cache, $stateKey, $lockKey, $counter, null, 'HOTP replay', $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function findMatchingCounter(string $otp, int $counter, int $lookAhead): ?int
     {
         for ($offset = 0; $offset <= $lookAhead; $offset++) {

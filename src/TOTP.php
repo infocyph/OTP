@@ -32,6 +32,9 @@ final readonly class TOTP
 
     private string $secret;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         #[\SensitiveParameter]
         string $secret,
@@ -63,11 +66,18 @@ final readonly class TOTP
         ];
     }
 
+    /**
+     * @throws \Exception
+     * @throws \TypeError
+     */
     public static function generateSecret(int $bytes = 20): string
     {
         return SecretUtility::generate($bytes);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function generate(?int $timestamp = null): string
     {
         return OtpMath::hotpFromBinary(
@@ -78,6 +88,9 @@ final readonly class TOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getCurrentTimeStep(?int $timestamp = null): int
     {
         return $this->getTimeStepFromTimestamp($timestamp ?? time());
@@ -89,6 +102,7 @@ final readonly class TOTP
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the same URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function getEnrollmentPayload(
         string $label,
@@ -112,6 +126,7 @@ final readonly class TOTP
      * @param string $label Account label without an issuer prefix.
      * @param string $issuer Issuer name; colons are not allowed.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUri(
         string $label,
@@ -140,6 +155,8 @@ final readonly class TOTP
      * @param string $issuer Issuer name; colons are not allowed.
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \BaconQrCode\Exception\InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function getProvisioningUriQR(
         string $label,
@@ -150,6 +167,9 @@ final readonly class TOTP
         return SvgQrRenderer::render($this->getProvisioningUri($label, $issuer, $additionalParameters), $imageSize);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getRemainingSeconds(?int $timestamp = null): int
     {
         $timestamp ??= time();
@@ -160,6 +180,9 @@ final readonly class TOTP
         return $this->period - ($timestamp % $this->period);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function getTimeStepFromTimestamp(int $timestamp): int
     {
         if ($timestamp < 0) {
@@ -178,6 +201,7 @@ final readonly class TOTP
      * @param array<string, scalar|null> $additionalParameters Non-reserved provisioning extensions.
      * @param bool $withQrSvg Whether to render the replacement URI as an SVG QR code.
      * @param int $imageSize QR image width and height in pixels.
+     * @throws \InvalidArgumentException
      */
     public function planRotation(
         #[\SensitiveParameter]
@@ -201,6 +225,12 @@ final readonly class TOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function verify(
         #[\SensitiveParameter]
         string $otp,
@@ -215,6 +245,12 @@ final readonly class TOTP
         )->matched;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function verifyWithWindow(
         #[\SensitiveParameter]
         string $otp,
@@ -250,6 +286,9 @@ final readonly class TOTP
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertReplayConfiguration(
         ?AuthenticationStateCacheInterface $cache,
         ?string $factorId,
@@ -265,6 +304,12 @@ final readonly class TOTP
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private function advanceReplayState(
         AuthenticationStateCacheInterface $cache,
         string $factorId,
@@ -283,6 +328,7 @@ final readonly class TOTP
      * @param int $currentStep Current moving-factor timestep.
      * @param VerificationWindow $window Accepted past and future drift.
      * @return array{step:int,offset:int}|null
+     * @throws \InvalidArgumentException
      */
     private function findMatch(string $otp, int $currentStep, VerificationWindow $window): ?array
     {
@@ -304,6 +350,9 @@ final readonly class TOTP
         return null;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private function matches(string $otp, int $step): bool
     {
         return hash_equals(

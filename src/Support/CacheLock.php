@@ -10,6 +10,7 @@ use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\CacheLayer\Cache\Lock\MemcachedLockProvider;
+use Infocyph\CacheLayer\Cache\Lock\PdoLockProvider;
 use Infocyph\CacheLayer\Cache\Lock\RedisLockProvider;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use InvalidArgumentException;
@@ -23,6 +24,12 @@ final class CacheLock
 
     private const float WAIT_SECONDS = 1.0;
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public static function advance(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -32,7 +39,7 @@ final class CacheLock
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
             return AtomicState::advance($cache, $atomic, $stateKey, $value, $ttl, $stateName, $runwire);
@@ -41,6 +48,9 @@ final class CacheLock
         return self::advanceWithLock($cache, $stateKey, $lockKey, $value, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function assertLockSafe(AuthenticationStateCacheInterface $cache): void
     {
         self::assertSafe($cache);
@@ -49,6 +59,9 @@ final class CacheLock
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function assertSafe(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         self::assertAuthenticationStateSafe($cache);
@@ -63,7 +76,7 @@ final class CacheLock
                 'Authentication state caches must provide an atomic or coordinated lock capability.',
             );
         }
-        if (self::lockRequiresAtomic($locks)) {
+        if (self::lockRequiresAtomic(self::effectiveLock($locks))) {
             throw new InvalidArgumentException(
                 'Lease-based authentication state locks require a backend atomic capability.',
             );
@@ -72,15 +85,21 @@ final class CacheLock
         return null;
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \LogicException
+     */
     public static function checkpoint(?RunwireExecutionContext $runwire): void
     {
-        if ($runwire === null) {
-            return;
-        }
-
         RunwireState::checkpoint($runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public static function consumeOnce(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -89,7 +108,7 @@ final class CacheLock
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
             return AtomicState::claim($cache, $atomic, $stateKey, 1, $ttl, $stateName, $runwire);
@@ -98,6 +117,12 @@ final class CacheLock
         return self::consumeOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public static function consumeReserved(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -105,19 +130,23 @@ final class CacheLock
         int $ttl,
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
+        ?int $expiresAt = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         if ($ttl < 1) {
             throw new InvalidArgumentException('Reserved authentication state TTL must be positive.');
         }
         $atomic = self::assertSafe($cache);
         if ($atomic !== null) {
-            return AtomicState::consumeReserved($cache, $atomic, $stateKey, $ttl, $stateName, $runwire);
+            return AtomicState::consumeReserved($cache, $atomic, $stateKey, $ttl, $stateName, $runwire, $expiresAt);
         }
 
-        return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
+        return self::consumeReservedWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire, $expiresAt);
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public static function ensureOwned(LockProviderInterface $locks, LockHandle $handle): void
     {
         if (!$locks->refresh($handle, self::LEASE_SECONDS)) {
@@ -125,6 +154,12 @@ final class CacheLock
         }
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public static function reserveOnce(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -133,7 +168,7 @@ final class CacheLock
         string $stateName,
         ?RunwireExecutionContext $runwire = null,
     ): bool {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         if ($ttl < 1) {
             throw new InvalidArgumentException('Reserved authentication state TTL must be positive.');
         }
@@ -145,6 +180,9 @@ final class CacheLock
         return self::reserveOnceWithLock($cache, $stateKey, $lockKey, $ttl, $stateName, $runwire);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function stateAtomic(AuthenticationStateCacheInterface $cache): ?AtomicCacheInterface
     {
         $atomic = self::assertSafe($cache);
@@ -153,14 +191,22 @@ final class CacheLock
         }
 
         $locks = $cache->authenticationStateLock();
+        if ($locks !== null) {
+            $locks = self::effectiveLock($locks);
+        }
 
-        return $locks === null || self::lockRequiresAtomic($locks) ? $atomic : null;
+        return $locks === null || $locks instanceof PdoLockProvider || self::lockRequiresAtomic($locks)
+            ? $atomic
+            : null;
     }
 
     /**
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function synchronized(
         AuthenticationStateCacheInterface $cache,
@@ -168,7 +214,7 @@ final class CacheLock
         callable $operation,
         ?RunwireExecutionContext $runwire = null,
     ): mixed {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         self::assertLockSafe($cache);
 
         return self::synchronizedKnownSafe($cache, $key, $operation, $runwire);
@@ -176,6 +222,7 @@ final class CacheLock
 
     /**
      * @template T
+     * @param bool $readCurrent Whether the lock-coordinated transition needs the previous value; atomic transitions always read it.
      * @param callable(mixed): array{
      *     result:T,
      *     replacement?:mixed,
@@ -184,6 +231,9 @@ final class CacheLock
      *     failure?:string
      * } $transition
      * @return T
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     public static function transition(
         AuthenticationStateCacheInterface $cache,
@@ -192,10 +242,9 @@ final class CacheLock
         string $stateName,
         callable $transition,
         ?RunwireExecutionContext $runwire = null,
+        bool $readCurrent = true,
     ): mixed {
-        if ($runwire !== null) {
-            self::checkpoint($runwire);
-        }
+        RunwireState::checkpoint($runwire);
         $atomic = self::stateAtomic($cache);
         if ($atomic !== null) {
             return AtomicState::transition($cache, $atomic, $stateKey, $stateName, $transition, $runwire);
@@ -210,13 +259,14 @@ final class CacheLock
                 $stateName,
                 $transition,
                 $runwire,
+                $readCurrent,
             ): mixed {
-                $decision = $transition($cache->get($stateKey));
+                $decision = $transition($readCurrent ? $cache->get($stateKey) : null);
                 if (!array_key_exists('replacement', $decision)) {
                     return $decision['result'];
                 }
 
-                self::checkpoint($runwire);
+                RunwireState::checkpoint($runwire);
                 self::ensureOwned($locks, $handle);
                 $mutated = ($decision['delete'] ?? false)
                     ? $cache->delete($stateKey)
@@ -233,6 +283,10 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function advanceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -261,6 +315,9 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertAuthenticationStateSafe(AuthenticationStateCacheInterface $cache): void
     {
         if ($cache->isFailOpen()) {
@@ -279,6 +336,10 @@ final class CacheLock
         return $cache instanceof AtomicCacheProviderInterface ? $cache->atomic() : null;
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function consumeOnceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -306,6 +367,10 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function consumeReservedWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -313,11 +378,12 @@ final class CacheLock
         int $ttl,
         string $stateName,
         ?RunwireExecutionContext $runwire,
+        ?int $expiresAt,
     ): bool {
         return self::synchronizedKnownSafe(
             $cache,
             $lockKey,
-            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName, $runwire): bool {
+            function (LockProviderInterface $locks, LockHandle $handle) use ($cache, $stateKey, $ttl, $stateName, $runwire, $expiresAt): bool {
                 $current = $cache->get($stateKey);
                 if ($current === null || $current === 1) {
                     return false;
@@ -325,7 +391,15 @@ final class CacheLock
                 if ($current !== 0) {
                     throw new RuntimeException('Invalid ' . $stateName . ' reservation in CacheLayer.');
                 }
-                self::storeLocked($cache, $locks, $handle, $stateKey, 1, $ttl, 'Unable to consume reserved ' . $stateName . '.', $runwire);
+                RunwireState::checkpoint($runwire);
+                self::ensureOwned($locks, $handle);
+                $remaining = $expiresAt === null ? $ttl : $expiresAt - time();
+                if ($remaining < 1) {
+                    return false;
+                }
+                if (!$cache->set($stateKey, 1, $remaining)) {
+                    throw new RuntimeException('Unable to consume reserved ' . $stateName . '.');
+                }
 
                 return true;
             },
@@ -333,11 +407,29 @@ final class CacheLock
         );
     }
 
+    private static function effectiveLock(LockProviderInterface $locks): LockProviderInterface
+    {
+        while ($locks instanceof PdoLockProvider) {
+            $effective = $locks->effectiveLockProvider();
+            if ($effective === $locks) {
+                break;
+            }
+
+            $locks = $effective;
+        }
+
+        return $locks;
+    }
+
     private static function lockRequiresAtomic(LockProviderInterface $locks): bool
     {
         return $locks instanceof MemcachedLockProvider || $locks instanceof RedisLockProvider;
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     private static function reserveOnceWithLock(
         AuthenticationStateCacheInterface $cache,
         string $stateKey,
@@ -365,6 +457,11 @@ final class CacheLock
         );
     }
 
+    /**
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \LogicException
+     */
     private static function storeLocked(
         AuthenticationStateCacheInterface $cache,
         LockProviderInterface $locks,
@@ -375,7 +472,7 @@ final class CacheLock
         string $failure,
         ?RunwireExecutionContext $runwire,
     ): void {
-        self::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         self::ensureOwned($locks, $handle);
         if (!$cache->set($stateKey, $value, $ttl)) {
             throw new RuntimeException($failure);
@@ -386,6 +483,8 @@ final class CacheLock
      * @template T
      * @param callable(LockProviderInterface, LockHandle): T $operation
      * @return T
+     * @throws \RuntimeException
+     * @throws \Throwable
      */
     private static function synchronizedKnownSafe(
         AuthenticationStateCacheInterface $cache,
@@ -395,21 +494,17 @@ final class CacheLock
     ): mixed {
         $locks = $cache->authenticationStateLock()
             ?? throw new InvalidArgumentException('Authentication state caches must provide a coordinated lock capability.');
-        $handle = RunwireState::acquireLock(
-            $locks,
-            $key,
-            $runwire,
-            self::WAIT_SECONDS,
-            self::LEASE_SECONDS,
-        );
+        $handle = $runwire === null
+            ? $locks->acquire($key, self::WAIT_SECONDS, self::LEASE_SECONDS)
+            : RunwireState::acquireLock($locks, $key, $runwire, self::WAIT_SECONDS, self::LEASE_SECONDS);
         if ($handle === null) {
-            self::checkpoint($runwire);
+            RunwireState::checkpoint($runwire);
 
             throw new RuntimeException('Unable to acquire the OTP state lock.');
         }
 
         try {
-            self::checkpoint($runwire);
+            RunwireState::checkpoint($runwire);
             $result = $operation($locks, $handle);
         } catch (Throwable $failure) {
             try {

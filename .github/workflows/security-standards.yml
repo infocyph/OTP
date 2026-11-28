@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: [ "main", "master", "develop", "development" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   phpforge:
     if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
@@ -18,10 +22,10 @@ jobs:
       actions: read
       contents: read
     with:
-      php_versions: '["8.4","8.5"]'
+      php_versions: '["8.4","8.5","8.6"]'
       dependency_versions: '["prefer-lowest","prefer-stable"]'
       fail_on_skipped_tests: true
-      integration_services: '["sqlite","redis"]'
+      integration_services: '["sqlite","redis","mysql","mariadb","postgres"]'
       service_topologies: '{}'
       benchmark_composer_script: 'benchmark:ci'
       benchmark_result_file: 'build/benchmark-result.json'
@@ -34,6 +38,22 @@ jobs:
       contents: write
     secrets:
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+
+  documentation:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    name: Documentation build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install documentation dependencies
+        run: python -m pip install -r docs/requirements.txt
+      - name: Build Sphinx documentation
+        run: python -m sphinx -W --keep-going -b html docs "$RUNNER_TEMP/otp-docs"
 
   sustained-performance:
     if: github.event_name == 'pull_request'
@@ -73,58 +93,48 @@ jobs:
         shell: bash
         run: |
           mkdir -p perf
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/baseline.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
             --duration=15 \
             --repetitions=3 \
-            --stable
-          php candidate/benchmarks/release-gate.php \
+            --stable > "$GITHUB_WORKSPACE/perf/baseline.json"
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/candidate.json" \
             --release="$GITHUB_SHA" \
             --duration=15 \
             --repetitions=3 \
-            --stable
-          php candidate/benchmarks/release-gate.php \
+            --stable > "$GITHUB_WORKSPACE/perf/candidate.json"
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/baseline-roundtrip.json" \
             --release="$OTP_PERF_BASELINE_SHA" \
             --duration=15 \
             --repetitions=3 \
             --stable \
-            --workload=roundtrip
-          php candidate/benchmarks/release-gate.php \
+            --workload=roundtrip > "$GITHUB_WORKSPACE/perf/baseline-roundtrip.json"
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/candidate-roundtrip.json" \
             --release="$GITHUB_SHA" \
             --duration=15 \
             --repetitions=3 \
             --stable \
-            --workload=roundtrip
-          php candidate/benchmarks/release-gate.php \
-            --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/baseline-concurrent.json" \
-            --release="$OTP_PERF_BASELINE_SHA" \
-            --duration=8 \
-            --repetitions=3 \
-            --stable \
-            --workload=concurrent-verify
-          php candidate/benchmarks/release-gate.php \
+            --workload=roundtrip > "$GITHUB_WORKSPACE/perf/candidate-roundtrip.json"
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/candidate-concurrent.json" \
-            --release="$GITHUB_SHA" \
-            --duration=8 \
-            --repetitions=3 \
-            --stable \
-            --workload=concurrent-verify
-          php candidate/benchmarks/release-gate.php \
-            --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/cold-start.json" \
             --release="$GITHUB_SHA" \
             --repetitions=3 \
-            --workload=cold-start
+            --workload=cold-start > "$GITHUB_WORKSPACE/perf/cold-start.json"
+
+      - name: Calibrate and compare paired four-worker SQLite trials
+        shell: bash
+        run: |
+          python3 candidate/benchmarks/sqlite-acceptance.py \
+            --baseline="$GITHUB_WORKSPACE/baseline" \
+            --candidate="$GITHUB_WORKSPACE/candidate" \
+            --harness="$GITHUB_WORKSPACE/candidate/benchmarks/release-gate.php" \
+            --baseline-release="$OTP_PERF_BASELINE_SHA" \
+            --candidate-release="$GITHUB_SHA" \
+            --output="$GITHUB_WORKSPACE/perf"
 
       - name: Install PHPForge validation tooling
         run: composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
@@ -132,14 +142,13 @@ jobs:
       - name: Run persistent Runwire lifecycle benchmark
         shell: bash
         run: |
-          php candidate/benchmarks/release-gate.php \
+          php -d auto_prepend_file="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" candidate/benchmarks/release-gate.php \
             --autoload="$GITHUB_WORKSPACE/candidate/vendor/autoload.php" \
-            --output="$GITHUB_WORKSPACE/perf/runwire-lifecycle.json" \
             --release="$GITHUB_SHA" \
             --duration=8 \
             --repetitions=3 \
             --stable \
-            --workload=runwire-lifecycle
+            --workload=runwire-lifecycle > "$GITHUB_WORKSPACE/perf/runwire-lifecycle.json"
 
       - name: Validate representative benchmark results
         shell: bash
@@ -161,6 +170,17 @@ jobs:
               comparison_status=1
             fi
           done
+          # A/A must be stable and within budget in either direction.
+          for arm in a b; do
+            other=b
+            if [[ "$arm" == b ]]; then other=a; fi
+            if ! composer --working-dir=candidate ic:benchmark:compare \
+              "$GITHUB_WORKSPACE/perf/aa-baseline-$arm.json" \
+              "$GITHUB_WORKSPACE/perf/aa-baseline-$other.json" \
+              --max-regression=2 --stable-environment; then
+              comparison_status=1
+            fi
+          done
           exit "$comparison_status"
 
       - name: Prepare the matching Runwire 3 HTTP host baseline
@@ -178,8 +198,9 @@ jobs:
             --baseline="$GITHUB_WORKSPACE/baseline" \
             --candidate="$GITHUB_WORKSPACE/candidate" \
             --output="$GITHUB_WORKSPACE/perf/http" \
-            --duration=15 \
-            --repetitions=3 \
+            --duration=30 \
+            --warmup=10 \
+            --repetitions=4 \
             --soak-duration=300 \
             --concurrency 1 8 32
 
@@ -192,5 +213,74 @@ jobs:
             perf/*.json
             perf/http/*.json
             perf/http/*-server.log
+            perf/sqlite-trials/
+          retention-days: 61
+          if-no-files-found: error
+
+  http-attribution:
+    if: github.event_name == 'pull_request'
+    name: HTTP performance attribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      OTP_PERF_BASELINE_SHA: df54c49b823c6beaad65cc2f829fb8b9c6502236
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: candidate
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.OTP_PERF_BASELINE_SHA }}
+          path: baseline
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+      - name: Install matched HTTP host dependencies
+        shell: bash
+        run: |
+          mkdir -p attribution
+          composer require --working-dir=baseline --dev 'infocyph/runwire:^3.0' --no-update --no-interaction
+          composer update --working-dir=baseline --no-interaction --prefer-dist --no-progress --prefer-stable
+          composer update --working-dir=candidate --no-interaction --prefer-dist --no-progress --prefer-stable
+          composer show --working-dir=baseline --format=json > attribution/baseline-packages.json
+          composer show --working-dir=candidate --format=json > attribution/candidate-packages.json
+      - name: Measure paired HTTP attribution workloads
+        shell: bash
+        run: |
+          for mode in full no-context memory memory-no-context transport; do
+            python3 candidate/benchmarks/http-acceptance.py \
+              --baseline="$GITHUB_WORKSPACE/baseline" \
+              --candidate="$GITHUB_WORKSPACE/candidate" \
+              --output="$GITHUB_WORKSPACE/attribution/$mode" \
+              --workload="$mode" --diagnostic \
+              --duration=15 --warmup=5 --repetitions=4 --concurrency 8 32
+          done
+      - name: Summarize attribution
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in sorted(Path('attribution').glob('*/http-acceptance.json')):
+              data = json.loads(path.read_text())
+              for concurrency, comparison in data['comparisons'].items():
+                  base = data['baseline'][concurrency]
+                  candidate = data['candidate'][concurrency]
+                  print(path.parent.name, 'C' + concurrency,
+                        f"baseline={base['median_successful_rpm']:.0f}",
+                        f"candidate={candidate['median_successful_rpm']:.0f}",
+                        f"regression={comparison['regression_percent']:.2f}%",
+                        f"CV={base['cv_percent']:.2f}/{candidate['cv_percent']:.2f}%")
+          PY
+      - name: Upload attribution evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: http-performance-attribution
+          path: attribution/
           retention-days: 61
           if-no-files-found: error

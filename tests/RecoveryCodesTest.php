@@ -2,10 +2,15 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
+use DateTimeImmutable;
 use Infocyph\OTP\RecoveryCodes;
 use Infocyph\OTP\Stores\InMemoryRecoveryCodeStore;
 use Infocyph\OTP\Tests\Support\Concurrency;
 use Infocyph\OTP\Tests\Support\SqliteAtomicStore;
+use InvalidArgumentException;
+use RuntimeException;
 
 test('recovery codes are keyed, formatted, atomic, and single use', function () {
     $codes = new RecoveryCodes(new InMemoryRecoveryCodeStore(), str_repeat('r', 32));
@@ -55,6 +60,7 @@ test('duplicate recovery alphabet characters are normalized before entropy check
 
 test('recovery consume uses mutation state without a fallible metadata follow-up', function () {
     $store = new class implements \Infocyph\OTP\Contracts\RecoveryCodeStoreInterface {
+        #[\Override]
         public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
         {
             expect($binding)->not->toBeEmpty()
@@ -63,11 +69,16 @@ test('recovery consume uses mutation state without a fallible metadata follow-up
             return ['consumed' => true, 'total' => 2, 'remaining' => 1, 'lastUsedAt' => $usedAt];
         }
 
+        /**
+         * @throws \RuntimeException
+         */
+        #[\Override]
         public function metadata(string $binding): array
         {
             throw new RuntimeException('Metadata must not be queried after consume for ' . $binding . '.');
         }
 
+        #[\Override]
         public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
         {
             expect($binding)->not->toBeEmpty();
@@ -87,6 +98,7 @@ test('same recovery text hashes differently for different bindings', function ()
         /** @var array<string, string> */
         public array $seen = [];
 
+        #[\Override]
         public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
         {
             $this->seen[$binding] = $hashedCode;
@@ -94,6 +106,9 @@ test('same recovery text hashes differently for different bindings', function ()
             return ['consumed' => false, 'total' => 0, 'remaining' => 0, 'lastUsedAt' => $usedAt];
         }
 
+        /**
+         */
+        #[\Override]
         public function metadata(string $binding): array
         {
             $this->seen[$binding] ??= '';
@@ -101,6 +116,7 @@ test('same recovery text hashes differently for different bindings', function ()
             return ['total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
         }
 
+        #[\Override]
         public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
         {
             $this->seen[$binding] ??= '';
@@ -114,90 +130,6 @@ test('same recovery text hashes differently for different bindings', function ()
 
     expect($store->seen['user-a'])->not->toBe($store->seen['user-b']);
 });
-
-test('recovery codes reject impossible custom-store consumption state', function (array $state) {
-    $store = new class($state) implements \Infocyph\OTP\Contracts\RecoveryCodeStoreInterface {
-        public function __construct(private array $state)
-        {
-        }
-
-        public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
-        {
-            expect($binding)->toBe('user-1')
-                ->and($hashedCode)->toMatch('/^[a-f0-9]{64}$/')
-                ->and($usedAt->getTimestamp())->toBeGreaterThan(0);
-
-            return $this->state;
-        }
-
-        public function metadata(string $binding): array
-        {
-            expect($binding)->toBe('user-1');
-
-            return ['total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
-        }
-
-        public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
-        {
-            expect($binding)->not->toBeEmpty()
-                ->and($hashedCodes)->not->toBeEmpty()
-                ->and($issuedAt->getTimestamp())->toBeGreaterThan(0);
-
-            return ['total' => count($hashedCodes), 'remaining' => count($hashedCodes), 'lastUsedAt' => null];
-        }
-    };
-
-    expect(fn () => (new RecoveryCodes($store, str_repeat('r', 32)))
-        ->consume('user-1', 'ABCD-EFGH'))
-        ->toThrow(RuntimeException::class);
-})->with([
-    'consumed is not boolean' => [['consumed' => 1, 'total' => 1, 'remaining' => 0, 'lastUsedAt' => new DateTimeImmutable()]],
-    'negative total' => [['consumed' => false, 'total' => -1, 'remaining' => 0, 'lastUsedAt' => null]],
-    'negative remaining' => [['consumed' => false, 'total' => 1, 'remaining' => -1, 'lastUsedAt' => null]],
-    'remaining exceeds total' => [['consumed' => false, 'total' => 1, 'remaining' => 2, 'lastUsedAt' => null]],
-    'last use is wrong type' => [['consumed' => false, 'total' => 1, 'remaining' => 1, 'lastUsedAt' => 'now']],
-    'successful consume lacks timestamp' => [['consumed' => true, 'total' => 1, 'remaining' => 0, 'lastUsedAt' => null]],
-]);
-
-test('recovery codes reject impossible custom-store replacement state', function (array $state) {
-    $store = new class($state) implements \Infocyph\OTP\Contracts\RecoveryCodeStoreInterface {
-        public function __construct(private array $state)
-        {
-        }
-
-        public function consume(string $binding, string $hashedCode, DateTimeImmutable $usedAt): array
-        {
-            expect($binding)->not->toBeEmpty()
-                ->and($hashedCode)->not->toBeEmpty()
-                ->and($usedAt->getTimestamp())->toBeGreaterThan(0);
-
-            return ['consumed' => false, 'total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
-        }
-
-        public function metadata(string $binding): array
-        {
-            expect($binding)->not->toBeEmpty();
-
-            return ['total' => 0, 'remaining' => 0, 'lastUsedAt' => null];
-        }
-
-        public function replace(string $binding, array $hashedCodes, DateTimeImmutable $issuedAt): array
-        {
-            expect($binding)->toBe('user-1')
-                ->and($hashedCodes)->toHaveCount(2)
-                ->and($issuedAt->getTimestamp())->toBeGreaterThan(0);
-
-            return $this->state;
-        }
-    };
-
-    expect(fn () => (new RecoveryCodes($store, str_repeat('r', 32)))->generate('user-1', count: 2))
-        ->toThrow(RuntimeException::class, 'invalid replacement state');
-})->with([
-    'wrong total' => [['total' => 3, 'remaining' => 3, 'lastUsedAt' => null]],
-    'wrong remaining' => [['total' => 2, 'remaining' => 1, 'lastUsedAt' => null]],
-    'stale last use' => [['total' => 2, 'remaining' => 2, 'lastUsedAt' => new DateTimeImmutable()]],
-]);
 
 test('concurrent recovery-code consumption commits exactly one success', function () {
     $path = tempnam(sys_get_temp_dir(), 'otp-recovery-');

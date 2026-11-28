@@ -2,7 +2,7 @@ Custom durable stores
 =====================
 
 The package does not define custom store contracts for Generic OTP or protocol
-replay state. Select a CacheLayer 4.0 authentication-state adapter for those
+replay state. Select a CacheLayer 4.1 authentication-state adapter for those
 paths; OTP uses its native atomics for safe scalar/whole-record transitions
 when available and its coordinated lock fallback otherwise. See
 :doc:`storage`. The only application persistence contract is

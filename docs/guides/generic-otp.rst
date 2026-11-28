@@ -70,9 +70,9 @@ Issue and deliver
    }
 
 ``generate()`` creates unbiased random decimal digits and writes the complete
-record under the binding-specific lock before returning. If lock acquisition or
-the CacheLayer write fails, an exception propagates and no plaintext code is
-returned. Issuing another code for the same binding atomically replaces the
+record through the selected atomic capability or binding-specific lock before
+returning. If coordination or the CacheLayer write fails, an exception
+propagates and no plaintext code is returned. Issuing another code for the same binding atomically replaces the
 prior record and invalidates the prior message.
 
 Choose a binding that identifies the exact flow. This permits two legitimate
@@ -111,7 +111,9 @@ Expiration behavior
 
 The package captures an absolute ``expiresAt`` timestamp during issuance and
 also supplies CacheLayer's relative TTL. Verification removes a record when
-``expiresAt <= now``. A failed attempt writes the decremented record with only
+``expiresAt <= now``. The verification clock is sampled after the state read,
+and again on each atomic retry, rather than before coordination or I/O. A failed
+attempt writes the decremented record with only
 the original remaining lifetime; it never converts expiration into a sliding
 TTL.
 

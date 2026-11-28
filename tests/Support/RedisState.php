@@ -27,6 +27,11 @@ final class RedisState
         }
     }
 
+    /**
+     * @throws \RuntimeException
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \LogicException
+     */
     public static function cache(string $namespace): AuthenticationStateCacheInterface
     {
         $cache = Cache::redis(
@@ -44,6 +49,9 @@ final class RedisState
         return $cache;
     }
 
+    /**
+     * @throws \RuntimeException
+     */
     public static function requireAvailable(): void
     {
         if (!self::available()) {
@@ -55,7 +63,7 @@ final class RedisState
     {
         $client = new \Redis();
         $client->connect(self::host(), self::port(), 1.0);
-        $password = getenv('IC_REDIS_PASSWORD') ?: getenv('CACHELAYER_REDIS_PASSWORD');
+        $password = self::environment('IC_REDIS_PASSWORD') ?? self::environment('CACHELAYER_REDIS_PASSWORD');
         if (is_string($password) && $password !== '') {
             $client->auth($password);
         }
@@ -63,15 +71,22 @@ final class RedisState
         return $client;
     }
 
+    private static function environment(string $name): ?string
+    {
+        $value = getenv($name);
+
+        return $value === false || $value === '' ? null : $value;
+    }
+
     private static function host(): string
     {
-        $host = getenv('IC_REDIS_HOST') ?: getenv('CACHELAYER_REDIS_HOST');
+        $host = self::environment('IC_REDIS_HOST') ?? self::environment('CACHELAYER_REDIS_HOST');
 
         return is_string($host) && $host !== '' ? $host : '127.0.0.1';
     }
 
     private static function port(): int
     {
-        return (int) (getenv('IC_REDIS_PORT') ?: getenv('CACHELAYER_REDIS_PORT') ?: 6379);
+        return (int) (self::environment('IC_REDIS_PORT') ?? self::environment('CACHELAYER_REDIS_PORT') ?? '6379');
     }
 }

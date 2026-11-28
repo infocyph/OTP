@@ -9,6 +9,7 @@ use Infocyph\CacheLayer\Cache\Lock\LockHandle;
 use Infocyph\CacheLayer\Cache\Lock\LockProviderInterface;
 use Infocyph\CacheLayer\Integration\Runwire\RunwireExecutionContext;
 use Infocyph\OTP\Support\CacheLock;
+use Infocyph\OTP\Support\RunwireState;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -22,6 +23,9 @@ final readonly class GenericOtp
 
     private const int STATE_VERSION = 1;
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         private AuthenticationStateCacheInterface $cache,
         #[\SensitiveParameter]
@@ -57,10 +61,16 @@ final readonly class GenericOtp
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function delete(string $binding, ?RunwireExecutionContext $runwire = null): bool
     {
         self::assertBinding($binding);
-        CacheLock::checkpoint($runwire);
+        RunwireState::checkpoint($runwire);
         $stateKey = self::stateKey($binding);
         if (($atomic = CacheLock::stateAtomic($this->cache)) !== null) {
             $atomic->getAndDelete($stateKey);
@@ -81,6 +91,12 @@ final readonly class GenericOtp
         }, $runwire);
     }
 
+    /**
+     * @throws \Infocyph\Runwire\Exception\CancelledException
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function generate(string $binding, ?RunwireExecutionContext $runwire = null): string
     {
         self::assertBinding($binding);
@@ -110,11 +126,18 @@ final readonly class GenericOtp
                 ];
             },
             $runwire,
+            readCurrent: false,
         );
 
         return $otp;
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     public function verify(
         string $binding,
         #[\SensitiveParameter]
@@ -127,18 +150,20 @@ final readonly class GenericOtp
         }
 
         $candidateDigest = $this->digest($binding, $otp);
-        $now = time();
 
         return CacheLock::transition(
             $this->cache,
             self::stateKey($binding),
             self::lockKey($binding),
             'generic OTP',
-            fn(mixed $stored): array => $this->verifyState($stored, $candidateDigest, $now),
+            fn(mixed $stored): array => $this->verifyState($stored, $candidateDigest, time()),
             $runwire,
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertBinding(string $binding): void
     {
         if ($binding === '' || strlen($binding) > self::MAX_BINDING_LENGTH) {
@@ -181,6 +206,7 @@ final readonly class GenericOtp
     /**
      * @param mixed $state Untrusted state loaded from CacheLayer.
      * @return array{v:int,digest:string,remainingAttempts:int,expiresAt:int}
+     * @throws \RuntimeException
      */
     private function requireState(mixed $state): array
     {
@@ -210,6 +236,7 @@ final readonly class GenericOtp
      *     delete?:bool,
      *     failure?:string
      * }
+     * @throws \RuntimeException
      */
     private function verifyState(mixed $stored, string $candidateDigest, int $now): array
     {

@@ -13,6 +13,9 @@ final readonly class PasskeyCeremony
 
     public const string TYPE_REGISTRATION = 'registration';
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function __construct(
         public string $id,
         public string $type,
@@ -43,6 +46,9 @@ final readonly class PasskeyCeremony
         ];
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     private static function assertId(string $id): void
     {
         if (strlen(Base64Url::decode($id, 'Passkey ceremony ID')) !== 16) {

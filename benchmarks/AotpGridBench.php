@@ -31,6 +31,27 @@ final class AotpGridBench
 
     private string $privateKey;
 
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
+    public function __construct()
+    {
+        $this->setUp();
+    }
+
+    /**
+     * @throws \Infocyph\CacheLayer\Exceptions\CacheInvalidArgumentException
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
     public function setUp(): void
     {
         $this->cache = Cache::memory(
@@ -51,6 +72,13 @@ final class AotpGridBench
         $this->gridChallenge = $this->gridOtp->issue('bench:grid');
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Throwable
+     */
     #[Revs(1)]
     public function benchAotpRoundTrip(): void
     {
@@ -64,6 +92,10 @@ final class AotpGridBench
         $this->aotp->verify($this->cache, 'bench:aotp:roundtrip', $challenge, $response);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \LogicException
+     */
     public function benchAotpSign(): void
     {
         AOTP::respond(
@@ -74,11 +106,20 @@ final class AotpGridBench
         );
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public function benchGridRespond(): void
     {
         GridOTP::respond($this->gridChallenge, $this->gridSecret);
     }
 
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
     #[Revs(1)]
     public function benchGridRoundTrip(): void
     {

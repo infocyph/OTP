@@ -22,6 +22,9 @@ final readonly class OcraSuite
         public ?int $timeStepSeconds,
     ) {}
 
+    /**
+     * @throws \InvalidArgumentException
+     */
     public static function parse(string $suite): self
     {
         if (preg_match(self::PATTERN, $suite, $matches, PREG_UNMATCHED_AS_NULL) !== 1) {
@@ -38,7 +41,11 @@ final readonly class OcraSuite
             'sha' . $matches[1],
             (int) $matches[2],
             $matches[3] !== null,
-            strtolower($matches[4]),
+            match ($matches[4]) {
+                'A' => 'a',
+                'H' => 'h',
+                default => 'n',
+            },
             (int) $matches[5],
             $matches[6] !== null ? strtolower($matches[6]) : null,
             $sessionLength,

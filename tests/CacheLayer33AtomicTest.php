@@ -2,136 +2,173 @@
 
 declare(strict_types=1);
 
+namespace Infocyph\OTP\Tests;
+
 use Infocyph\CacheLayer\Cache\AtomicCacheInterface;
 use Infocyph\CacheLayer\Cache\AtomicCacheProviderInterface;
 use Infocyph\CacheLayer\Cache\AuthenticationStateCacheInterface;
 use Infocyph\OTP\GenericOtp;
 use Infocyph\OTP\OCRA;
 use Infocyph\OTP\TOTP;
+use PHPUnit\Framework\Attributes\TestDox;
+use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
-test('TOTP uses CacheLayer atomics without acquiring a replay lock', function () {
-    $atomic = $this->createMock(AtomicCacheInterface::class);
-    $cache = $this->createMockForIntersectionOfInterfaces([
-        AuthenticationStateCacheInterface::class,
-        AtomicCacheProviderInterface::class,
-    ]);
-    $cache->method('isFailOpen')->willReturn(false);
-    $cache->method('hasPayloadIntegrity')->willReturn(true);
-    $cache->method('isAuthoritative')->willReturn(true);
-    $cache->method('atomic')->willReturn($atomic);
-    $cache->expects($this->never())->method('authenticationStateLock');
-    $cache->expects($this->once())->method('get')->willReturn(null);
-    $atomic->expects($this->once())->method('setIfAbsent')->with(
-        $this->callback(static fn (string $key): bool => strlen($key) === 64),
-        100,
-        30,
-    )->willReturn(true);
+final class CacheLayer33AtomicTest extends TestCase
+{
+    /**
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
+    #[TestDox('TOTP uses CacheLayer atomics without acquiring a replay lock')]
+    public function testTOTPUsesCacheLayerAtomicsWithoutAcquiringAReplayLock(): void
+    {
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->expects($this->never())->method('authenticationStateLock');
+        $cache->expects($this->once())->method('get')->willReturn(null);
+        $atomic->expects($this->once())->method('setIfAbsent')->with(
+            $this->callback(static fn (string $key): bool => strlen($key) === 64),
+            100,
+            30,
+        )->willReturn(true);
 
-    $totp = new TOTP(TOTP::generateSecret(), period: 30);
-    $result = $totp->verifyWithWindow(
-        $totp->generate(3000),
-        3000,
-        cache: $cache,
-        factorId: 'atomic-totp',
-    );
+        $totp = new TOTP(TOTP::generateSecret(), period: 30);
+        $result = $totp->verifyWithWindow(
+            $totp->generate(3000),
+            3000,
+            cache: $cache,
+            factorId: 'atomic-totp',
+        );
 
-    expect($result->matched)->toBeTrue();
-});
+        expect($result->matched)->toBeTrue();
+    }
 
-test('TOTP resolves an atomic CAS race as replay without state regression', function () {
-    $atomic = $this->createMock(AtomicCacheInterface::class);
-    $cache = $this->createMockForIntersectionOfInterfaces([
-        AuthenticationStateCacheInterface::class,
-        AtomicCacheProviderInterface::class,
-    ]);
-    $cache->method('isFailOpen')->willReturn(false);
-    $cache->method('hasPayloadIntegrity')->willReturn(true);
-    $cache->method('isAuthoritative')->willReturn(true);
-    $cache->method('atomic')->willReturn($atomic);
-    $cache->expects($this->never())->method('authenticationStateLock');
-    $cache->expects($this->exactly(2))->method('get')->willReturnOnConsecutiveCalls(99, 100);
-    $atomic->expects($this->once())->method('compareAndSet')->with(
-        $this->callback(static fn (string $key): bool => strlen($key) === 64),
-        99,
-        100,
-        30,
-    )->willReturn(false);
+    /**
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \Psr\SimpleCache\InvalidArgumentException
+     * @throws \Throwable
+     */
+    #[TestDox('TOTP resolves an atomic CAS race as replay without state regression')]
+    public function testTOTPResolvesAnAtomicCASRaceAsReplayWithoutStateRegression(): void
+    {
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->expects($this->never())->method('authenticationStateLock');
+        $cache->expects($this->exactly(2))->method('get')->willReturnOnConsecutiveCalls(99, 100);
+        $atomic->expects($this->once())->method('compareAndSet')->with(
+            $this->callback(static fn (string $key): bool => strlen($key) === 64),
+            99,
+            100,
+            30,
+        )->willReturn(false);
 
-    $totp = new TOTP(TOTP::generateSecret(), period: 30);
-    $result = $totp->verifyWithWindow(
-        $totp->generate(3000),
-        3000,
-        cache: $cache,
-        factorId: 'atomic-race',
-    );
+        $totp = new TOTP(TOTP::generateSecret(), period: 30);
+        $result = $totp->verifyWithWindow(
+            $totp->generate(3000),
+            3000,
+            cache: $cache,
+            factorId: 'atomic-race',
+        );
 
-    expect($result->matched)->toBeFalse()
-        ->and($result->replayDetected)->toBeTrue();
-});
+        expect($result->matched)->toBeFalse()
+            ->and($result->replayDetected)->toBeTrue();
+    }
 
-test('non-counter OCRA claims replay state with one atomic set-if-absent', function () {
-    $atomic = $this->createMock(AtomicCacheInterface::class);
-    $cache = $this->createMockForIntersectionOfInterfaces([
-        AuthenticationStateCacheInterface::class,
-        AtomicCacheProviderInterface::class,
-    ]);
-    $cache->method('isFailOpen')->willReturn(false);
-    $cache->method('hasPayloadIntegrity')->willReturn(true);
-    $cache->method('isAuthoritative')->willReturn(true);
-    $cache->method('atomic')->willReturn($atomic);
-    $cache->expects($this->never())->method('authenticationStateLock');
-    $cache->expects($this->never())->method('get');
-    $atomic->expects($this->once())->method('setIfAbsent')->with(
-        $this->callback(static fn (string $key): bool => strlen($key) === 64),
-        1,
-        300,
-    )->willReturn(true);
+    /**
+     * @throws \InvalidArgumentException
+     * @throws \TypeError
+     * @throws \RuntimeException
+     */
+    #[TestDox('non-counter OCRA claims replay state with one atomic set-if-absent')]
+    public function testNonCounterOCRAClaimsReplayStateWithOneAtomicSetIfAbsent(): void
+    {
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->expects($this->never())->method('authenticationStateLock');
+        $cache->expects($this->never())->method('get');
+        $atomic->expects($this->once())->method('setIfAbsent')->with(
+            $this->callback(static fn (string $key): bool => strlen($key) === 64),
+            1,
+            300,
+        )->willReturn(true);
 
-    $result = (new OCRA('OCRA-1:HOTP-SHA1-6:QN08', '12345678901234567890'))->verifyWithResult(
-        '237653',
-        '00000000',
-        cache: $cache,
-        factorId: 'atomic-ocra',
-        replayTtl: 300,
-    );
+        $result = (new OCRA('OCRA-1:HOTP-SHA1-6:QN08', '12345678901234567890'))->verifyWithResult(
+            '237653',
+            '00000000',
+            cache: $cache,
+            factorId: 'atomic-ocra',
+            replayTtl: 300,
+        );
 
-    expect($result->matched)->toBeTrue();
-});
+        expect($result->matched)->toBeTrue();
+    }
 
-test('atomic OCRA replay rejects corrupted existing state', function () {
-    $atomic = $this->createMock(AtomicCacheInterface::class);
-    $cache = $this->createMockForIntersectionOfInterfaces([
-        AuthenticationStateCacheInterface::class,
-        AtomicCacheProviderInterface::class,
-    ]);
-    $cache->method('isFailOpen')->willReturn(false);
-    $cache->method('hasPayloadIntegrity')->willReturn(true);
-    $cache->method('isAuthoritative')->willReturn(true);
-    $cache->method('atomic')->willReturn($atomic);
-    $cache->expects($this->never())->method('authenticationStateLock');
-    $cache->expects($this->once())->method('get')->willReturn(2);
-    $atomic->expects($this->once())->method('setIfAbsent')->willReturn(false);
+    #[TestDox('atomic OCRA replay rejects corrupted existing state')]
+    public function testAtomicOCRAReplayRejectsCorruptedExistingState(): void
+    {
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->expects($this->never())->method('authenticationStateLock');
+        $cache->expects($this->once())->method('get')->willReturn(2);
+        $atomic->expects($this->once())->method('setIfAbsent')->willReturn(false);
 
-    expect(fn () => (new OCRA('OCRA-1:HOTP-SHA1-6:QN08', '12345678901234567890'))->verifyWithResult(
-        '237653',
-        '00000000',
-        cache: $cache,
-        factorId: 'atomic-corrupt',
-        replayTtl: 300,
-    ))->toThrow(RuntimeException::class, 'Invalid OCRA replay token in CacheLayer.');
-});
+        expect(fn () => (new OCRA('OCRA-1:HOTP-SHA1-6:QN08', '12345678901234567890'))->verifyWithResult(
+            '237653',
+            '00000000',
+            cache: $cache,
+            factorId: 'atomic-corrupt',
+            replayTtl: 300,
+        ))->toThrow(RuntimeException::class, 'Invalid OCRA replay token in CacheLayer.');
+    }
 
-test('GenericOtp accepts atomic state coordination without a lock', function () {
-    $atomic = $this->createMock(AtomicCacheInterface::class);
-    $cache = $this->createMockForIntersectionOfInterfaces([
-        AuthenticationStateCacheInterface::class,
-        AtomicCacheProviderInterface::class,
-    ]);
-    $cache->method('isFailOpen')->willReturn(false);
-    $cache->method('hasPayloadIntegrity')->willReturn(true);
-    $cache->method('isAuthoritative')->willReturn(true);
-    $cache->method('atomic')->willReturn($atomic);
-    $cache->expects($this->never())->method('authenticationStateLock');
+    #[TestDox('GenericOtp accepts atomic state coordination without a lock')]
+    public function testGenericOtpAcceptsAtomicStateCoordinationWithoutALock(): void
+    {
+        $atomic = $this->createMock(AtomicCacheInterface::class);
+        $cache = $this->createMockForIntersectionOfInterfaces([
+            AuthenticationStateCacheInterface::class,
+            AtomicCacheProviderInterface::class,
+        ]);
+        $cache->method('isFailOpen')->willReturn(false);
+        $cache->method('hasPayloadIntegrity')->willReturn(true);
+        $cache->method('isAuthoritative')->willReturn(true);
+        $cache->method('atomic')->willReturn($atomic);
+        $cache->expects($this->never())->method('authenticationStateLock');
 
-    expect(new GenericOtp($cache, str_repeat('g', 32)))->toBeInstanceOf(GenericOtp::class);
-});
+        expect(fn () => new GenericOtp($cache, str_repeat('g', 32)))->not->toThrow(\InvalidArgumentException::class);
+    }
+}
